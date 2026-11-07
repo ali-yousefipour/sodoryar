@@ -36,7 +36,7 @@ jobs:
           test -s deploy-payload/src/bootstrap.php
           echo 'Deploying public/ and src/ only. Environment secrets and database imports are excluded.'
 
-      - name: Upload through FTP over explicit TLS
+      - name: Upload through FTP with host-compatible TLS
         env:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
@@ -48,18 +48,27 @@ jobs:
             echo 'Required GitHub secrets ftp and pass are missing.' >&2
             exit 1
           fi
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq lftp
-          # An encrypted FTP control and data channel is required to protect the stored credentials.
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! timeout 90s sudo apt-get install -y -qq lftp; then
+              timeout 90s sudo apt-get update -qq
+              timeout 90s sudo apt-get install -y -qq lftp
+            fi
+          fi
+          # The shared host uses a certificate with an untrusted issuer (also handled
+          # in Khatyar's deployment). Keep TLS encryption mandatory while accepting
+          # that server identity cannot be validated until the host certificate is fixed.
           # Never delete files from the remote host: the database and .env are managed separately.
           lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
           set ftp:ssl-allow true
           set ftp:ssl-force true
           set ftp:ssl-protect-data true
+          set ssl:verify-certificate no
           set ftp:passive-mode true
-          set net:max-retries 2
-          set net:timeout 20
+          set ftp:prefer-epsv false
+          set net:max-retries 5
+          set net:timeout 60
+          set net:reconnect-interval-base 2
           mkdir -p "$FTP_REMOTE_DIR"
           mirror -R --verbose --no-perms --parallel=2 deploy-payload "$FTP_REMOTE_DIR"
           bye
