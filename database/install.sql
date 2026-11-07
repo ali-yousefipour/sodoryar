@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS companies (
  name VARCHAR(180) NOT NULL, slug VARCHAR(80) NOT NULL UNIQUE,
  is_active TINYINT(1) NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS users (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  company_id BIGINT UNSIGNED NULL, username VARCHAR(100) NOT NULL UNIQUE,
@@ -108,4 +109,12 @@ CREATE TABLE IF NOT EXISTS login_attempts (
  attempt_key CHAR(64) NOT NULL,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  INDEX idx_login_attempt_window (attempt_key, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Operator-specific access rights. New installation includes this table.
+CREATE TABLE IF NOT EXISTS user_permissions (
+ user_id BIGINT UNSIGNED NOT NULL,
+ permission_key VARCHAR(80) NOT NULL,
+ PRIMARY KEY(user_id,permission_key),
+ CONSTRAINT fk_permission_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -91,6 +91,27 @@ function require_admin(): void {
         http_response_code(403); exit('دسترسی مجاز نیست');
     }
 }
+function permission_catalog(): array {
+    return [
+        'customers.view'=>'مشاهده تاکسیرانان', 'customers.create'=>'ثبت تاکسیران',
+        'services.view'=>'مشاهده خدمات', 'invoices.view'=>'مشاهده فاکتورها',
+        'invoices.create'=>'صدور فاکتور', 'reports.view'=>'گزارش‌های مالی',
+        'bills.view'=>'مشاهده قبوض', 'bills.create'=>'ثبت پرداخت قبض',
+        'commissions.view'=>'مشاهده پورسانت', 'pos.view'=>'مشاهده کارتخوان‌ها',
+        'activity.view'=>'مشاهده لاگ فعالیت',
+    ];
+}
+function can(string $permission): bool {
+    $u = require_login();
+    if (in_array($u['role'],['superadmin','company_admin'],true)) return true;
+    if (!array_key_exists($permission,permission_catalog())) return false;
+    static $allowed = null;
+    if ($allowed === null) $allowed = query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$u['id']])->fetchAll(PDO::FETCH_COLUMN);
+    return in_array($permission,$allowed,true);
+}
+function require_permission(string $permission): void {
+    if (!can($permission)) { http_response_code(403); exit('دسترسی مجاز نیست'); }
+}
 function csrf_token(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
 function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">'; }
 function verify_csrf(): void {

@@ -11,4 +11,4 @@ jobs:
       - name: Check PHP syntax
         run: find public src scripts -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Check required files
-        run: test -s database/install.sql && test -s database/migrations/001_initial.sql && test -s database/migrations/002_login_rate_limit.sql && test -s public/assets/app.css && test -s .env.example
+        run: test -s database/install.sql && test -s database/migrations/001_initial.sql && test -s database/migrations/002_login_rate_limit.sql && test -s database/migrations/003_user_permissions.sql && test -s public/assets/app.css && test -s .env.example

@@ -1,9 +1,10 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
+require __DIR__ . '/_private/src/modules.php';
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt'];
+$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','bills','commissions','pos','templates','settings','activity','profile'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 
 try {
@@ -41,9 +42,19 @@ try {
         if ($page === 'companies' && is_super() && $action === 'add') {
             $name = trim((string)($_POST['name'] ?? ''));
             $slug = strtolower(trim((string)($_POST['slug'] ?? '')));
-            if (mb_strlen($name) < 2 || !preg_match('/^[a-z0-9-]{3,80}$/',$slug)) throw new RuntimeException('نام یا شناسه شرکت نامعتبر است.');
-            query('INSERT INTO companies(name,slug) VALUES(?,?)',[$name,$slug]);
-            audit('company.create',$slug,null); redirect('companies','شرکت ثبت شد.');
+            $manager = trim((string)($_POST['manager_username'] ?? ''));
+            $managerName = trim((string)($_POST['manager_name'] ?? ''));
+            $managerPass = (string)($_POST['manager_password'] ?? '');
+            if (mb_strlen($name)<2 || !preg_match('/^[a-z0-9-]{3,80}$/',$slug) || !preg_match('/^[a-zA-Z0-9_.-]{3,100}$/',$manager) || mb_strlen($managerName)<2 || strlen($managerPass)<12) throw new RuntimeException('اطلاعات شرکت یا مدیر اولیه نامعتبر است (رمز حداقل ۱۲ کاراکتر).');
+            db()->beginTransaction();
+            try {
+                query('INSERT INTO companies(name,slug) VALUES(?,?)',[$name,$slug]);
+                $companyId=(int)db()->lastInsertId();
+                query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$companyId,$manager,password_hash($managerPass,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                audit('company.create',$slug,$companyId);
+                db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('companies','شرکت و حساب مدیر آن ایجاد شدند.');
         }
         if ($page === 'users' && $action === 'add') {
             require_admin(); $tenant = tenant_id();
@@ -52,10 +63,36 @@ try {
             $password = (string)($_POST['password'] ?? '');
             $role = (string)($_POST['role'] ?? 'operator');
             if (!preg_match('/^[a-zA-Z0-9_.-]{3,100}$/',$username) || mb_strlen($fullName)<2 || strlen($password)<12 || !in_array($role,['operator','company_admin'],true)) throw new RuntimeException('اطلاعات کاربر نامعتبر است؛ رمز حداقل ۱۲ کاراکتر باشد.');
+            $newPermissions=array_unique((array)($_POST['permissions']??[]));
+            foreach($newPermissions as $permission) if (!is_string($permission) || !array_key_exists($permission,permission_catalog())) throw new RuntimeException('مجوز نامعتبر است.');
+            db()->beginTransaction();
+            try {
             query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$tenant,$username,password_hash($password,PASSWORD_DEFAULT),$fullName,$role]);
-            audit('user.create',$username); redirect('users','کاربر ثبت شد.');
+            $newUserId=(int)db()->lastInsertId();
+            if ($role==='operator') foreach($newPermissions as $permission) {
+                query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$newUserId,$permission]);
+            }
+            audit('user.create',$username); db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('users','کاربر ثبت شد.');
+        }
+        if ($page === 'users' && $action === 'permissions') {
+            require_admin(); $tenant=tenant_id();
+            $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
+            $target=$id?query('SELECT id,role FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+            if (!$target || $target['role']!=='operator') throw new RuntimeException('اپراتور مورد نظر معتبر نیست.');
+            $permissions=array_unique((array)($_POST['permissions']??[]));
+            foreach($permissions as $permission) if (!is_string($permission) || !array_key_exists($permission,permission_catalog())) throw new RuntimeException('مجوز نامعتبر است.');
+            db()->beginTransaction();
+            try {
+                query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
+                foreach($permissions as $permission) query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$id,$permission]);
+                audit('user.permissions.update',(string)$id); db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('users','دسترسی‌های اپراتور ذخیره شد.');
         }
         if ($page === 'customers' && $action === 'add') {
+            require_permission('customers.create');
             $tenant = tenant_id(); $code = trim((string)($_POST['national_code'] ?? ''));
             $first = trim((string)($_POST['first_name'] ?? '')); $last = trim((string)($_POST['last_name'] ?? ''));
             if (!preg_match('/^[0-9]{10}$/',$code) || $first==='' || $last==='') throw new RuntimeException('کد ملی ده‌رقمی و نام و نام خانوادگی الزامی هستند.');
@@ -70,6 +107,7 @@ try {
             audit('service.create',$title); redirect('services','خدمت ثبت شد.');
         }
         if ($page === 'invoices' && $action === 'add') {
+            require_permission('invoices.create');
             $tenant = tenant_id(); $customer = filter_var($_POST['customer_id'] ?? null,FILTER_VALIDATE_INT);
             $selected = array_unique(array_filter(array_map('intval',(array)($_POST['service_ids'] ?? [])),static fn($v)=>$v>0));
             $payment = (string)($_POST['payment_type'] ?? ''); $ref = trim((string)($_POST['pos_ref'] ?? ''));
@@ -89,6 +127,7 @@ try {
                 header('Location: ?page=receipt&id='.$invoiceId); exit;
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         }
+        if (in_array($page,['bills','pos','templates','settings','commissions','profile'],true)) handle_module_post($page,$action);
     }
 } catch (Throwable $ex) {
     error_log((string)$ex);
@@ -96,9 +135,15 @@ try {
 }
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
-if ($page === 'users' || $page === 'services') require_admin();
+if ($page === 'users') require_admin();
+if ($page === 'services') require_permission('services.view');
+if ($page === 'templates' || $page === 'settings') require_admin();
+if ($permission=module_page_permission($page)) require_permission($permission);
+if ($page === 'customers') require_permission('customers.view');
+if (in_array($page,['invoices','receipt'],true)) require_permission('invoices.view');
+if ($page === 'reports') require_permission('reports.view');
 $tenant = null;
-if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
+if (!in_array($page,['login','companies','profile'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
@@ -114,41 +159,56 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">ص</div><div><strong>صدوریار</strong><small>مدیریت خدمات تاکسیرانی</small></div></div>
 <nav aria-label="منوی اصلی"><a class="<?= $page==='dashboard'?'active':'' ?>" href="?page=dashboard">داشبورد</a>
 <?php if(is_super()): ?><a href="?page=companies">مدیریت شرکت‌ها</a><?php endif; ?>
-<?php if($tenant): ?><a href="?page=customers">تاکسیرانان</a><?php if(user()['role']!=='operator'): ?><a href="?page=services">خدمات و تعرفه‌ها</a><a href="?page=users">کاربران شرکت</a><?php endif; ?><a href="?page=invoices">فاکتورها</a><a href="?page=reports">گزارش مالی</a><?php endif; ?></nav>
+<?php if($tenant): ?>
+<?php if(can('customers.view')): ?><a href="?page=customers">تاکسیرانان</a><?php endif; ?>
+<?php if(can('services.view')): ?><a href="?page=services">خدمات و تعرفه‌ها</a><?php endif; ?>
+<?php if(user()['role']!=='operator'): ?><a href="?page=users">کاربران شرکت</a><?php endif; ?>
+<?php if(can('invoices.view')): ?><a href="?page=invoices">فاکتورها</a><?php endif; ?>
+<?php if(can('bills.view')): ?><a href="?page=bills">قبوض</a><?php endif; ?>
+<?php if(can('reports.view')): ?><a href="?page=reports">گزارش مالی</a><?php endif; ?>
+<?php if(can('commissions.view')): ?><a href="?page=commissions">پورسانت</a><?php endif; ?>
+<?php if(can('pos.view')): ?><a href="?page=pos">کارتخوان‌ها</a><?php endif; ?>
+<?php if(user()['role']!=='operator'): ?><a href="?page=templates">قالب چاپ</a><a href="?page=settings">تنظیمات شرکت</a><?php endif; ?>
+<?php if(can('activity.view')): ?><a href="?page=activity">لاگ فعالیت‌ها</a><?php endif; ?>
+<?php endif; ?><a href="?page=profile">تغییر رمز عبور</a></nav>
 <form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="ghost">خروج از حساب</button></form></aside>
 <div class="main-wrap"><header class="topbar"><div><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong><span class="muted"> / <?=e(user()['full_name'])?></span></div><span class="pill"><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></span></header>
 <main class="content">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
-<?php if(is_super() && !$tenant && $page!=='companies'): ?>
+<?php if(is_super() && !$tenant && !in_array($page,['companies','profile'],true)): ?>
 <h1>انتخاب شرکت</h1><p class="muted">برای مشاهده اطلاعات هر شرکت، ابتدا شرکت مورد نظر را انتخاب کنید.</p>
 <div class="card"><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><label>شرکت<select name="company_id" required><?php foreach(query('SELECT id,name FROM companies WHERE is_active=1 ORDER BY name')->fetchAll() as $c): ?><option value="<?=e($c['id'])?>"><?=e($c['name'])?></option><?php endforeach; ?></select></label><button>ورود به پنل شرکت</button></form></div>
 <?php elseif($page==='companies'): ?>
 <div class="heading"><div><h1>مدیریت شرکت‌ها</h1><p class="muted">هر شرکت پایگاه داده منطقی و دسترسی مستقل دارد.</p></div></div>
-<div class="card"><h2>افزودن شرکت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام شرکت<input name="name" required></label><label>شناسه انگلیسی<input name="slug" pattern="[a-z0-9-]{3,80}" placeholder="mashhad-taxi" required></label><button>ثبت شرکت</button></form></div>
+<div class="card"><h2>افزودن شرکت و مدیر اولیه</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام شرکت<input name="name" required></label><label>شناسه انگلیسی<input name="slug" pattern="[a-z0-9-]{3,80}" placeholder="mashhad-taxi" required></label><label>نام مدیر شرکت<input name="manager_name" required></label><label>نام کاربری مدیر<input name="manager_username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه مدیر<input type="password" minlength="12" autocomplete="new-password" name="manager_password" required></label><button>ثبت شرکت و مدیر</button></form></div>
 <div class="card"><h2>شرکت‌های ثبت‌شده</h2><div class="table-wrap"><table><thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>ورود</th></tr></thead><tbody><?php foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): ?><tr><td><?=e($c['name'])?></td><td><?=e($c['slug'])?></td><td><?= (int)$c['is_active']?'فعال':'غیرفعال' ?></td><td><?php if((int)$c['is_active']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><button class="small">انتخاب</button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='dashboard'): ?>
 <h1>نمای کلی شرکت</h1><p class="muted">وضعیت خدمات و صدور فاکتورهای ثبت‌شده</p>
+<?php if(!can('reports.view')): ?><div class="card"><h2>خوش آمدید</h2><p class="muted">برای مشاهده گزارش‌های مالی، مدیر شرکت باید دسترسی مربوط را برای حساب شما فعال کند.</p></div><?php else: ?>
 <?php $stats=query('SELECT (SELECT COUNT(*) FROM customers WHERE company_id=?) customers,(SELECT COUNT(*) FROM services WHERE company_id=? AND is_active=1) services,(SELECT COUNT(*) FROM invoices WHERE company_id=?) invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=?) revenue',[$tenant,$tenant,$tenant,$tenant])->fetch(); ?>
 <div class="stats"><article class="stat"><span>تاکسیرانان</span><b><?=money($stats['customers'])?></b></article><article class="stat"><span>خدمات فعال</span><b><?=money($stats['services'])?></b></article><article class="stat"><span>فاکتورها</span><b><?=money($stats['invoices'])?></b></article><article class="stat"><span>جمع مبالغ ثبت‌شده</span><b><?=money($stats['revenue'])?></b><small>واحد مبلغ مطابق تعرفه شرکت</small></article></div>
 <div class="card"><div class="heading"><h2>آخرین فاکتورها</h2><a href="?page=invoices">مشاهده همه</a></div><?php render_invoices($tenant,8); ?></div>
+<?php endif; ?>
 <?php elseif($page==='users'): ?>
-<h1>کاربران شرکت</h1><div class="card"><h2>ایجاد کاربر</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام و نام خانوادگی<input name="full_name" required></label><label>نام کاربری<input name="username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه (حداقل ۱۲ کاراکتر)<input type="password" minlength="12" name="password" autocomplete="new-password" required></label><label>نقش<select name="role"><option value="operator">اپراتور</option><option value="company_admin">مدیر شرکت</option></select></label><button>ایجاد کاربر</button></form></div>
-<div class="card table-wrap"><table><thead><tr><th>نام</th><th>نام کاربری</th><th>نقش</th><th>وضعیت</th></tr></thead><tbody><?php foreach(query('SELECT full_name,username,role,is_active FROM users WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['full_name'])?></td><td><?=e($r['username'])?></td><td><?=e($r['role'])?></td><td><?= $r['is_active']?'فعال':'غیرفعال' ?></td></tr><?php endforeach; ?></tbody></table></div>
+<h1>کاربران شرکت</h1><p class="muted">مدیر شرکت به همه بخش‌های شرکت خود دسترسی دارد؛ مجوزهای اپراتورها جداگانه تنظیم می‌شوند.</p><div class="card"><h2>ایجاد کاربر</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام و نام خانوادگی<input name="full_name" required></label><label>نام کاربری<input name="username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه (حداقل ۱۲ کاراکتر)<input type="password" minlength="12" name="password" autocomplete="new-password" required></label><label>نقش<select name="role"><option value="operator">اپراتور</option><option value="company_admin">مدیر شرکت</option></select></label><fieldset class="wide"><legend>دسترسی‌های اختیاری اپراتور</legend><div class="choices"><?php foreach(permission_catalog() as $key=>$title): ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><button>ایجاد کاربر</button></form></div>
+<div class="card"><h2>فهرست کاربران و ویرایش مجوزها</h2><div class="table-wrap"><table><thead><tr><th>نام</th><th>نام کاربری</th><th>نقش</th><th>وضعیت</th><th>دسترسی‌های اپراتور</th></tr></thead><tbody><?php foreach(query('SELECT id,full_name,username,role,is_active FROM users WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['full_name'])?></td><td><?=e($r['username'])?></td><td><?=e($r['role'])?></td><td><?=$r['is_active']?'فعال':'غیرفعال'?></td><td><?php if($r['role']==='operator'): ?><?php $granted=query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$r['id']])->fetchAll(PDO::FETCH_COLUMN); ?><form method="post"><input type="hidden" name="action" value="permissions"><input type="hidden" name="user_id" value="<?=e($r['id'])?>"><?=csrf_field()?><details><summary>انتخاب دسترسی‌ها</summary><div class="permission-list"><?php foreach(permission_catalog() as $key=>$title): ?><label><input type="checkbox" name="permissions[]" value="<?=e($key)?>" <?=in_array($key,$granted,true)?'checked':''?>><?=e($title)?></label><?php endforeach; ?></div><button class="small">ذخیره</button></details></form><?php else: ?>تمام دسترسی‌های شرکت<?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='customers'): ?>
-<h1>تاکسیرانان</h1><div class="card"><h2>ثبت تاکسیران</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>کد ملی<input name="national_code" inputmode="numeric" pattern="[0-9]{10}" required></label><label>نام<input name="first_name" required></label><label>نام خانوادگی<input name="last_name" required></label><label>تلفن همراه<input name="mobile" inputmode="tel"></label><label>خط فعالیت<input name="line_area"></label><label>کد در خط<input name="line_code"></label><button>ثبت تاکسیران</button></form></div>
+<h1>تاکسیرانان</h1><?php if(can('customers.create')): ?><div class="card"><h2>ثبت تاکسیران</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>کد ملی<input name="national_code" inputmode="numeric" pattern="[0-9]{10}" required></label><label>نام<input name="first_name" required></label><label>نام خانوادگی<input name="last_name" required></label><label>تلفن همراه<input name="mobile" inputmode="tel"></label><label>خط فعالیت<input name="line_area"></label><label>کد در خط<input name="line_code"></label><button>ثبت تاکسیران</button></form></div><?php endif; ?>
 <div class="card"><h2>فهرست تاکسیرانان</h2><div class="table-wrap"><table><thead><tr><th>کد ملی</th><th>نام</th><th>همراه</th><th>خط</th></tr></thead><tbody><?php foreach(query('SELECT * FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 100',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['national_code'])?></td><td><?=e($r['first_name'].' '.$r['last_name'])?></td><td><?=e($r['mobile'])?></td><td><?=e($r['line_area'])?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='services'): ?>
-<h1>خدمات و تعرفه‌ها</h1><div class="card"><h2>افزودن خدمت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان خدمت<input name="title" required></label><label>مبلغ<input name="price" type="number" min="0" required></label><button>ثبت خدمت</button></form></div>
+<h1>خدمات و تعرفه‌ها</h1><?php if(user()['role']!=='operator'): ?><div class="card"><h2>افزودن خدمت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان خدمت<input name="title" required></label><label>مبلغ<input name="price" type="number" min="0" required></label><button>ثبت خدمت</button></form></div><?php endif; ?>
 <div class="card table-wrap"><table><thead><tr><th>عنوان</th><th>مبلغ</th><th>وضعیت</th></tr></thead><tbody><?php foreach(query('SELECT * FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['title'])?></td><td><?=money($r['price'])?></td><td><?=$r['is_active']?'فعال':'غیرفعال'?></td></tr><?php endforeach; ?></tbody></table></div>
 <?php elseif($page==='invoices'): ?>
-<h1>صدور فاکتور</h1><div class="card"><h2>فاکتور جدید</h2><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><div class="form-grid"><label>تاکسیران<select name="customer_id" required><option value="">انتخاب کنید</option><?php foreach(query('SELECT id,first_name,last_name,national_code FROM customers WHERE company_id=? ORDER BY last_name LIMIT 500',[$tenant])->fetchAll() as $r): ?><option value="<?=e($r['id'])?>"><?=e($r['first_name'].' '.$r['last_name'].' — '.$r['national_code'])?></option><?php endforeach; ?></select></label><label>نوع پرداخت<select name="payment_type" id="paymentType" required><option value="cash">نقدی</option><option value="pos">کارتخوان (ثبت دستی شماره پیگیری)</option></select></label><label>شماره پیگیری کارتخوان<input name="pos_ref" id="posRef" placeholder="برای پرداخت کارتی الزامی است"></label></div>
+<?php if(can('invoices.create')): ?><h1>صدور فاکتور</h1><div class="card"><h2>فاکتور جدید</h2><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><div class="form-grid"><label>تاکسیران<select name="customer_id" required><option value="">انتخاب کنید</option><?php foreach(query('SELECT id,first_name,last_name,national_code FROM customers WHERE company_id=? ORDER BY last_name LIMIT 500',[$tenant])->fetchAll() as $r): ?><option value="<?=e($r['id'])?>"><?=e($r['first_name'].' '.$r['last_name'].' — '.$r['national_code'])?></option><?php endforeach; ?></select></label><label>نوع پرداخت<select name="payment_type" id="paymentType" required><option value="cash">نقدی</option><option value="pos">کارتخوان (ثبت دستی شماره پیگیری)</option></select></label><label>شماره پیگیری کارتخوان<input name="pos_ref" id="posRef" placeholder="برای پرداخت کارتی الزامی است"></label></div>
 <fieldset><legend>خدمات ارائه‌شده</legend><div class="choices"><?php foreach(query('SELECT * FROM services WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll() as $r): ?><label class="choice"><input type="checkbox" name="service_ids[]" value="<?=e($r['id'])?>"><span><?=e($r['title'])?></span><strong><?=money($r['price'])?></strong></label><?php endforeach; ?></div></fieldset><button>ثبت نهایی فاکتور</button></form></div>
-<div class="card"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div>
+<?php endif; ?><div class="card"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div>
 <?php elseif($page==='reports'): ?>
 <h1>گزارش مالی</h1><?php $r=query('SELECT payment_type,COUNT(*) qty,COALESCE(SUM(total_amount),0) total FROM invoices WHERE company_id=? GROUP BY payment_type',[$tenant])->fetchAll(); ?><div class="stats"><?php foreach($r as $x): ?><article class="stat"><span><?=$x['payment_type']==='cash'?'پرداخت نقدی':'پرداخت کارتخوان'?></span><b><?=money($x['total'])?></b><small><?=money($x['qty'])?> فاکتور</small></article><?php endforeach; ?></div><div class="card"><h2>فاکتورهای ثبت‌شده</h2><?php render_invoices($tenant,100); ?></div>
 <?php elseif($page==='receipt'): ?>
 <?php $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id'] ?? 0),$tenant])->fetch(); if(!$invoice): ?><div class="alert error">فاکتور پیدا نشد.</div><?php else: ?><div class="receipt card"><div class="heading"><h1>فاکتور خدمات</h1><button data-print-receipt type="button">چاپ فاکتور</button></div><p><?=e($companyName)?></p><p>شماره: <?=e($invoice['invoice_number'])?> | تاریخ: <?=e($invoice['created_at'])?></p><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e($invoice['national_code'])?></p><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money($i['price'])?></td></tr><?php endforeach; ?></tbody></table><h2>جمع کل: <?=money($invoice['total_amount'])?></h2><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e($invoice['pos_ref'])?></p></div><?php endif; ?>
+<?php elseif(in_array($page,['bills','commissions','pos','templates','settings','activity','profile'],true)): ?>
+<?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
 <?php endif; ?><script src="assets/app.js" defer></script></body></html>
