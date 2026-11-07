@@ -12,6 +12,21 @@ function attach_global_driver(int $tenant, string $nationalCode): int {
     return (int)db()->lastInsertId();
 }
 
+function register_missing_driver(int $tenant, string $nationalCode, array $fields): int {
+    if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی راننده باید ده‌رقمی باشد.');
+    $existing=query('SELECT id FROM global_drivers WHERE national_code=?',[$nationalCode])->fetchColumn();
+    if (!$existing) {
+        $first=trim((string)($fields['first_name']??''));
+        $last=trim((string)($fields['last_name']??''));
+        $mobile=trim((string)($fields['mobile']??''));
+        $line=trim((string)($fields['line_area']??''));
+        if ($first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100 || mb_strlen($mobile)>30 || mb_strlen($line)>180) throw new RuntimeException('این کد ملی در بانک مرکزی وجود ندارد؛ نام و نام خانوادگی راننده جدید را وارد کنید.');
+        query('INSERT INTO global_drivers(national_code,first_name,last_name,mobile,line_area) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code)',[$nationalCode,$first,$last,$mobile,$line]);
+        audit('global_driver.create',$nationalCode);
+    }
+    return attach_global_driver($tenant,$nationalCode);
+}
+
 function module_page_permission(string $page): ?string {
     return [
         'bills'=>'bills.view', 'commissions'=>'commissions.view',
@@ -63,6 +78,10 @@ function handle_module_post(string $page, string $action): void {
         query('UPDATE users SET password_hash=? WHERE id=?',[password_hash($new,PASSWORD_DEFAULT),user()['id']]);
         audit('password.change'); session_regenerate_id(true); redirect('profile','رمز عبور تغییر کرد.');
     }
+    if ($page === 'profile' && $action === 'photo') {
+        save_profile_photo((int)user()['id']);
+        redirect('profile','تصویر پروفایل ذخیره شد.');
+    }
     if ($page === 'commissions' && $action === 'calculate') {
         require_admin();
         $userId=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
@@ -82,7 +101,7 @@ function handle_module_post(string $page, string $action): void {
 
 function render_module(string $page, int $tenant): void {
     if ($page==='profile') { ?>
-      <h1>امنیت حساب کاربری</h1><div class="card"><h2>تغییر رمز عبور</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="password"><label>رمز فعلی<input type="password" name="current_password" autocomplete="current-password" required></label><label>رمز جدید (حداقل ۱۲ کاراکتر)<input type="password" name="new_password" minlength="12" autocomplete="new-password" required></label><button>ذخیره رمز جدید</button></form></div>
+      <h1>پروفایل و امنیت حساب</h1><div class="card profile-card"><div class="profile-identity"><span class="avatar avatar-large"><?php if(query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=user_photo&amp;id=<?=e(user()['id'])?>" alt="تصویر کاربر"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><div><h2><?=e(user()['full_name'])?></h2><p class="muted">عکس پرسنلی حساب کاربری؛ به‌صورت مربعی و بهینه ذخیره می‌شود.</p></div></div><form method="post" enctype="multipart/form-data" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="photo"><label>انتخاب تصویر کاربر (JPG، PNG یا WebP)<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></label><button>ذخیره تصویر</button></form></div><div class="card"><h2>تغییر رمز عبور</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="password"><label>رمز فعلی<input type="password" name="current_password" autocomplete="current-password" required></label><label>رمز جدید (حداقل ۱۲ کاراکتر)<input type="password" name="new_password" minlength="12" autocomplete="new-password" required></label><button>ذخیره رمز جدید</button></form></div>
     <?php return; }
     if ($page==='bills') { require_permission('bills.view'); ?>
       <h1>پرداخت قبوض</h1><p class="muted">ثبت اطلاعات قبض به‌صورت دستی؛ تراکنش بانکی از این صفحه انجام نمی‌شود.</p>
