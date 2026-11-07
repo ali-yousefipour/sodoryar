@@ -124,11 +124,19 @@ document.addEventListener('DOMContentLoaded',()=>{
     const choice=editUser.selectedOptions[0];
     document.getElementById('editUserName').value=choice.dataset.fullName||'';
     document.getElementById('editUserUsername').value=choice.dataset.username||'';
+    document.getElementById('editUserRole').value=choice.dataset.role||'operator';
     document.getElementById('editUserNational').value=choice.dataset.nationalCode||'';
     document.getElementById('editUserMobile').value=choice.dataset.mobile||'';
     document.getElementById('editUserAddress').value=choice.dataset.address||'';
     document.getElementById('editUserActive').checked=choice.dataset.active==='1';
-  });}
+  });
+    document.querySelectorAll('[data-edit-user-id]').forEach(button=>button.addEventListener('click',()=>{
+      editUser.value=button.dataset.editUserId;
+      editUser.dispatchEvent(new Event('change'));
+      document.getElementById('userEdit')?.showModal();
+      document.getElementById('editUserName')?.focus();
+    }));
+  }
   const extraItems=document.getElementById('extraInvoiceItems');
   const extraAdd=document.querySelector('[data-add-invoice-item]');
   if(extraItems&&extraAdd){

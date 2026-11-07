@@ -6,6 +6,13 @@ require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 
+function archive_ready(string $table): bool {
+    if (!in_array($table,['users','companies'],true)) return false;
+    static $ready=[];
+    if (!array_key_exists($table,$ready)) $ready[$table]=(bool)query("SHOW COLUMNS FROM `$table` LIKE 'archived_at'")->fetch();
+    return $ready[$table];
+}
+
 $page = (string) ($_GET['page'] ?? 'dashboard');
 $valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
@@ -105,6 +112,37 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('companies','شرکت و حساب مدیر آن ایجاد شدند.');
         }
+        if ($page==='companies' && is_super() && in_array($action,['edit_company','company_status','archive_company','restore_company'],true)) {
+            $id=filter_var($_POST['company_id']??null,FILTER_VALIDATE_INT);
+            $company=$id?query('SELECT id,name,slug,is_active'.(archive_ready('companies')?',archived_at':'').' FROM companies WHERE id=?',[$id])->fetch():false;
+            if (!$company) throw new RuntimeException('شرکت مورد نظر پیدا نشد.');
+            $archived=archive_ready('companies') && $company['archived_at']!==null;
+            if ($action==='edit_company') {
+                if ($archived) throw new RuntimeException('ابتدا شرکت بایگانی‌شده را بازیابی کنید.');
+                $name=trim((string)($_POST['name']??'')); $slug=strtolower(trim((string)($_POST['slug']??'')));
+                if (mb_strlen($name)<2 || mb_strlen($name)>180 || !preg_match('/^[a-z0-9-]{3,80}$/',$slug)) throw new RuntimeException('نام یا شناسه شرکت معتبر نیست.');
+                query('UPDATE companies SET name=?,slug=? WHERE id=?',[$name,$slug,$id]); audit('company.update',$slug,$id);
+                redirect('companies','مشخصات شرکت ویرایش شد.');
+            }
+            if ($action==='company_status') {
+                if ($archived) throw new RuntimeException('شرکت بایگانی‌شده قابل فعال‌سازی نیست.');
+                $active=(int)$company['is_active']===1?0:1;
+                query('UPDATE companies SET is_active=? WHERE id=?',[$active,$id]);
+                if (!$active && (int)($_SESSION['selected_company']??0)===$id) unset($_SESSION['selected_company']);
+                audit($active?'company.activate':'company.deactivate',(string)$id,$id);
+                redirect('companies',$active?'شرکت فعال شد.':'شرکت غیرفعال شد و ورود کاربران آن متوقف شد.');
+            }
+            if (!archive_ready('companies')) throw new RuntimeException('برای بایگانی شرکت، ابتدا میگرشن ۰۰۷ را اجرا کنید.');
+            if ($action==='archive_company') {
+                if ($archived) throw new RuntimeException('شرکت قبلاً بایگانی شده است.');
+                query('UPDATE companies SET is_active=0,archived_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);
+                if ((int)($_SESSION['selected_company']??0)===$id) unset($_SESSION['selected_company']);
+                audit('company.archive',(string)$id,$id); redirect('companies','شرکت بایگانی شد؛ سوابق مالی آن محفوظ است.');
+            }
+            if (!$archived) throw new RuntimeException('شرکت بایگانی نشده است.');
+            query('UPDATE companies SET archived_at=NULL,is_active=0 WHERE id=?',[$id]);
+            audit('company.restore',(string)$id,$id); redirect('companies','شرکت بازیابی شد؛ برای شروع فعالیت، آن را فعال کنید.');
+        }
         if ($page === 'users' && $action === 'add') {
             require_admin(); $tenant = tenant_id();
             $username = trim((string)($_POST['username'] ?? ''));
@@ -129,7 +167,8 @@ try {
         if ($page === 'users' && $action === 'permissions') {
             require_admin(); $tenant=tenant_id();
             $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
-            $target=$id?query('SELECT id,role FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+            $target=$id?query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+            if ($target && (!(int)$target['is_active'] || (archive_ready('users') && $target['archived_at']!==null))) throw new RuntimeException('دسترسی حساب غیرفعال یا بایگانی‌شده قابل تغییر نیست.');
             if (!$target || $target['role']!=='operator') throw new RuntimeException('اپراتور مورد نظر معتبر نیست.');
             $permissions=array_unique((array)($_POST['permissions']??[]));
             foreach($permissions as $permission) if (!is_string($permission) || !array_key_exists($permission,permission_catalog())) throw new RuntimeException('مجوز نامعتبر است.');
@@ -151,20 +190,50 @@ try {
         if ($page === 'users' && $action === 'edit') {
             require_admin(); $tenant=tenant_id();
             $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
-            $target=$id?query('SELECT id,role,is_active FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+            $target=$id?query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
             $fullName=trim((string)($_POST['full_name']??''));
             $username=trim((string)($_POST['username']??''));
             $active=isset($_POST['is_active'])?1:0;
+            $role=(string)($_POST['role']??($target['role']??''));
+            $newPassword=(string)($_POST['new_password']??'');
             if (!$target || mb_strlen($fullName)<2 || mb_strlen($fullName)>180 || !preg_match('/^[a-zA-Z0-9_.-]{3,100}$/',$username)) throw new RuntimeException('اطلاعات کاربر معتبر نیست.');
-            if ((int)$id===(int)user()['id'] && !$active) throw new RuntimeException('نمی‌توانید حساب خود را غیرفعال کنید.');
-            if ($target['role']==='company_admin' && !$active && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد.');
+            if (!in_array($role,['operator','company_admin'],true) || ($newPassword!=='' && (strlen($newPassword)<12 || strlen($newPassword)>4096))) throw new RuntimeException('نقش یا رمز جدید معتبر نیست (حداقل ۱۲ کاراکتر).');
+            if (archive_ready('users') && $target['archived_at']!==null) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
+            if ((int)$id===(int)user()['id'] && (!$active || $role!=='company_admin')) throw new RuntimeException('نمی‌توانید حساب مدیریتی خود را غیرفعال کنید یا نقش آن را تغییر دهید.');
+            if ($target['role']==='company_admin' && (!$active || $role!=='company_admin') && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد یا نقش آن را تغییر داد.');
             db()->beginTransaction();
             try {
-                query('UPDATE users SET full_name=?,username=?,is_active=? WHERE id=? AND company_id=?',[$fullName,$username,$active,$id,$tenant]);
+                query('UPDATE users SET full_name=?,username=?,is_active=?,role=?'.($newPassword!==''?',password_hash=?':'').' WHERE id=? AND company_id=?',array_merge([$fullName,$username,$active,$role],$newPassword!==''?[password_hash($newPassword,PASSWORD_DEFAULT),$id,$tenant]:[$id,$tenant]));
+                if ($role==='company_admin') query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
                 save_user_details((int)$id,(array)($_POST['details']??[]));
                 audit('user.update',(string)$id); db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('users','اطلاعات کاربر به‌روزرسانی شد.');
+        }
+        if ($page==='users' && in_array($action,['user_status','archive_user','restore_user'],true)) {
+            require_admin(); $tenant=tenant_id();
+            $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
+            $target=$id?query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+            if (!$target) throw new RuntimeException('کاربر متعلق به این شرکت نیست.');
+            if ((int)$id===(int)user()['id'] && $action!=='restore_user') throw new RuntimeException('حساب خودتان را نمی‌توانید غیرفعال یا بایگانی کنید.');
+            $archived=archive_ready('users') && $target['archived_at']!==null;
+            if ($action==='user_status') {
+                if ($archived) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
+                $active=(int)$target['is_active']===1?0:1;
+                if (!$active && $target['role']==='company_admin' && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد.');
+                query('UPDATE users SET is_active=? WHERE id=? AND company_id=?',[$active,$id,$tenant]);
+                audit($active?'user.activate':'user.deactivate',(string)$id); redirect('users',$active?'حساب کاربر فعال شد.':'حساب کاربر غیرفعال شد.');
+            }
+            if (!archive_ready('users')) throw new RuntimeException('برای حذف امن کاربر، ابتدا میگرشن ۰۰۷ را اجرا کنید.');
+            if ($action==='archive_user') {
+                if ($archived) throw new RuntimeException('کاربر قبلاً بایگانی شده است.');
+                if ($target['role']==='company_admin' && (int)$target['is_active']===1 && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان حذف کرد.');
+                query('UPDATE users SET is_active=0,archived_at=CURRENT_TIMESTAMP WHERE id=? AND company_id=?',[$id,$tenant]);
+                audit('user.archive',(string)$id); redirect('users','کاربر بایگانی شد؛ سوابق فاکتورهای او محفوظ است.');
+            }
+            if (!$archived) throw new RuntimeException('کاربر بایگانی نشده است.');
+            query('UPDATE users SET archived_at=NULL,is_active=0 WHERE id=? AND company_id=?',[$id,$tenant]);
+            audit('user.restore',(string)$id); redirect('users','کاربر بازیابی شد؛ برای ورود، حساب را فعال کنید.');
         }
         if ($page === 'customers' && $action === 'add') {
             require_permission('customers.create');
@@ -363,7 +432,10 @@ $navGroup=null;
 <?php elseif($page==='companies'): ?>
 <div class="heading"><div><h1>مدیریت شرکت‌ها</h1><p class="muted">هر شرکت پایگاه داده منطقی و دسترسی مستقل دارد.</p></div></div>
 <div class="card"><h2>افزودن شرکت و مدیر اولیه</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام شرکت<input name="name" required></label><label>شناسه انگلیسی<input name="slug" pattern="[a-z0-9-]{3,80}" placeholder="mashhad-taxi" required></label><label>نام مدیر شرکت<input name="manager_name" required></label><label>نام کاربری مدیر<input name="manager_username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه مدیر<input type="password" minlength="12" autocomplete="new-password" name="manager_password" required></label><button>ثبت شرکت و مدیر</button></form></div>
-<div class="card"><h2>شرکت‌های ثبت‌شده</h2><div class="table-wrap"><table><thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>ورود</th></tr></thead><tbody><?php foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): ?><tr><td><?=e($c['name'])?></td><td><?=e($c['slug'])?></td><td><?= (int)$c['is_active']?'فعال':'غیرفعال' ?></td><td><?php if((int)$c['is_active']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><button class="small">انتخاب</button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
+<div class="card"><h2>شرکت‌های ثبت‌شده</h2><p class="muted">حذف شرکت به‌صورت بایگانی انجام می‌شود تا فاکتورها و گزارش‌های مالی آن محفوظ بمانند.</p><div class="table-wrap"><table><thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): $archived=archive_ready('companies') && $c['archived_at']!==null; ?><tr><td><?=e($c['name'])?></td><td><?=e($c['slug'])?></td><td><span class="status-chip <?=!$archived && (int)$c['is_active']?'status-good':'status-muted'?>"><?=$archived?'بایگانی‌شده':((int)$c['is_active']?'فعال':'غیرفعال')?></span></td><td><div class="management-actions"><?php if(!$archived): ?><?php if((int)$c['is_active']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><button class="small">ورود</button></form><?php endif; ?><button class="small secondary" type="button" data-dialog-open="companyEdit<?=e($c['id'])?>">ویرایش</button><button class="small secondary" type="button" data-dialog-open="companyStatus<?=e($c['id'])?>"><?=(int)$c['is_active']?'غیرفعال‌سازی':'فعال‌سازی'?></button><button class="small danger" type="button" data-dialog-open="companyArchive<?=e($c['id'])?>">حذف</button><?php else: ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="restore_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><button class="small secondary">بازیابی</button></form><?php endif; ?></div>
+<?php if(!$archived): ?><dialog class="app-dialog" id="companyEdit<?=e($c['id'])?>"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="edit_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><h2>ویرایش شرکت <?=e($c['name'])?></h2><label>نام شرکت<input name="name" value="<?=e($c['name'])?>" maxlength="180" required></label><label>شناسه انگلیسی<input name="slug" value="<?=e($c['slug'])?>" pattern="[a-z0-9-]{3,80}" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog>
+<dialog class="app-dialog" id="companyStatus<?=e($c['id'])?>"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="company_status"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><h2><?=(int)$c['is_active']?'غیرفعال‌سازی':'فعال‌سازی'?> شرکت</h2><p>آیا از تغییر وضعیت «<?=e($c['name'])?>» مطمئن هستید؟ <?=$c['is_active']?'تا زمان فعال‌سازی مجدد، کاربران شرکت امکان ورود نخواهند داشت.':''?></p><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>تأیید</button></div></form></dialog>
+<dialog class="app-dialog" id="companyArchive<?=e($c['id'])?>"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="archive_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><h2>حذف شرکت</h2><p>شرکت «<?=e($c['name'])?>» بایگانی و دسترسی کاربران آن مسدود می‌شود. اطلاعات و سوابق مالی حذف نمی‌شوند.</p><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button class="danger">حذف و بایگانی</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='dashboard'): ?>
 <section class="dashboard-hero"><div><span class="hero-eyebrow">مرکز کنترل خدمات</span><h1>داشبورد <?=e($companyName ?: 'صدوریار')?></h1><p>نمای یکپارچه فعالیت‌های شرکت، وضعیت خدمات و امور مالی</p></div><div class="hero-actions"><?php if(can('invoices.create')): ?><a class="hero-button" href="?page=invoices">+ صدور فاکتور جدید</a><?php endif; ?><a class="hero-secondary" href="?page=profile">حساب کاربری</a></div></section>
 <?php if(!can('reports.view')): ?><div class="card"><h2>خوش آمدید</h2><p class="muted">برای مشاهده گزارش‌های مالی، مدیر شرکت باید دسترسی مربوط را برای حساب شما فعال کند.</p></div><?php else: ?>
@@ -378,11 +450,13 @@ $navGroup=null;
 <fieldset class="wide"><legend>اطلاعات تکمیلی کاربر</legend><div class="form-grid"><label>کد ملی<input name="details[national_code]" inputmode="numeric" maxlength="10" pattern="[0-9]{10}"></label><label>تلفن همراه<input name="details[mobile]" type="tel" maxlength="20"></label><label class="wide">آدرس<textarea name="details[address]" rows="2" maxlength="1000"></textarea></label></div></fieldset>
 <fieldset class="wide"><legend>دسترسی‌های اختیاری اپراتور</legend><div class="choices"><?php foreach(permission_catalog() as $key=>$title): ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><button>ایجاد کاربر</button></form></div>
 <div class="card"><h2>فهرست کاربران و ویرایش مجوزها</h2><div class="table-wrap"><table><thead><tr><th>کاربر</th><th>نام کاربری</th><th>نقش</th><th>وضعیت</th><th>تصویر</th><th>دسترسی‌های اپراتور</th></tr></thead><tbody><?php $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role,u.is_active,p.storage_key FROM users u LEFT JOIN user_photos p ON p.user_id=u.id WHERE u.company_id=? ORDER BY u.id DESC':'SELECT u.id,u.full_name,u.username,u.role,u.is_active,NULL AS storage_key FROM users u WHERE u.company_id=? ORDER BY u.id DESC'; foreach(query($userListSQL,[$tenant])->fetchAll() as $r): ?><tr><td><div class="table-person"><span class="avatar"><?php if($r['storage_key']): ?><img src="?page=user_photo&amp;id=<?=e($r['id'])?>" alt=""><?php else: ?><?=e(mb_substr($r['full_name'],0,1))?><?php endif; ?></span><?=e($r['full_name'])?></div></td><td><?=e($r['username'])?></td><td><?=e($r['role'])?></td><td><?=$r['is_active']?'فعال':'غیرفعال'?></td><td><?php if(user_photo_table_ready()): ?><form method="post" enctype="multipart/form-data" class="photo-upload"><?=csrf_field()?><input type="hidden" name="action" value="photo"><input type="hidden" name="user_id" value="<?=e($r['id'])?>"><input aria-label="انتخاب عکس <?=e($r['full_name'])?>" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required><button class="small">ذخیره عکس</button></form><?php else: ?><small>نیاز به میگرشن ۰۰۵</small><?php endif; ?></td><td><?php if($r['role']==='operator'): ?><?php $granted=query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$r['id']])->fetchAll(PDO::FETCH_COLUMN); ?><form method="post"><input type="hidden" name="action" value="permissions"><input type="hidden" name="user_id" value="<?=e($r['id'])?>"><?=csrf_field()?><details><summary>انتخاب دسترسی‌ها</summary><div class="permission-list"><?php foreach(permission_catalog() as $key=>$title): ?><label><input type="checkbox" name="permissions[]" value="<?=e($key)?>" <?=in_array($key,$granted,true)?'checked':''?>><?=e($title)?></label><?php endforeach; ?></div><button class="small">ذخیره</button></details></form><?php else: ?>تمام دسترسی‌های شرکت<?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
-<div class="card"><div class="heading"><div><h2>ویرایش کاربران</h2><p class="muted">ویرایش نام، نام کاربری و وضعیت فعال‌بودن؛ تغییر دسترسی‌های اپراتور از جدول بالا انجام می‌شود.</p></div><button type="button" data-dialog-open="userEdit">ویرایش کاربر</button></div></div>
+<div class="card"><h2>مدیریت وضعیت و حذف کاربران</h2><p class="muted">حذف کاربران به شکل بایگانی قابل‌بازیابی است؛ سوابق مالی و فعالیت‌های ثبت‌شده محفوظ می‌ماند.</p><div class="table-wrap"><table><thead><tr><th>نام کاربر</th><th>وضعیت</th><th>عملیات مدیریتی</th></tr></thead><tbody><?php foreach(query('SELECT id,full_name,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $manageable): $archived=archive_ready('users') && $manageable['archived_at']!==null; $self=(int)$manageable['id']===(int)user()['id']; ?><tr><td><?=e($manageable['full_name'])?><?=$self?' (شما)':''?></td><td><span class="status-chip <?=!$archived && $manageable['is_active']?'status-good':'status-muted'?>"><?=$archived?'بایگانی‌شده':($manageable['is_active']?'فعال':'غیرفعال')?></span></td><td><div class="management-actions"><?php if($archived): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="restore_user"><input type="hidden" name="user_id" value="<?=e($manageable['id'])?>"><button class="small secondary">بازیابی</button></form><?php else: ?><button type="button" class="small secondary" data-edit-user-id="<?=e($manageable['id'])?>">ویرایش</button><?php if(!$self): ?><button type="button" class="small secondary" data-dialog-open="userStatus<?=e($manageable['id'])?>"><?=$manageable['is_active']?'غیرفعال‌سازی':'فعال‌سازی'?></button><button type="button" class="small danger" data-dialog-open="userArchive<?=e($manageable['id'])?>">حذف</button><?php endif; ?><?php endif; ?></div>
+<?php if(!$archived && !$self): ?><dialog id="userStatus<?=e($manageable['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="user_status"><input type="hidden" name="user_id" value="<?=e($manageable['id'])?>"><h2><?=$manageable['is_active']?'غیرفعال‌سازی':'فعال‌سازی'?> کاربر</h2><p>وضعیت حساب «<?=e($manageable['full_name'])?>» تغییر کند؟</p><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>تأیید</button></div></form></dialog><dialog id="userArchive<?=e($manageable['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="archive_user"><input type="hidden" name="user_id" value="<?=e($manageable['id'])?>"><h2>حذف کاربر</h2><p>«<?=e($manageable['full_name'])?>» بایگانی می‌شود؛ امکان ورود نخواهد داشت و فاکتورها حفظ می‌شوند.</p><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button class="danger">تأیید حذف</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
+<div class="card"><div class="heading"><div><h2>ویرایش کاربران</h2><p class="muted">تغییر مشخصات، نقش، رمز عبور و وضعیت؛ دسترسی‌های اپراتور از جدول بالا تنظیم می‌شود.</p></div><button type="button" data-dialog-open="userEdit">ویرایش کاربر</button></div></div>
 <dialog id="userEdit" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="edit"><h2>ویرایش مشخصات کاربر</h2>
-<label>کاربر<select name="user_id" id="editUserSelect" required><option value="">انتخاب کنید</option><?php $detailSelect=database_table_exists('user_profiles')?'SELECT u.id,u.full_name,u.username,u.is_active,p.national_code,p.mobile,p.address FROM users u LEFT JOIN user_profiles p ON p.user_id=u.id WHERE u.company_id=? ORDER BY u.full_name':'SELECT id,full_name,username,is_active,NULL national_code,NULL mobile,NULL address FROM users WHERE company_id=? ORDER BY full_name'; foreach(query($detailSelect,[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>" data-full-name="<?=e($u['full_name'])?>" data-username="<?=e($u['username'])?>" data-active="<?=e($u['is_active'])?>" data-national-code="<?=e($u['national_code'])?>" data-mobile="<?=e($u['mobile'])?>" data-address="<?=e($u['address'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label>
+<label>کاربر<select name="user_id" id="editUserSelect" required><option value="">انتخاب کنید</option><?php $detailSelect=database_table_exists('user_profiles')?'SELECT u.id,u.full_name,u.username,u.role,u.is_active,p.national_code,p.mobile,p.address'.(archive_ready('users')?',u.archived_at':'').' FROM users u LEFT JOIN user_profiles p ON p.user_id=u.id WHERE u.company_id=? ORDER BY u.full_name':'SELECT id,full_name,username,role,is_active,NULL national_code,NULL mobile,NULL address'.(archive_ready('users')?',archived_at':'').' FROM users WHERE company_id=? ORDER BY full_name'; foreach(query($detailSelect,[$tenant])->fetchAll() as $u): if(archive_ready('users') && $u['archived_at']!==null) continue; ?><option value="<?=e($u['id'])?>" data-full-name="<?=e($u['full_name'])?>" data-username="<?=e($u['username'])?>" data-role="<?=e($u['role'])?>" data-active="<?=e($u['is_active'])?>" data-national-code="<?=e($u['national_code'])?>" data-mobile="<?=e($u['mobile'])?>" data-address="<?=e($u['address'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label>
 <label>نام و نام خانوادگی<input id="editUserName" name="full_name" maxlength="180" required></label><label>نام کاربری<input id="editUserUsername" name="username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>کد ملی<input id="editUserNational" name="details[national_code]" maxlength="10" inputmode="numeric" pattern="[0-9]{10}"></label><label>تلفن همراه<input id="editUserMobile" name="details[mobile]" type="tel" maxlength="20"></label><label>آدرس<textarea id="editUserAddress" name="details[address]" maxlength="1000" rows="2"></textarea></label>
-<label class="choice"><input id="editUserActive" type="checkbox" name="is_active" value="1" checked>حساب فعال باشد</label><div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>انصراف</button><button>ثبت تغییرات</button></div></form></dialog>
+<label>نقش کاربر<select id="editUserRole" name="role"><option value="operator">اپراتور</option><option value="company_admin">مدیر شرکت</option></select></label><label>رمز عبور جدید (اختیاری)<input type="password" name="new_password" minlength="12" autocomplete="new-password" placeholder="در صورت عدم تغییر، خالی بماند"></label><label class="choice"><input id="editUserActive" type="checkbox" name="is_active" value="1" checked>حساب فعال باشد</label><div class="dialog-actions"><button class="secondary" type="button" data-dialog-close>انصراف</button><button>ثبت تغییرات</button></div></form></dialog>
 <?php elseif($page==='customers'): ?>
 <?php if(can('customers.create')): ?><div class="card"><h2>فراخوانی از بانک مرکزی تاکسیرانان</h2><p class="muted">کد ملی را وارد کنید تا راننده به پرونده این شرکت متصل شود؛ سوابق مالی شرکت‌های دیگر منتقل یا نمایش داده نمی‌شوند.</p><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="link_global"><label>کد ملی<input name="national_code" data-driver-lookup inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required><small class="lookup-result" data-driver-result role="status" aria-live="polite"></small></label><button>افزودن به پرونده شرکت</button></form></div><?php endif; ?>
 <h1>تاکسیرانان</h1><?php if(can('customers.create')): ?><div class="card"><h2>ثبت تاکسیران</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>کد ملی<input name="national_code" inputmode="numeric" pattern="[0-9]{10}" required></label><label>نام<input name="first_name" required></label><label>نام خانوادگی<input name="last_name" required></label><label>تلفن همراه<input name="mobile" inputmode="tel"></label><label>خط فعالیت<input name="line_area"></label><label>کد در خط<input name="line_code"></label><button>ثبت تاکسیران</button></form></div><?php endif; ?>

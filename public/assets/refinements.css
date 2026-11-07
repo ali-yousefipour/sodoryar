@@ -326,3 +326,9 @@ html { scroll-padding-top: 100px; }
 .login-security-note span { color: #34A88E; padding-left: 4px; }
 @media (max-width: 850px) { .login-layout { grid-template-columns: 1fr; width: min(100%,580px); } .login-showcase { padding: 23px 28px; min-height: 135px; } .login-showcase-content,.login-showcase-footer { display: none; } .login-showcase-brand b { font-size: 21px; } .login-showcase-symbol { width: 52px; height: 52px; flex-basis: 52px; border-radius: 14px; } .login-showcase-symbol img { width: 52px; height: 52px; } .login-card { padding: clamp(24px,5vw,40px); } }
 @media (max-width: 430px) { .login-wrap { padding: 10px; } .login-layout { border-radius: 18px; } .login-showcase { min-height: 104px; padding: 17px 19px; } .login-showcase-brand small { font-size: 10px; } .login-card { padding: 25px 19px; } .captcha-grid { grid-template-columns: minmax(0,1fr) 90px; gap: 8px; } .captcha-question { gap: 8px; font-size: 21px; } }
+.management-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.management-actions form{margin:0}
+.management-actions .small{min-height:40px}
+button.danger{background:#b42332;color:#fff}
+button.danger:hover{background:#8b1724}
+@media(max-width:700px){.management-actions{min-width:220px}.management-actions .small{flex:1}}
