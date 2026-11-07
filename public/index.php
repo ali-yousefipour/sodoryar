@@ -7,11 +7,16 @@ require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
     serve_profile_photo((int)($_GET['id']??0));
+}
+if ($page==='my_photo') {
+    if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
+    require_login();
+    serve_profile_photo((int)user()['id']);
 }
 if ($page==='template_logo') {
     require_login();
@@ -346,7 +351,7 @@ $navGroup=null;
 <div class="sidebar-footer">
 <?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="sidebar-action" type="submit"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#back"></use></svg><span>بازگشت به مدیریت کل</span></button></form><?php endif; ?>
 <form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="sidebar-action sidebar-logout"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#logout"></use></svg><span>خروج از حساب</span></button></form></div></aside>
-<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</small><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=user_photo&amp;id=<?=e(user()['id'])?>" alt="تصویر پروفایل"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
+<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</small><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=my_photo" alt="تصویر پروفایل" width="38" height="38"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
 <main class="content" id="mainContent" tabindex="-1">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
