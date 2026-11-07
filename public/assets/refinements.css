@@ -191,3 +191,43 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .topbar-title strong { overflow-wrap: anywhere; }
 @media (max-width: 700px) { .topbar-identity { gap: 8px; } .topbar-brand-icon { width: 36px; height: 36px; flex-basis: 36px; } .topbar-title small { font-size: 10px; line-height: 1.5; } }
 @media (prefers-reduced-motion: reduce) { button, .button-link { transition: none; } }
+/* 2026 Sodoryar identity refresh: sophisticated violet ink on quiet ivory surfaces. */
+:root {
+  --primary: #5B43BA;
+  --dark: #26234D;
+  --line: #E7E3EF;
+  --muted: #706A83;
+  --gold: #78D5C9;
+  --brand-cyan: #4FC5B8;
+  --brand-soft: #F2EFFB;
+}
+body { background: #F8F7FC; color: #28243D; }
+.app-shell > .sidebar { background: linear-gradient(172deg,#312A66 0%,#26234D 60%,#201E40 100%); box-shadow: -8px 0 30px #31225B19; }
+.sidebar .brand { background: #FFFFFF08; border-radius: 18px; padding: 10px 8px 20px; }
+.sidebar .brand strong { color: #F9F7FF; }
+.sidebar .brand small { color: #D8D2F4; }
+.brand-mark { background: #F9F7FF; box-shadow: 0 7px 20px #130D3733; border: 1px solid #FFFFFFBB; border-radius: 15px; }
+.brand-mark img { padding: 4px; }
+.login-card .brand-mark { background: #F6F3FF; box-shadow: 0 12px 26px #6C55AF2B; }
+.login-wrap { background: radial-gradient(circle at 84% 5%,#E6DFFC,transparent 37%),radial-gradient(circle at 2% 94%,#DDF4F0,transparent 42%),#F8F7FC; }
+.sidebar nav a.active { background: linear-gradient(90deg,#7665BD86,#FFFFFF10); border-color: #D6CFFF2A; box-shadow: inset -4px 0 #79D8CB; }
+.sidebar nav a:hover { background: #FFFFFF17; }
+.topbar { background: #FFFEFFEE; border-bottom-color: #EDE9F5; }
+.topbar-title small { color: #77708B; }
+.topbar-brand-icon { background: #F8F5FF; border: 1px solid #E7DFF5; padding: 2px; box-shadow: 0 4px 13px #3D2B7C16; }
+.dashboard-hero, .dashboard-hero.global-hero { background: radial-gradient(circle at 10% 115%,#62D2BF55,transparent 38%),linear-gradient(112deg,#5F4AA8,#353064 62%,#29264F); box-shadow: 0 16px 40px #34296929; }
+.hero-eyebrow { color: #D7F9EF; }
+.hero-button { background: #C9F0E8; color: #25234B; }
+.stat::before { background: linear-gradient(90deg,#9B88D9,#5D4AB8 58%,#5DC9B9); }
+.stat b,.card h2,.metrics-list dd { color: #352F69; }
+.ranking-track span { background: linear-gradient(90deg,#7156C9,#55C9B9); }
+.avatar { background: linear-gradient(130deg,#7E69CC,#403274); }
+button { background: #5B43BA; }
+button:hover { background: #47349A; box-shadow: 0 6px 16px #5B43BA24; }
+.secondary,button.secondary { background: #F1EEF9; color: #49398A; border-color: #E2DBF2; }
+.secondary:hover,button.secondary:hover { background: #E9E2F8; color: #35266D; }
+.table-wrap th { background: #F5F3FB; color: #524B6F; }
+input:not([type=checkbox]):focus,select:focus,textarea:focus { border-color: #7358CC; box-shadow: 0 0 0 3px #7358CC24; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline-color: #4FC5B8; }
+.status-good { color: #176353; background: #DCF4EB; }
+@media (prefers-reduced-motion: reduce) { button,.sidebar nav a { transition: none; } }
