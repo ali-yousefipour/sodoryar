@@ -306,24 +306,37 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
 <form method="post" class="stack"><?=csrf_field()?><label>نام کاربری<input name="username" autocomplete="username" required autofocus></label><label>رمز عبور<input name="password" type="password" autocomplete="current-password" required></label><button>ورود به سامانه</button></form></section></main>
 <?php else: ?>
-<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="48" height="48"></div><div><strong>صدوریار</strong><small>برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</small></div></div>
-<button type="button" class="sidebar-toggle secondary" aria-expanded="false" aria-controls="primaryNav" data-sidebar-toggle>نمایش منو</button>
-<nav id="primaryNav" aria-label="منوی اصلی"><a class="<?= $page==='dashboard'?'active':'' ?>" href="?page=dashboard"><?=is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت'?></a>
-<?php if(is_super() && !$tenant): ?><a class="<?= $page==='companies'?'active':'' ?>" href="?page=companies">مدیریت شرکت‌ها</a><?php endif; ?>
-<?php if($tenant): ?>
-<?php if(can('customers.view')): ?><a href="?page=customers">تاکسیرانان</a><?php endif; ?>
-<?php if(can('services.view')): ?><a href="?page=services">خدمات و تعرفه‌ها</a><?php endif; ?>
-<?php if(user()['role']!=='operator'): ?><a href="?page=users">کاربران شرکت</a><?php endif; ?>
-<?php if(can('invoices.view')): ?><a href="?page=invoices">فاکتورها</a><?php endif; ?>
-<?php if(can('reports.view')): ?><a href="?page=reports">گزارش مالی</a><?php endif; ?>
-<?php if(can('commissions.view')): ?><a href="?page=commissions">پورسانت</a><?php endif; ?>
-<?php if(user()['role']!=='operator'): ?><a href="?page=templates">قالب چاپ</a><a href="?page=settings">تنظیمات شرکت</a><?php endif; ?>
-<?php if(can('activity.view')): ?><a href="?page=activity">لاگ فعالیت‌ها</a><?php endif; ?>
-<?php endif; ?><a class="<?= $page==='profile'?'active':'' ?>" href="?page=profile">پروفایل و امنیت</a></nav>
-<?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="ghost" type="submit">بازگشت به مدیریت کل</button></form><?php endif; ?>
-<form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="ghost">خروج از حساب</button></form></aside>
+<div class="app-shell"><a class="skip-link" href="#mainContent">پرش به محتوای اصلی</a><aside class="sidebar" id="siteSidebar" aria-label="ناوبری صدوریار"><div class="brand"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="" width="48" height="48"></div><div><strong>صدوریار</strong><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></div></div>
+<button type="button" class="sidebar-toggle" aria-expanded="false" aria-controls="primaryNav" data-sidebar-toggle><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#menu"></use></svg><span data-sidebar-toggle-label>نمایش فهرست بخش‌ها</span></button>
+<?php
+$navItems=[['dashboard',is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت','dashboard','اصلی']];
+if (is_super() && !$tenant) $navItems[]=['companies','مدیریت شرکت‌ها','companies','مدیریت کل'];
+if ($tenant) {
+    if (can('customers.view')) $navItems[]=['customers','تاکسیرانان','drivers','عملیات'];
+    if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات'];
+    if (can('invoices.view')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات'];
+    if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها'];
+    if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها'];
+    if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها'];
+    if (user()['role']!=='operator') {
+        $navItems[]=['users','کاربران شرکت','users','مدیریت شرکت'];
+        $navItems[]=['templates','قالب چاپ','templates','مدیریت شرکت'];
+        $navItems[]=['settings','تنظیمات شرکت','settings','مدیریت شرکت'];
+    }
+}
+$navItems[]=['profile','پروفایل و امنیت','profile','حساب کاربری'];
+$navGroup=null;
+?>
+<nav id="primaryNav" aria-label="منوی اصلی صدوریار" data-nav-menu>
+<?php foreach($navItems as [$navPage,$navLabel,$navIcon,$navCategory]): ?>
+<?php if ($navCategory!==$navGroup): $navGroup=$navCategory; ?><p class="nav-section-label"><?=e($navCategory)?></p><?php endif; ?>
+<a class="nav-link<?=$page===$navPage?' active':''?>" href="?page=<?=e($navPage)?>" <?=$page===$navPage?'aria-current="page"':''?>><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#<?=e($navIcon)?>"></use></svg><span class="nav-link-label"><?=e($navLabel)?></span></a>
+<?php endforeach; ?></nav>
+<div class="sidebar-footer">
+<?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="sidebar-action" type="submit"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#back"></use></svg><span>بازگشت به مدیریت کل</span></button></form><?php endif; ?>
+<form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="sidebar-action sidebar-logout"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#logout"></use></svg><span>خروج از حساب</span></button></form></div></aside>
 <div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</small><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=user_photo&amp;id=<?=e(user()['id'])?>" alt="تصویر پروفایل"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
-<main class="content">
+<main class="content" id="mainContent" tabindex="-1">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
 <?php if(is_super() && !$tenant && !in_array($page,['companies','profile'],true)): ?>

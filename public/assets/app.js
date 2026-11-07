@@ -2,12 +2,26 @@ document.addEventListener('DOMContentLoaded',()=>{
   const sidebarToggle=document.querySelector('[data-sidebar-toggle]');
   const sidebarNav=document.getElementById('primaryNav');
   if(sidebarToggle&&sidebarNav){
-    sidebarToggle.addEventListener('click',()=>{
-      const expanded=sidebarToggle.getAttribute('aria-expanded')!=='true';
+    const mobileViewport=window.matchMedia('(max-width: 900px)');
+    const toggleLabel=sidebarToggle.querySelector('[data-sidebar-toggle-label]');
+    const toggleIcon=sidebarToggle.querySelector('use');
+    const setMenuOpen=expanded=>{
       sidebarToggle.setAttribute('aria-expanded',String(expanded));
       sidebarNav.classList.toggle('nav-open',expanded);
-      sidebarToggle.textContent=expanded?'بستن منو':'نمایش منو';
+      if(toggleLabel)toggleLabel.textContent=expanded?'بستن فهرست بخش‌ها':'نمایش فهرست بخش‌ها';
+      if(toggleIcon)toggleIcon.setAttribute('href','assets/sidebar-icons.svg#'+(expanded?'close':'menu'));
+    };
+    sidebarToggle.addEventListener('click',()=>{
+      const expanded=sidebarToggle.getAttribute('aria-expanded')!=='true';
+      setMenuOpen(expanded);
+      if(expanded)sidebarNav.querySelector('a')?.focus();
     });
+    sidebarNav.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&mobileViewport.matches){setMenuOpen(false);sidebarToggle.focus();}
+    });
+    sidebarNav.addEventListener('click',event=>{if(mobileViewport.matches&&event.target.closest('a'))setMenuOpen(false);});
+    mobileViewport.addEventListener('change',()=>setMenuOpen(false));
+    setMenuOpen(false);
   }
   const persianDigits=value=>String(value).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
   const persianCalendar=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'});
