@@ -143,3 +143,9 @@ input:not([type=checkbox]):focus, select:focus { border-color: #087b70; box-shad
   .sidebar .brand { display: flex; }
   .return-global { margin: 0; }
 }
+.extra-invoice-row{display:grid;grid-template-columns:minmax(180px,2fr) minmax(140px,1fr) auto;gap:12px;align-items:center;margin-block:8px}
+.extra-invoice-row input{min-width:0}
+.template-order{display:grid;gap:8px}.template-order-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid #dbe6ef;border-radius:10px;background:#f6f9fc;cursor:grab}.template-order-item button{margin-inline-start:5px}.receipt-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
+.receipt-logo{display:block;max-width:140px;max-height:90px;object-fit:contain;margin:0 auto 12px}
+@media print{.receipt-toolbar{display:none!important}}
+@media(max-width:600px){.extra-invoice-row{grid-template-columns:1fr 1fr}.extra-invoice-row button{grid-column:1/-1}}

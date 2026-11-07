@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS invoices (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS invoice_items (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, company_id BIGINT UNSIGNED NOT NULL,
- invoice_id BIGINT UNSIGNED NOT NULL, service_id BIGINT UNSIGNED NOT NULL,
+ invoice_id BIGINT UNSIGNED NOT NULL, service_id BIGINT UNSIGNED NULL,
  service_title VARCHAR(200) NOT NULL, price BIGINT UNSIGNED NOT NULL,
  CONSTRAINT fk_item_invoice FOREIGN KEY(invoice_id,company_id) REFERENCES invoices(id,company_id) ON DELETE CASCADE,
  CONSTRAINT fk_item_service FOREIGN KEY(service_id,company_id) REFERENCES services(id,company_id)
@@ -142,4 +142,21 @@ CREATE TABLE IF NOT EXISTS user_photos (
  mime_type VARCHAR(40) NOT NULL DEFAULT 'image/jpeg',
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  CONSTRAINT fk_user_photo_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration 006: optional user details and reversible financial audit trail.
+CREATE TABLE IF NOT EXISTS user_profiles (
+ user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+ national_code CHAR(10) NULL, mobile VARCHAR(20) NULL, address TEXT NULL,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ CONSTRAINT fk_profile_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS invoice_voids (
+ invoice_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+ company_id BIGINT UNSIGNED NOT NULL,
+ voided_by BIGINT UNSIGNED NOT NULL, reason VARCHAR(500) NOT NULL,
+ voided_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CONSTRAINT fk_void_invoice FOREIGN KEY(invoice_id,company_id) REFERENCES invoices(id,company_id),
+ CONSTRAINT fk_void_user FOREIGN KEY(voided_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

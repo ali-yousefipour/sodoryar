@@ -1,6 +1,36 @@
 <?php
 declare(strict_types=1);
 
+function database_table_exists(string $table): bool {
+    static $cache=[];
+    if (!in_array($table,['user_profiles','invoice_voids'],true)) return false;
+    if (!array_key_exists($table,$cache)) {
+        try { query('SELECT 1 FROM '.$table.' LIMIT 0'); $cache[$table]=true; }
+        catch (PDOException $ex) { $cache[$table]=false; }
+    }
+    return $cache[$table];
+}
+
+function save_user_details(int $id, array $input): void {
+    $national=ascii_digits(trim((string)($input['national_code']??'')));
+    $mobile=ascii_digits(trim((string)($input['mobile']??'')));
+    $address=trim((string)($input['address']??''));
+    if (($national!=='' && !preg_match('/^\d{10}$/',$national)) || mb_strlen($mobile)>20 || mb_strlen($address)>1000) throw new RuntimeException('کد ملی، موبایل یا آدرس کاربر نامعتبر است.');
+    if (!database_table_exists('user_profiles')) {
+        if ($national!=='' || $mobile!=='' || $address!=='') throw new RuntimeException('برای ذخیره مشخصات تکمیلی، ابتدا میگرشن ۰۰۶ را اجرا کنید.');
+        return;
+    }
+    query('INSERT INTO user_profiles(user_id,national_code,mobile,address) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code),mobile=VALUES(mobile),address=VALUES(address)',[$id,$national?:null,$mobile?:null,$address?:null]);
+}
+
+function invoice_extensions_ready(): bool {
+    if (!database_table_exists('invoice_voids')) return false;
+    try {
+        $column=query("SHOW COLUMNS FROM invoice_items LIKE 'service_id'")->fetch();
+        return $column && strtoupper((string)$column['Null'])==='YES';
+    } catch (PDOException $ex) { return false; }
+}
+
 function attach_global_driver(int $tenant, string $nationalCode): int {
     $nationalCode=trim($nationalCode);
     if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی باید ده رقم باشد.');
@@ -63,7 +93,24 @@ function handle_module_post(string $page, string $action): void {
         if ($title==='' || mb_strlen($title)>160 || !in_array($paper,['thermal80','a5'],true) || !in_array($font,['Tahoma','Vazirmatn'],true)) throw new RuntimeException('عنوان، قلم یا اندازه کاغذ نامعتبر است.');
         $header=trim((string)($_POST['header_text']??'')); $footer=trim((string)($_POST['footer_text']??''));
         if (mb_strlen($header)>1000 || mb_strlen($footer)>1000) throw new RuntimeException('متن سربرگ یا پانوشت طولانی است.');
-        query('INSERT INTO print_templates(company_id,title,paper_type,header_text,footer_text,layout_json,is_default) VALUES(?,?,?,?,?,?,0)',[$tenant,$title,$paper,$header,$footer,json_encode(['font'=>$font],JSON_THROW_ON_ERROR)]);
+        $allowed=['header','invoice_number','date','customer','items','total','payment','footer'];
+        $order=explode(',',(string)($_POST['block_order']??implode(',',$allowed)));
+        if (count($order)!==count($allowed) || array_unique($order)!==$order || array_diff($allowed,$order)) throw new RuntimeException('ترتیب اجزای قالب معتبر نیست.');
+        $logo=null;
+        $file=$_FILES['logo']??null;
+        if (is_array($file) && (int)($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE) {
+            if ((int)$file['error']!==UPLOAD_ERR_OK || (int)$file['size']>1024*1024 || (int)$file['size']<100 || !is_uploaded_file((string)$file['tmp_name'])) throw new RuntimeException('لوگو باید کمتر از یک مگابایت باشد.');
+            $info=@getimagesize((string)$file['tmp_name']);
+            if (!$info || !in_array($info[2],[IMAGETYPE_PNG,IMAGETYPE_JPEG],true) || $info[0]>2000 || $info[1]>2000) throw new RuntimeException('لوگو باید PNG یا JPG با حداکثر ابعاد ۲۰۰۰ پیکسل باشد.');
+            $directory=dirname(__DIR__).'/uploads/template-logos';
+            if (!is_dir($directory) && !mkdir($directory,0700,true) && !is_dir($directory)) throw new RuntimeException('امکان ایجاد پوشه لوگو نیست.');
+            $logo=bin2hex(random_bytes(16)).($info[2]===IMAGETYPE_PNG?'.png':'.jpg');
+            if (!move_uploaded_file((string)$file['tmp_name'],$directory.'/'.$logo)) throw new RuntimeException('ذخیره لوگو ناموفق بود.');
+            chmod($directory.'/'.$logo,0600);
+        }
+        try {
+            query('INSERT INTO print_templates(company_id,title,paper_type,header_text,footer_text,logo_path,layout_json,is_default) VALUES(?,?,?,?,?,?,?,0)',[$tenant,$title,$paper,$header,$footer,$logo,json_encode(['font'=>$font,'order'=>$order],JSON_THROW_ON_ERROR)]);
+        } catch(Throwable $ex) { if ($logo) @unlink(dirname(__DIR__).'/uploads/template-logos/'.$logo); throw $ex; }
         audit('template.create',$title); redirect('templates','قالب چاپ ثبت شد.');
     }
     if ($page === 'templates' && $action === 'default') {
@@ -126,7 +173,8 @@ function handle_module_post(string $page, string $action): void {
             $jm++;if ($jm===13) { $jy++;$jm=1; }
             $to=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$jy,$jm));
         }
-        $total=(int)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND created_at>=? AND created_at<?',[$tenant,$userId,$from,$to])->fetchColumn();
+        $voidFilter=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':'';
+        $total=(int)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND created_at>=? AND created_at<?'.$voidFilter,[$tenant,$userId,$from,$to])->fetchColumn();
         $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
         if (($settings['commission_enabled']??'0')!=='1') throw new RuntimeException('ابتدا سیستم پورسانت را از تنظیمات شرکت فعال کنید.');
         $limit=max(0,(float)($settings['commission_limit']??0));
@@ -155,7 +203,7 @@ function render_module(string $page, int $tenant): void {
     <?php return; }
     if ($page==='templates') { require_admin(); ?>
       <h1>طراحی قالب چاپ فاکتور</h1><p class="muted">تنظیم مشخصات قالب و مشاهده نمونه چاپ؛ برای استفاده در فاکتور، قالب موردنظر را پیش‌فرض کنید.</p>
-      <div class="template-designer"><div class="card"><h2>قالب جدید</h2><form method="post" class="stack" id="templateEditor"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان قالب<input name="title" required maxlength="160" placeholder="قالب پیش‌فرض شرکت"></label><label>نوع کاغذ<select name="paper_type"><option value="thermal80">حرارتی ۸ سانتی‌متر</option><option value="a5">A5</option></select></label><label>قلم<select name="font_family"><option value="Tahoma">Tahoma</option><option value="Vazirmatn">وزیرمتن</option></select></label><label>متن سربرگ<input name="header_text" maxlength="1000" placeholder="فاکتور خدمات"></label><label>متن پانوشت<input name="footer_text" maxlength="1000" placeholder="با تشکر از مراجعه شما"></label><button>ذخیره قالب جدید</button></form></div><div class="card"><h2>پیش‌نمایش فاکتور</h2><div class="invoice-paper" id="templatePreview"><h3 data-preview-header>فاکتور خدمات</h3><p>شماره فاکتور: ۱۴۰۵۰۸۱۶-۰۰۱</p><p>تاریخ: ۱۴۰۵/۰۸/۱۶</p><p>نام مشتری: نمونه نمایشی</p><p>کد ملی: ۰۰۰۰۰۰۰۰۰۰</p><table><thead><tr><th>شرح خدمت</th><th>مبلغ</th></tr></thead><tbody><tr><td>خدمت نمونه</td><td>۱۰۰٬۰۰۰ تومان</td></tr></tbody></table><h3>مبلغ کل: ۱۰۰٬۰۰۰ تومان</h3><p data-preview-footer>با تشکر از مراجعه شما</p></div></div></div>
+      <div class="template-designer"><div class="card"><h2>قالب جدید</h2><form method="post" enctype="multipart/form-data" class="stack" id="templateEditor"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان قالب<input name="title" required maxlength="160" placeholder="قالب پیش‌فرض شرکت"></label><label>نوع کاغذ<select name="paper_type"><option value="thermal80">حرارتی ۸ سانتی‌متر</option><option value="a5">A5</option></select></label><label>قلم<select name="font_family"><option value="Tahoma">Tahoma</option><option value="Vazirmatn">وزیرمتن</option></select></label><label>لوگوی شرکت (PNG/JPG حداکثر یک مگابایت)<input type="file" name="logo" accept="image/jpeg,image/png"></label><label>متن سربرگ<input name="header_text" maxlength="1000" placeholder="فاکتور خدمات"></label><label>متن پانوشت<input name="footer_text" maxlength="1000" placeholder="با تشکر از مراجعه شما"></label><h3>چیدمان بخش‌ها</h3><p class="muted">برای تغییر ترتیب، بخش‌ها را بکشید یا از دکمه‌های جابه‌جایی استفاده کنید.</p><input type="hidden" name="block_order" id="templateBlockOrder" value="header,invoice_number,date,customer,items,total,payment,footer"><div class="template-order" id="templateOrderList"><?php foreach(['header'=>'سربرگ','invoice_number'=>'شماره فاکتور','date'=>'تاریخ','customer'=>'مشخصات تاکسیران','items'=>'ردیف خدمات','total'=>'جمع کل','payment'=>'پرداخت','footer'=>'پانوشت'] as $key=>$label): ?><div class="template-order-item" draggable="true" data-block="<?=e($key)?>"><span>☰ <?=e($label)?></span><span><button type="button" class="small secondary" data-move-up aria-label="انتقال به بالا">↑</button><button type="button" class="small secondary" data-move-down aria-label="انتقال به پایین">↓</button></span></div><?php endforeach; ?></div><button>ذخیره قالب جدید</button></form></div><div class="card"><h2>پیش‌نمایش فاکتور</h2><div class="invoice-paper" id="templatePreview"><h3 data-block="header" data-preview-header>فاکتور خدمات</h3><p data-block="invoice_number">شماره فاکتور: ۱۴۰۵۰۸۱۶-۰۰۱</p><p data-block="date">تاریخ: ۱۴۰۵/۰۸/۱۶</p><p data-block="customer">نام مشتری: نمونه نمایشی | کد ملی: ۰۰۰۰۰۰۰۰۰۰</p><table data-block="items"><thead><tr><th>شرح خدمت</th><th>مبلغ</th></tr></thead><tbody><tr><td>خدمت نمونه</td><td>۱۰۰٬۰۰۰ تومان</td></tr></tbody></table><h3 data-block="total">مبلغ کل: ۱۰۰٬۰۰۰ تومان</h3><p data-block="payment">پرداخت: نقدی</p><p data-block="footer" data-preview-footer>با تشکر از مراجعه شما</p></div></div></div>
       <div class="card"><h2>قالب‌های ذخیره‌شده</h2><div class="table-wrap"><table><thead><tr><th>عنوان</th><th>کاغذ</th><th>پیش‌فرض</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,paper_type,is_default FROM print_templates WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $t): ?><tr><td><?=e($t['title'])?></td><td><?=e($t['paper_type'])?></td><td><?=$t['is_default']?'بله':'خیر'?></td><td><?php if(!$t['is_default']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="default"><input type="hidden" name="template_id" value="<?=e($t['id'])?>"><button class="small">انتخاب پیش‌فرض</button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
     <?php return; }
     if ($page==='settings') { require_admin(); $s=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR); ?>

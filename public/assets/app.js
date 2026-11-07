@@ -110,11 +110,48 @@ document.addEventListener('DOMContentLoaded',()=>{
     const choice=editUser.selectedOptions[0];
     document.getElementById('editUserName').value=choice.dataset.fullName||'';
     document.getElementById('editUserUsername').value=choice.dataset.username||'';
+    document.getElementById('editUserNational').value=choice.dataset.nationalCode||'';
+    document.getElementById('editUserMobile').value=choice.dataset.mobile||'';
+    document.getElementById('editUserAddress').value=choice.dataset.address||'';
     document.getElementById('editUserActive').checked=choice.dataset.active==='1';
   });}
+  const extraItems=document.getElementById('extraInvoiceItems');
+  const extraAdd=document.querySelector('[data-add-invoice-item]');
+  if(extraItems&&extraAdd){
+    extraAdd.addEventListener('click',()=>{
+      if(extraItems.children.length>=10)return;
+      const row=document.createElement('div');row.className='extra-invoice-row';
+      const title=document.createElement('input');title.name='extra_title[]';title.maxLength=200;title.placeholder='عنوان خدمت موردی';title.setAttribute('aria-label','عنوان خدمت موردی');
+      const price=document.createElement('input');price.name='extra_price[]';price.type='number';price.min='1';price.max='100000000000';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
+      const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>row.remove());
+      row.append(title,price,remove);extraItems.append(row);title.focus();
+    });
+  }
   const templateForm=document.getElementById('templateEditor');
   const templatePreview=document.getElementById('templatePreview');
   if(templateForm&&templatePreview){
+    const orderList=document.getElementById('templateOrderList');
+    const orderInput=document.getElementById('templateBlockOrder');
+    if(orderList&&orderInput){
+      const syncOrder=()=>{
+        const keys=[...orderList.querySelectorAll('[data-block]')].map(el=>el.dataset.block);
+        orderInput.value=keys.join(',');
+        keys.forEach(key=>{const part=templatePreview.querySelector(`[data-block="${key}"]`);if(part)templatePreview.append(part);});
+      };
+      orderList.addEventListener('click',event=>{
+        const button=event.target.closest('button[data-move-up],button[data-move-down]');if(!button)return;
+        const item=button.closest('[data-block]');
+        if(button.hasAttribute('data-move-up')&&item.previousElementSibling)orderList.insertBefore(item,item.previousElementSibling);
+        if(button.hasAttribute('data-move-down')&&item.nextElementSibling)orderList.insertBefore(item.nextElementSibling,item);
+        syncOrder();
+      });
+      let dragged=null;
+      orderList.addEventListener('dragstart',event=>{dragged=event.target.closest('[data-block]');});
+      orderList.addEventListener('dragover',event=>{if(dragged&&event.target.closest('[data-block]'))event.preventDefault();});
+      orderList.addEventListener('drop',event=>{const target=event.target.closest('[data-block]');if(dragged&&target&&target!==dragged){event.preventDefault();orderList.insertBefore(dragged,target);syncOrder();}dragged=null;});
+      orderList.addEventListener('dragend',()=>{dragged=null;});
+      syncOrder();
+    }
     const refreshPreview=()=>{
       templatePreview.querySelector('[data-preview-header]').textContent=templateForm.elements.header_text.value.trim()||'فاکتور خدمات';
       templatePreview.querySelector('[data-preview-footer]').textContent=templateForm.elements.footer_text.value.trim()||'با تشکر از مراجعه شما';
