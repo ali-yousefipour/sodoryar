@@ -3,10 +3,6 @@ name: Deploy Sodoryar to shared Linux host
 on:
   push:
     branches: [main]
-    paths:
-      - 'public/**'
-      - 'src/**'
-      - '.github/workflows/deploy-shared-host.yml'
   workflow_dispatch:
 
 permissions:
