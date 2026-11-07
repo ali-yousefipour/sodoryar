@@ -112,3 +112,34 @@ input:not([type=checkbox]):focus, select:focus { border-color: #087b70; box-shad
 @media(max-width:1000px){ .template-designer { grid-template-columns: 1fr; } }
 .receipt-footer { border-top: 1px solid #d5e1e2; padding-top: 20px; text-align: center; }
 @media print { .receipt-thermal { max-width: 80mm; width: 80mm; padding: 2mm; font-size: 10pt; } .receipt-thermal table { font-size: 9pt; } }
+
+/* Superadmin overview, robust mobile navigation, and Jalali calendar. */
+.global-hero { background: radial-gradient(circle at 5% 110%,#58b6d555,transparent 40%),linear-gradient(115deg,#123a59,#092e49 80%); }
+.return-global { margin: 0 4px; }
+.return-global button { border: 1px solid #d5b46e66; background: #e7bb6924; color: #f5ddb1; text-align: center; }
+.return-global button:hover { background: #e7bb6936; }
+.sidebar-toggle { display: none; width: 100%; }
+.jalali-field { display: flex; gap: 6px; min-height: 46px; align-items: center; }
+.jalali-field > input[type=hidden] { display: none; }
+.jalali-field button { min-width: 0; }
+.jalali-picker-button { flex: 1; text-align: right; }
+.jalali-clear { width: 46px; padding: 0; }
+.jalali-dialog { width: min(94vw,390px); }
+.calendar-header { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 18px; }
+.calendar-header button { font-size: .78rem; padding: 9px; min-height: 40px; }
+.calendar-title { color: #143e49; font-weight: 800; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 3px; text-align: center; }
+.calendar-weekday { font-size: .78rem; color: #637c84; padding: 8px 0; }
+.calendar-day { border: 0; background: #f3f7f8; color: #234c55; border-radius: 10px; padding: 0; height: 43px; min-height: 43px; font-size: .9rem; }
+.calendar-day:hover { background: #dbf2ea; }
+.calendar-day.selected { background: #087b70; color: #fff; }
+@media(max-width:700px){
+  .sidebar-toggle { display: block; }
+  .app-shell > .sidebar { display: grid; gap: 10px; }
+  .sidebar #primaryNav { display: none; flex-direction: column; max-height: min(55vh,500px); overflow-y: auto; }
+  .sidebar #primaryNav.nav-open { display: flex; }
+  .sidebar #primaryNav a { white-space: normal; }
+  .sidebar .logout { display: block; }
+  .sidebar .brand { display: flex; }
+  .return-global { margin: 0; }
+}

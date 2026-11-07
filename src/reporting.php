@@ -8,7 +8,7 @@ function report_filters_default(): array {
 function report_filters(): array {
     $filters=[];
     foreach (['date_from','date_to','national_code','invoice_number','payment_type','user_id'] as $key) {
-        $filters[$key]=trim((string)($_GET[$key]??''));
+        $filters[$key]=ascii_digits(trim((string)($_GET[$key]??'')));
     }
     foreach (['date_from','date_to'] as $dateKey) {
         if ($filters[$dateKey]!=='') {
@@ -63,7 +63,7 @@ function export_excel_xml(string $name, array $headers, array $rows): never {
 function render_report_filters(string $page, array $filter, bool $invoice=true): void {
     $users=query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1 ORDER BY full_name',[tenant_id()])->fetchAll();
     echo '<form method="get" class="card report-filter"><input type="hidden" name="page" value="'.e($page).'"><div class="form-grid">';
-    echo '<label>از تاریخ (میلادی)<input type="date" name="date_from" value="'.e($filter['date_from']).'"></label><label>تا تاریخ (میلادی)<input type="date" name="date_to" value="'.e($filter['date_to']).'"></label>';
+    echo '<label>از تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_from" value="'.e($filter['date_from']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ شروع">×</button></span></label><label>تا تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_to" value="'.e($filter['date_to']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ پایان">×</button></span></label>';
     echo '<label>کاربر<select name="user_id"><option value="">همه کاربران</option>';
     foreach($users as $u) echo '<option value="'.e($u['id']).'"'.($filter['user_id']===(string)$u['id']?' selected':'').'>'.e($u['full_name']).'</option>';
     echo '</select></label>';

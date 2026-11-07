@@ -114,12 +114,18 @@ function handle_module_post(string $page, string $action): void {
         require_admin();
         $userId=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
         $rate=filter_var($_POST['rate']??null,FILTER_VALIDATE_FLOAT);
-        $date=(string)($_POST['period_key']??'');
+        $date=ascii_digits(trim((string)($_POST['period_key']??'')));
         $period=(string)($_POST['period_type']??'');
-        if (!$userId || $rate===false || $rate<0 || $rate>100 || !in_array($period,['daily','monthly'],true) || !preg_match($period==='daily'?'/^\d{4}-\d{2}-\d{2}$/':'/^\d{4}-\d{2}$/',$date)) throw new RuntimeException('دوره، نرخ یا کاربر نامعتبر است.');
+        if (!$userId || $rate===false || $rate<0 || $rate>100 || !in_array($period,['daily','monthly'],true) || !preg_match($period==='daily'?'/^1[34]\d{2}[\/-]\d{2}[\/-]\d{2}$/':'/^1[34]\d{2}[\/-]\d{2}$/',$date)) throw new RuntimeException('دوره شمسی، نرخ یا کاربر نامعتبر است.');
         if (!query('SELECT id FROM users WHERE id=? AND company_id=? AND is_active=1',[$userId,$tenant])->fetch()) throw new RuntimeException('کاربر متعلق به شرکت نیست.');
-        $from=$period==='daily'?$date:$date.'-01';
-        $to=$period==='daily'?(new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d'):(new DateTimeImmutable($from))->modify('+1 month')->format('Y-m-d');
+        $date=str_replace('/','-',$date);
+        $from=jalali_to_gregorian_date($period==='daily'?$date:$date.'-01');
+        if ($period==='daily') $to=(new DateTimeImmutable($from))->modify('+1 day')->format('Y-m-d');
+        else {
+            [$jy,$jm]=array_map('intval',explode('-',$date));
+            $jm++;if ($jm===13) { $jy++;$jm=1; }
+            $to=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$jy,$jm));
+        }
         $total=(int)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND created_at>=? AND created_at<?',[$tenant,$userId,$from,$to])->fetchColumn();
         $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
         if (($settings['commission_enabled']??'0')!=='1') throw new RuntimeException('ابتدا سیستم پورسانت را از تنظیمات شرکت فعال کنید.');
@@ -158,7 +164,7 @@ function render_module(string $page, int $tenant): void {
     if ($page==='commissions') { require_permission('commissions.view'); ?>
       <h1>پورسانت کاربران</h1><p class="muted">محاسبه بر اساس فاکتورهای ثبت‌شده توسط هر کاربر و تاریخ میلادی ذخیره‌شده؛ این گزارش تسویه بانکی نیست.</p>
       <?php $commissionSettings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR); if(($commissionSettings['commission_enabled']??'0')!=='1'): ?><div class="alert error">سیستم پورسانت غیرفعال است. مدیر شرکت می‌تواند آن را از بخش «تنظیمات شرکت» فعال کند.</div><?php endif; ?>
-      <?php if(in_array(user()['role'],['superadmin','company_admin'],true)): ?><div class="card"><h2>محاسبه پورسانت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="calculate"><label>کاربر<select name="user_id"><?php foreach(query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1',[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label><label>نوع دوره<select name="period_type"><option value="daily">روزانه</option><option value="monthly">ماهانه</option></select></label><label>تاریخ دوره (میلادی)<input name="period_key" placeholder="2026-11-07" required></label><label>درصد پورسانت<input name="rate" type="number" min="0" max="100" step="0.001" required></label><button>محاسبه و ثبت</button></form></div><?php endif; ?>
+      <?php if(in_array(user()['role'],['superadmin','company_admin'],true)): ?><div class="card"><h2>محاسبه پورسانت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="calculate"><label>کاربر<select name="user_id"><?php foreach(query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1',[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label><label>نوع دوره<select name="period_type"><option value="daily">روزانه</option><option value="monthly">ماهانه</option></select></label><label>دوره شمسی<span class="jalali-field"><input type="hidden" name="period_key" data-jalali-iso data-jalali-output="jalali" required><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear>×</button></span></label><label>درصد پورسانت<input name="rate" type="number" min="0" max="100" step="0.001" required></label><button>محاسبه و ثبت</button></form></div><?php endif; ?>
       <div class="card"><h2>سوابق پورسانت</h2><?php render_table(['کاربر','دوره','تاریخ','جمع فروش','نرخ','پورسانت'],query('SELECT u.full_name,c.period_type,c.period_key,c.sales_total,c.rate,c.amount FROM commissions c JOIN users u ON u.id=c.user_id WHERE c.company_id=? ORDER BY c.id DESC LIMIT 100',[$tenant])->fetchAll(),['sales_total','amount']); ?></div>
     <?php return; }
     if ($page==='activity') { require_permission('activity.view'); ?>
@@ -170,7 +176,7 @@ function render_table(array $headings, array $rows, array $moneyColumns=[]): voi
     echo '<div class="table-wrap"><table><thead><tr>';
     foreach ($headings as $h) echo '<th>'.e($h).'</th>';
     echo '</tr></thead><tbody>';
-    foreach ($rows as $row) { echo '<tr>'; foreach ($row as $key=>$value) echo '<td>'.(in_array($key,$moneyColumns,true)?money($value):e($value)).'</td>'; echo '</tr>'; }
+    foreach ($rows as $row) { echo '<tr>'; foreach ($row as $key=>$value) echo '<td>'.(in_array($key,$moneyColumns,true)?money($value):e(ui_value($value,(string)$key))).'</td>'; echo '</tr>'; }
     if (!$rows) echo '<tr><td colspan="'.count($headings).'" class="empty-state">هنوز موردی ثبت نشده است.</td></tr>';
     echo '</tbody></table></div>';
 }

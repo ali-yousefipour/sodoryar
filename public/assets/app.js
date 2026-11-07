@@ -1,4 +1,104 @@
 document.addEventListener('DOMContentLoaded',()=>{
+  const sidebarToggle=document.querySelector('[data-sidebar-toggle]');
+  const sidebarNav=document.getElementById('primaryNav');
+  if(sidebarToggle&&sidebarNav){
+    sidebarToggle.addEventListener('click',()=>{
+      const expanded=sidebarToggle.getAttribute('aria-expanded')!=='true';
+      sidebarToggle.setAttribute('aria-expanded',String(expanded));
+      sidebarNav.classList.toggle('nav-open',expanded);
+      sidebarToggle.textContent=expanded?'بستن منو':'نمایش منو';
+    });
+  }
+  const persianDigits=value=>String(value).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  const persianCalendar=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'});
+  const persianParts=date=>{
+    const parts=Object.fromEntries(persianCalendar.formatToParts(date).filter(p=>['year','month','day'].includes(p.type)).map(p=>[p.type,Number(p.value)]));
+    return {y:parts.year,m:parts.month,d:parts.day};
+  };
+  const gregorianOfPersian=(y,m,d)=>{
+    const target=y*10000+m*100+d;
+    let low=Math.floor(Date.UTC(y+620,0,1)/86400000),high=Math.floor(Date.UTC(y+623,0,1)/86400000);
+    while(low<=high){
+      const mid=Math.floor((low+high)/2),p=persianParts(new Date(mid*86400000));
+      const value=p.y*10000+p.m*100+p.d;
+      if(value===target)return new Date(mid*86400000).toISOString().slice(0,10);
+      if(value<target)low=mid+1;else high=mid-1;
+    }
+    return null;
+  };
+  const monthNames=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+  const formatPersianDate=iso=>{
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return 'انتخاب تاریخ';
+    const p=persianParts(new Date(iso+'T00:00:00Z'));
+    return persianDigits(`${p.y}/${String(p.m).padStart(2,'0')}/${String(p.d).padStart(2,'0')}`);
+  };
+  document.querySelectorAll('.jalali-field').forEach(field=>{
+    const hidden=field.querySelector('[data-jalali-iso]');
+    const open=field.querySelector('[data-jalali-open]');
+    const clear=field.querySelector('[data-jalali-clear]');
+    const jalaliOutput=hidden.dataset.jalaliOutput==='jalali';
+    const periodType=jalaliOutput?field.closest('form')?.querySelector('[name=period_type]'):null;
+    const update=()=>{open.textContent=jalaliOutput?(hidden.value?persianDigits(hidden.value):'انتخاب دوره شمسی'):formatPersianDate(hidden.value);};
+    periodType?.addEventListener('change',()=>{
+      if(!hidden.value)return;
+      const parts=hidden.value.split('/');
+      hidden.value=periodType.value==='monthly'?parts.slice(0,2).join('/'):parts.slice(0,2).join('/')+'/'+(parts[2]||'01');update();
+    });
+    clear.addEventListener('click',()=>{hidden.value='';update();});
+    open.addEventListener('click',()=>{
+      let source=new Date();
+      if(jalaliOutput&&hidden.value){
+        const [jy,jm,jd]=hidden.value.split('/').map(Number);
+        const iso=gregorianOfPersian(jy,jm,jd||1);if(iso)source=new Date(iso+'T00:00:00Z');
+      }else if(hidden.value&&/^\d{4}-\d{2}-\d{2}$/.test(hidden.value))source=new Date(hidden.value+'T00:00:00Z');
+      let {y,m}=persianParts(source);
+      const dialog=document.createElement('dialog');dialog.className='app-dialog jalali-dialog';
+      const title=document.createElement('strong');title.className='calendar-title';
+      const grid=document.createElement('div');grid.className='calendar-grid';
+      const prev=document.createElement('button'),next=document.createElement('button'),close=document.createElement('button');
+      prev.type=next.type=close.type='button';prev.textContent='ماه قبل';next.textContent='ماه بعد';close.textContent='بستن';close.className='secondary';
+      const header=document.createElement('div');header.className='calendar-header';header.append(prev,title,next);
+      const draw=()=>{
+        title.textContent=`${monthNames[m-1]} ${persianDigits(y)}`;grid.replaceChildren();
+        const iso=gregorianOfPersian(y,m,1);if(!iso)return;
+        const first=new Date(iso+'T00:00:00Z');
+        const start=(first.getUTCDay()+1)%7;
+        ['ش','ی','د','س','چ','پ','ج'].forEach(day=>{const label=document.createElement('span');label.className='calendar-weekday';label.textContent=day;grid.append(label);});
+        for(let i=0;i<start;i++)grid.append(document.createElement('span'));
+        for(let d=1;d<=31;d++){
+          const date=new Date(first.getTime()+(d-1)*86400000);const p=persianParts(date);
+          if(p.y!==y||p.m!==m)break;
+          const btn=document.createElement('button');btn.type='button';btn.className='calendar-day secondary';btn.textContent=persianDigits(d);
+          const value=date.toISOString().slice(0,10);
+          const jalaliValue=`${p.y}/${String(p.m).padStart(2,'0')}/${String(p.d).padStart(2,'0')}`;
+          if(hidden.value===value||(jalaliOutput&&hidden.value===jalaliValue))btn.classList.add('selected');
+          btn.addEventListener('click',()=>{hidden.value=jalaliOutput?(periodType?.value==='monthly'?jalaliValue.slice(0,7):jalaliValue):value;update();dialog.close();});grid.append(btn);
+        }
+      };
+      prev.addEventListener('click',()=>{m--;if(m===0){m=12;y--;}draw();});
+      next.addEventListener('click',()=>{m++;if(m===13){m=1;y++;}draw();});
+      close.addEventListener('click',()=>dialog.close());
+      const footer=document.createElement('div');footer.className='dialog-actions';footer.append(close);
+      dialog.append(header,grid,footer);document.body.append(dialog);
+      dialog.addEventListener('close',()=>dialog.remove(),{once:true});draw();dialog.showModal();
+    });
+    update();
+  });
+  const localizeText=root=>{
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    let current;
+    while((current=walker.nextNode())){
+      if(current.parentElement?.closest('script,style,code,pre,textarea,option'))continue;
+      if(/[0-9]/.test(current.nodeValue)){
+        const localized=current.nodeValue.replace(/\b(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::\d{2})?)?\b/g,(full,iso,time)=>{
+          const rendered=formatPersianDate(iso);
+          return rendered==='انتخاب تاریخ'?full:rendered+(time?' '+time:'');
+        });
+        current.nodeValue=persianDigits(localized);
+      }
+    }
+  };
+  localizeText(document.body);
   document.querySelectorAll('[data-dialog-open]').forEach(button=>button.addEventListener('click',()=>{
     const dialog=document.getElementById(button.dataset.dialogOpen);
     if(dialog instanceof HTMLDialogElement){dialog.showModal();dialog.querySelector('input:not([type=hidden])')?.focus();}

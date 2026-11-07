@@ -18,6 +18,7 @@ function config(string $key, string $default = ''): string {
 }
 
 ini_set('display_errors', config('APP_ENV', 'production') === 'development' ? '1' : '0');
+date_default_timezone_set('Asia/Tehran');
 ini_set('session.use_strict_mode', '1');
 session_name('sodoryar_session');
 session_set_cookie_params([
@@ -42,6 +43,7 @@ function db(): PDO {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
+        $pdo->exec("SET time_zone = '+03:30'");
     }
     return $pdo;
 }
@@ -61,7 +63,13 @@ function login_succeeded(string $key): void {
     query('DELETE FROM login_attempts WHERE attempt_key=?',[$key]);
 }
 function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
-function money(int|string $amount): string { return number_format((int) $amount); }
+function fa_digits(string|int|float $value): string {
+    return strtr((string)$value,['0'=>'۰','1'=>'۱','2'=>'۲','3'=>'۳','4'=>'۴','5'=>'۵','6'=>'۶','7'=>'۷','8'=>'۸','9'=>'۹']);
+}
+function ascii_digits(string $value): string {
+    return strtr($value,['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
+}
+function money(int|string $amount): string { return fa_digits(number_format((int)$amount)); }
 function user(): ?array { return $_SESSION['user'] ?? null; }
 function is_super(): bool { return (user()['role'] ?? '') === 'superadmin'; }
 function require_login(): array {

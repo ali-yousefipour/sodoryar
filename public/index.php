@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
+require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
@@ -60,6 +61,9 @@ try {
             $id = filter_var($_POST['company_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$id || !query('SELECT id FROM companies WHERE id=? AND is_active=1',[$id])->fetch()) throw new RuntimeException('شرکت معتبر نیست.');
             $_SESSION['selected_company'] = (int)$id; redirect('dashboard');
+        }
+        if ($action === 'leave_company' && is_super()) {
+            unset($_SESSION['selected_company']); redirect('dashboard','به داشبورد مدیریت کل بازگشتید.');
         }
         if ($page === 'companies' && is_super() && $action === 'add') {
             $name = trim((string)($_POST['name'] ?? ''));
@@ -201,6 +205,7 @@ try {
 }
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
+if ($page === 'companies' && is_super() && isset($_SESSION['selected_company'])) redirect('dashboard','برای مدیریت شرکت‌ها ابتدا به داشبورد مدیریت کل بازگردید.');
 if ($page === 'users') require_admin();
 if ($page === 'services') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
@@ -209,7 +214,7 @@ if ($page === 'customers') require_permission('customers.view');
 if (in_array($page,['invoices','receipt'],true)) require_permission('invoices.view');
 if ($page === 'reports') require_permission('reports.view');
 $tenant = null;
-if (!in_array($page,['login','companies','profile'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
+if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
@@ -219,11 +224,11 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
         if (($_GET['export']??'')==='excel') {
             if ($page==='reports') {
                 $reportData=invoice_report($tenant,$reportFilter,10000);
-                $rows=array_map(static fn($r)=>[$r['invoice_number'],$r['created_at'],$r['national_code'],$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',$r['pos_ref'],$r['total_amount']],$reportData['rows']);
+                $rows=array_map(static fn($r)=>[fa_digits($r['invoice_number']),jalali_datetime($r['created_at']),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',fa_digits((string)$r['pos_ref']),money($r['total_amount'])],$reportData['rows']);
                 export_excel_xml('sodoryar-invoices',['شماره فاکتور','تاریخ','کد ملی','نام راننده','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],$rows);
             } else {
                 $rows=activity_report($tenant,$reportFilter,10000);
-                export_excel_xml('sodoryar-activity',['تاریخ و ساعت','کاربر','عملیات','توضیحات'],array_map('array_values',$rows));
+                export_excel_xml('sodoryar-activity',['تاریخ و ساعت','کاربر','عملیات','توضیحات'],array_map(static fn($r)=>[jalali_datetime($r['created_at']),$r['full_name'],$r['action'],$r['details']],$rows));
             }
         }
     } catch (RuntimeException $ex) { $error=$ex->getMessage(); $reportFilter=report_filters_default(); }
@@ -238,8 +243,9 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <form method="post" class="stack"><?=csrf_field()?><label>نام کاربری<input name="username" autocomplete="username" required autofocus></label><label>رمز عبور<input name="password" type="password" autocomplete="current-password" required></label><button>ورود به سامانه</button></form></section></main>
 <?php else: ?>
 <div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">ص</div><div><strong>صدوریار</strong><small>مدیریت خدمات تاکسیرانی</small></div></div>
-<nav aria-label="منوی اصلی"><a class="<?= $page==='dashboard'?'active':'' ?>" href="?page=dashboard">داشبورد</a>
-<?php if(is_super()): ?><a href="?page=companies">مدیریت شرکت‌ها</a><?php endif; ?>
+<button type="button" class="sidebar-toggle secondary" aria-expanded="false" aria-controls="primaryNav" data-sidebar-toggle>نمایش منو</button>
+<nav id="primaryNav" aria-label="منوی اصلی"><a class="<?= $page==='dashboard'?'active':'' ?>" href="?page=dashboard"><?=is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت'?></a>
+<?php if(is_super() && !$tenant): ?><a class="<?= $page==='companies'?'active':'' ?>" href="?page=companies">مدیریت شرکت‌ها</a><?php endif; ?>
 <?php if($tenant): ?>
 <?php if(can('customers.view')): ?><a href="?page=customers">تاکسیرانان</a><?php endif; ?>
 <?php if(can('services.view')): ?><a href="?page=services">خدمات و تعرفه‌ها</a><?php endif; ?>
@@ -249,15 +255,18 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <?php if(can('commissions.view')): ?><a href="?page=commissions">پورسانت</a><?php endif; ?>
 <?php if(user()['role']!=='operator'): ?><a href="?page=templates">قالب چاپ</a><a href="?page=settings">تنظیمات شرکت</a><?php endif; ?>
 <?php if(can('activity.view')): ?><a href="?page=activity">لاگ فعالیت‌ها</a><?php endif; ?>
-<?php endif; ?><a href="?page=profile">تغییر رمز عبور</a></nav>
+<?php endif; ?><a class="<?= $page==='profile'?'active':'' ?>" href="?page=profile">پروفایل و امنیت</a></nav>
+<?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="ghost" type="submit">بازگشت به مدیریت کل</button></form><?php endif; ?>
 <form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="ghost">خروج از حساب</button></form></aside>
 <div class="main-wrap"><header class="topbar"><div class="topbar-title"><small>پنل مدیریت صدوریار</small><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=user_photo&amp;id=<?=e(user()['id'])?>" alt="تصویر پروفایل"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
 <main class="content">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
 <?php if(is_super() && !$tenant && !in_array($page,['companies','profile'],true)): ?>
-<h1>انتخاب شرکت</h1><p class="muted">برای مشاهده اطلاعات هر شرکت، ابتدا شرکت مورد نظر را انتخاب کنید.</p>
-<div class="card"><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><label>شرکت<select name="company_id" required><?php foreach(query('SELECT id,name FROM companies WHERE is_active=1 ORDER BY name')->fetchAll() as $c): ?><option value="<?=e($c['id'])?>"><?=e($c['name'])?></option><?php endforeach; ?></select></label><button>ورود به پنل شرکت</button></form></div>
+<section class="dashboard-hero global-hero"><div><span class="hero-eyebrow">فرماندهی مجموعه</span><h1>داشبورد مدیریت کل صدوریار</h1><p>نمای تجمیعی شرکت‌ها، کاربران و عملیات مالی، بدون تغییر در استقلال اطلاعات شرکت‌ها</p></div><div class="hero-actions"><a class="hero-button" href="?page=companies">مدیریت شرکت‌ها</a><a class="hero-secondary" href="?page=profile">امنیت حساب مدیر کل</a></div></section>
+<?php $globalStats=query('SELECT (SELECT COUNT(*) FROM companies) companies,(SELECT COUNT(*) FROM companies WHERE is_active=1) active_companies,(SELECT COUNT(*) FROM users WHERE is_active=1 AND company_id IS NOT NULL) active_users,(SELECT COUNT(*) FROM invoices) invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices) revenue,(SELECT COUNT(*) FROM invoices WHERE DATE(created_at)=CURRENT_DATE()) today_invoices')->fetch(); ?>
+<div class="stats"><article class="stat"><span>شرکت‌های ثبت‌شده</span><b><?=money($globalStats['companies'])?></b><small><?=money($globalStats['active_companies'])?> شرکت فعال</small></article><article class="stat"><span>کاربران فعال شرکت‌ها</span><b><?=money($globalStats['active_users'])?></b></article><article class="stat"><span>کل فاکتورها</span><b><?=money($globalStats['invoices'])?></b><small><?=money($globalStats['today_invoices'])?> فاکتور امروز</small></article><article class="stat"><span>مجموع مبالغ ثبت‌شده</span><b><?=money($globalStats['revenue'])?></b></article></div>
+<div class="card"><div class="heading"><div><h2>مدیریت و پایش شرکت‌ها</h2><p class="muted">برای ورود به پنل هر شرکت از دکمه انتخاب استفاده کنید؛ این دسترسی فقط برای مدیر کل است.</p></div><a class="button-link" href="?page=companies">تعریف شرکت جدید</a></div><div class="table-wrap"><table><thead><tr><th>نام شرکت</th><th>وضعیت</th><th>کاربران فعال</th><th>تعداد فاکتور</th><th>مجموع ثبت‌شده</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT c.id,c.name,c.is_active,(SELECT COUNT(*) FROM users u WHERE u.company_id=c.id AND u.is_active=1) users_count,(SELECT COUNT(*) FROM invoices i WHERE i.company_id=c.id) invoices_count,(SELECT COALESCE(SUM(total_amount),0) FROM invoices i WHERE i.company_id=c.id) revenue FROM companies c ORDER BY c.id DESC LIMIT 100')->fetchAll() as $c): ?><tr><td><?=e($c['name'])?></td><td><span class="status-chip <?=$c['is_active']?'status-good':'status-muted'?>"><?=$c['is_active']?'فعال':'غیرفعال'?></span></td><td><?=money($c['users_count'])?></td><td><?=money($c['invoices_count'])?></td><td><?=money($c['revenue'])?></td><td><?php if($c['is_active']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="select_company"><input type="hidden" name="company_id" value="<?=e($c['id'])?>"><button class="small">ورود به شرکت</button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='companies'): ?>
 <div class="heading"><div><h1>مدیریت شرکت‌ها</h1><p class="muted">هر شرکت پایگاه داده منطقی و دسترسی مستقل دارد.</p></div></div>
 <div class="card"><h2>افزودن شرکت و مدیر اولیه</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام شرکت<input name="name" required></label><label>شناسه انگلیسی<input name="slug" pattern="[a-z0-9-]{3,80}" placeholder="mashhad-taxi" required></label><label>نام مدیر شرکت<input name="manager_name" required></label><label>نام کاربری مدیر<input name="manager_username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه مدیر<input type="password" minlength="12" autocomplete="new-password" name="manager_password" required></label><button>ثبت شرکت و مدیر</button></form></div>
@@ -266,9 +275,9 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <section class="dashboard-hero"><div><span class="hero-eyebrow">مرکز کنترل خدمات</span><h1>داشبورد <?=e($companyName ?: 'صدوریار')?></h1><p>نمای یکپارچه فعالیت‌های شرکت، وضعیت خدمات و امور مالی</p></div><div class="hero-actions"><?php if(can('invoices.create')): ?><a class="hero-button" href="?page=invoices">+ صدور فاکتور جدید</a><?php endif; ?><a class="hero-secondary" href="?page=profile">حساب کاربری</a></div></section>
 <?php if(!can('reports.view')): ?><div class="card"><h2>خوش آمدید</h2><p class="muted">برای مشاهده گزارش‌های مالی، مدیر شرکت باید دسترسی مربوط را برای حساب شما فعال کند.</p></div><?php else: ?>
 <?php $stats=query('SELECT (SELECT COUNT(*) FROM customers WHERE company_id=?) customers,(SELECT COUNT(*) FROM services WHERE company_id=? AND is_active=1) services,(SELECT COUNT(*) FROM invoices WHERE company_id=?) invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=?) revenue',[$tenant,$tenant,$tenant,$tenant])->fetch(); ?>
-<?php $period=query('SELECT COALESCE(SUM(CASE WHEN DATE(created_at)=CURRENT_DATE() THEN 1 ELSE 0 END),0) today_count,COALESCE(SUM(CASE WHEN created_at>=DATE_FORMAT(CURRENT_DATE(),\'%Y-%m-01\') THEN 1 ELSE 0 END),0) month_count,COALESCE(SUM(CASE WHEN DATE(created_at)=CURRENT_DATE() THEN total_amount ELSE 0 END),0) today_total,COALESCE(SUM(CASE WHEN created_at>=DATE_FORMAT(CURRENT_DATE(),\'%Y-%m-01\') THEN total_amount ELSE 0 END),0) month_total FROM invoices WHERE company_id=?',[$tenant])->fetch(); ?>
+<?php [$todayJy,$todayJm]=gregorian_to_jalali((int)date('Y'),(int)date('n'),(int)date('j')); $jalaliMonthStart=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$todayJy,$todayJm)); $period=query('SELECT COALESCE(SUM(CASE WHEN DATE(created_at)=CURRENT_DATE() THEN 1 ELSE 0 END),0) today_count,COALESCE(SUM(CASE WHEN created_at>=? THEN 1 ELSE 0 END),0) month_count,COALESCE(SUM(CASE WHEN DATE(created_at)=CURRENT_DATE() THEN total_amount ELSE 0 END),0) today_total,COALESCE(SUM(CASE WHEN created_at>=? THEN total_amount ELSE 0 END),0) month_total FROM invoices WHERE company_id=?',[$jalaliMonthStart,$jalaliMonthStart,$tenant])->fetch(); ?>
 <div class="stats"><article class="stat"><span>خدمات ثبت‌شده امروز</span><b><?=money($period['today_count'])?></b></article><article class="stat"><span>خدمات ماه جاری</span><b><?=money($period['month_count'])?></b></article><article class="stat"><span>فروش امروز</span><b><?=money($period['today_total'])?></b><small>مبلغ ثبت‌شده</small></article><article class="stat"><span>فروش ماه جاری</span><b><?=money($period['month_total'])?></b><small>مبلغ ثبت‌شده</small></article></div>
-<div class="dashboard-secondary"><div class="card"><h2>عملکرد کاربران در ماه جاری</h2><?php $ranking=query('SELECT u.full_name,COUNT(i.id) invoice_count,COALESCE(SUM(i.total_amount),0) total FROM users u LEFT JOIN invoices i ON i.user_id=u.id AND i.company_id=u.company_id AND i.created_at>=DATE_FORMAT(CURRENT_DATE(),\'%Y-%m-01\') WHERE u.company_id=? AND u.is_active=1 GROUP BY u.id,u.full_name ORDER BY invoice_count DESC,total DESC LIMIT 8',[$tenant])->fetchAll(); ?><div class="ranking-chart"><?php $max=max(1,...array_map(static fn($r)=>(int)$r['invoice_count'],$ranking)); foreach($ranking as $row): ?><div class="ranking-row"><span><?=e($row['full_name'])?></span><div class="ranking-track"><span style="width:<?=e((int)round(100*$row['invoice_count']/$max))?>%"></span></div><b><?=money($row['invoice_count'])?></b></div><?php endforeach; ?></div></div><div class="card"><h2>شاخص‌های جاری</h2><dl class="metrics-list"><div><dt>رانندگان در پرونده شرکت</dt><dd><?=money($stats['customers'])?></dd></div><div><dt>خدمات فعال</dt><dd><?=money($stats['services'])?></dd></div><div><dt>کل فاکتورهای ثبت‌شده</dt><dd><?=money($stats['invoices'])?></dd></div><div><dt>مجموع مبالغ ثبت‌شده</dt><dd><?=money($stats['revenue'])?></dd></div></dl></div></div>
+<div class="dashboard-secondary"><div class="card"><h2>عملکرد کاربران در ماه شمسی جاری</h2><?php $ranking=query('SELECT u.full_name,COUNT(i.id) invoice_count,COALESCE(SUM(i.total_amount),0) total FROM users u LEFT JOIN invoices i ON i.user_id=u.id AND i.company_id=u.company_id AND i.created_at>=? WHERE u.company_id=? AND u.is_active=1 GROUP BY u.id,u.full_name ORDER BY invoice_count DESC,total DESC LIMIT 8',[$jalaliMonthStart,$tenant])->fetchAll(); ?><div class="ranking-chart"><?php $max=max(1,...array_map(static fn($r)=>(int)$r['invoice_count'],$ranking)); foreach($ranking as $row): ?><div class="ranking-row"><span><?=e($row['full_name'])?></span><div class="ranking-track"><span style="width:<?=e((int)round(100*$row['invoice_count']/$max))?>%"></span></div><b><?=money($row['invoice_count'])?></b></div><?php endforeach; ?></div></div><div class="card"><h2>شاخص‌های جاری</h2><dl class="metrics-list"><div><dt>رانندگان در پرونده شرکت</dt><dd><?=money($stats['customers'])?></dd></div><div><dt>خدمات فعال</dt><dd><?=money($stats['services'])?></dd></div><div><dt>کل فاکتورهای ثبت‌شده</dt><dd><?=money($stats['invoices'])?></dd></div><div><dt>مجموع مبالغ ثبت‌شده</dt><dd><?=money($stats['revenue'])?></dd></div></dl></div></div>
 <div class="card"><div class="heading"><h2>آخرین فاکتورها</h2><a href="?page=invoices">مشاهده همه</a></div><?php render_invoices($tenant,8); ?></div>
 <?php endif; ?>
 <?php elseif($page==='users'): ?>
@@ -311,6 +320,6 @@ $templateStyle=$selectedTemplate?json_decode((string)$selectedTemplate['layout_j
 function render_invoices(int $tenant, int $limit): void {
     $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.created_at,c.first_name,c.last_name FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.company_id=? ORDER BY i.id DESC LIMIT '.(int)$limit,[$tenant])->fetchAll();
     echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>جزئیات</th></tr></thead><tbody>';
-    foreach($rows as $r) echo '<tr><td>'.e($r['invoice_number']).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e($r['created_at']).'</td><td><a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a></td></tr>';
+    foreach($rows as $r) echo '<tr><td>'.e(fa_digits($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['created_at'])).'</td><td><a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a></td></tr>';
     echo '</tbody></table></div>';
 }
