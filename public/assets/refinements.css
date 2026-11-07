@@ -149,3 +149,45 @@ input:not([type=checkbox]):focus, select:focus { border-color: #087b70; box-shad
 .receipt-logo{display:block;max-width:140px;max-height:90px;object-fit:contain;margin:0 auto 12px}
 @media print{.receipt-toolbar{display:none!important}}
 @media(max-width:600px){.extra-invoice-row{grid-template-columns:1fr 1fr}.extra-invoice-row button{grid-column:1/-1}}
+/* Sodoryar brand: azure, deep lapis, turquoise and warm amber. */
+:root {
+  --primary: #215BC3;
+  --dark: #142C58;
+  --line: #DFE7F4;
+  --muted: #60718B;
+  --gold: #F2B65A;
+  --brand-cyan: #27B7C8;
+  --brand-soft: #EFF5FF;
+}
+body { background: #F4F7FD; color: #172D50; }
+.app-shell > .sidebar { background: linear-gradient(160deg,#163D82 0%,#172F64 55%,#101F43 100%); box-shadow: -8px 0 30px #173E821c; }
+.sidebar .brand { gap: 13px; }
+.sidebar .brand strong { color: #FFFFFF; letter-spacing: -.3px; }
+.sidebar .brand small { color: #C8E7F4; line-height: 1.6; max-width: 180px; }
+.brand-mark { width: 54px; height: 54px; flex: 0 0 54px; border-radius: 16px; background: none; box-shadow: 0 9px 22px #07193742; overflow: hidden; padding: 0; }
+.brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.login-card .brand-mark { width: 70px; height: 70px; border-radius: 19px; box-shadow: 0 15px 28px #173D8350; }
+.login-wrap { background: radial-gradient(circle at 82% 12%,#C5E6FB 0,transparent 40%),radial-gradient(circle at 5% 90%,#D4F3F3,transparent 42%),#F4F7FD; }
+.sidebar nav a.active { background: linear-gradient(95deg,#3589E97a,#FFFFFF13); box-shadow: inset -4px 0 var(--gold); border-color: #C0E4FF25; }
+.sidebar nav a:hover { background: #FFFFFF1d; }
+.dashboard-hero { background: radial-gradient(circle at 14% 120%,#23C7D65c,transparent 34%),linear-gradient(115deg,#205FBC,#173A81 64%,#172A58); box-shadow: 0 15px 38px #183E8E32; }
+.dashboard-hero.global-hero { background: radial-gradient(circle at 12% 100%,#28BCCA64,transparent 40%),linear-gradient(110deg,#214CA0,#142B61 72%); }
+.hero-eyebrow { color: #FFE2AA; }
+.hero-button { background: var(--gold); color: #19365E; }
+.stat::before { background: linear-gradient(90deg,var(--brand-cyan),#3C79E3 62%,var(--gold)); }
+.stat b, .card h2, .metrics-list dd { color: #183E80; }
+.ranking-track span { background: linear-gradient(90deg,#2260CA,#33BFC9); }
+input:not([type=checkbox]):focus, select:focus, textarea:focus { border-color: #2469D5; box-shadow: 0 0 0 3px #2469D526; }
+button, .button-link { transition: background-color .2s, box-shadow .2s, transform .2s; }
+button:hover { background: #19489E; box-shadow: 0 6px 18px #215BC32a; }
+.secondary, button.secondary { background: #EAF1FB; color: #20457D; border-color: #D3E1F5; }
+.secondary:hover, button.secondary:hover { background: #DBE9FC; color: #183967; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #E6A740; outline-offset: 2px; }
+.table-wrap th { background: #EFF4FC; color: #3C5278; }
+.topbar-title small { color: #55729C; }
+.topbar-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.topbar-brand-icon { display: block; width: 43px; height: 43px; border-radius: 12px; box-shadow: 0 5px 12px #173D8333; flex: 0 0 43px; }
+.topbar-title { min-width: 0; }
+.topbar-title strong { overflow-wrap: anywhere; }
+@media (max-width: 700px) { .topbar-identity { gap: 8px; } .topbar-brand-icon { width: 36px; height: 36px; flex-basis: 36px; } .topbar-title small { font-size: 10px; line-height: 1.5; } }
+@media (prefers-reduced-motion: reduce) { button, .button-link { transition: none; } }

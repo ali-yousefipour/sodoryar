@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">نشان صدوریار</title>
+  <desc id="desc">خودروی تاکسی و سند خدمات با علامت تایید</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#266BDF"/><stop offset="1" stop-color="#15366D"/></linearGradient>
+    <linearGradient id="aqua" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#70E2DF"/><stop offset="1" stop-color="#24ABC4"/></linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="29" fill="url(#blue)"/>
+  <path d="M17 91C15 63 35 40 62 34" fill="none" stroke="#70E2DF" stroke-width="5" opacity=".36" stroke-linecap="round"/>
+  <path d="M25 78l9-27c2-7 8-11 16-11h30c8 0 13 3 16 11l8 27" fill="#F5B95E"/>
+  <path d="M40 53c1-4 4-6 9-6h33c5 0 8 2 9 6l5 18H34z" fill="#EAF8FE"/>
+  <path d="M41 59h44l5 12H37z" fill="url(#aqua)"/>
+  <path d="M29 74h70c7 0 12 6 12 13v12H17V87c0-7 5-13 12-13z" fill="#FFFFFF"/>
+  <path d="M23 84h24v8H23zM81 84h24v8H81z" fill="#F5B95E"/>
+  <rect x="27" y="96" width="15" height="12" rx="4" fill="#102E61"/><rect x="86" y="96" width="15" height="12" rx="4" fill="#102E61"/>
+  <rect x="52" y="11" width="30" height="17" rx="6" fill="#FFFFFF"/><path d="M60 19h14" fill="none" stroke="#1C67D2" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="95" cy="33" r="17" fill="#24B9BC" stroke="#FFFFFF" stroke-width="4"/><path d="M87 33l5 5 11-12" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
