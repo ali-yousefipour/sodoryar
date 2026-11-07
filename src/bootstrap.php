@@ -20,6 +20,8 @@ function config(string $key, string $default = ''): string {
 ini_set('display_errors', config('APP_ENV', 'production') === 'development' ? '1' : '0');
 date_default_timezone_set('Asia/Tehran');
 ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.use_trans_sid', '0');
 session_name('sodoryar_session');
 session_set_cookie_params([
     'httponly' => true, 'secure' => config('SESSION_SECURE', '1') === '1',
@@ -29,6 +31,7 @@ session_start();
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: SAMEORIGIN');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
 header('Cache-Control: private, no-store');
 header('Content-Security-Policy: default-src \'self\'; script-src \'self\'; style-src \'self\' https://fonts.googleapis.com; font-src \'self\' https://fonts.gstatic.com; img-src \'self\' data:; object-src \'none\'; base-uri \'self\'; form-action \'self\'; frame-ancestors \'self\'');
 if (config('SESSION_SECURE', '1') === '1') header('Strict-Transport-Security: max-age=31536000');
@@ -53,14 +56,30 @@ function query(string $sql, array $params = []): PDOStatement {
 function login_attempt_key(string $username): string {
     return hash('sha256', strtolower(trim($username)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
 }
-function login_is_limited(string $key): bool {
-    return (int) query('SELECT COUNT(*) FROM login_attempts WHERE attempt_key=? AND created_at >= NOW() - INTERVAL 15 MINUTE',[$key])->fetchColumn() >= 5;
+function login_ip_key(): string {
+    return hash('sha256','ip:'.($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+}
+function login_is_limited(string $key,int $limit=5): bool {
+    return (int) query('SELECT COUNT(*) FROM login_attempts WHERE attempt_key=? AND created_at >= NOW() - INTERVAL 15 MINUTE',[$key])->fetchColumn() >= $limit;
 }
 function login_failed(string $key): void {
     query('INSERT INTO login_attempts(attempt_key) VALUES(?)',[$key]);
 }
 function login_succeeded(string $key): void {
     query('DELETE FROM login_attempts WHERE attempt_key=?',[$key]);
+}
+function login_captcha_new(): array {
+    $a=random_int(2,9); $b=random_int(2,9);
+    $_SESSION['login_captcha']=['answer'=>(string)($a+$b),'issued_at'=>time()];
+    return [$a,$b];
+}
+function login_captcha_verify(string $submitted): bool {
+    $challenge=$_SESSION['login_captcha']??null;
+    unset($_SESSION['login_captcha']);
+    $value=ascii_digits(trim($submitted));
+    return is_array($challenge) && isset($challenge['answer'],$challenge['issued_at'])
+        && time()-(int)$challenge['issued_at']<=300 && time()>=(int)$challenge['issued_at']
+        && preg_match('/^[0-9]{1,2}$/D',$value)===1 && hash_equals((string)$challenge['answer'],$value);
 }
 function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function fa_digits(string|int|float $value): string {
@@ -74,6 +93,13 @@ function user(): ?array { return $_SESSION['user'] ?? null; }
 function is_super(): bool { return (user()['role'] ?? '') === 'superadmin'; }
 function require_login(): array {
     $u = user(); if (!$u) { header('Location: ?page=login'); exit; }
+    if (time()-(int)($_SESSION['last_activity']??time())>1800) {
+        $_SESSION=[]; session_regenerate_id(true); header('Location: ?page=login'); exit;
+    }
+    $_SESSION['last_activity']=time();
+    if (time()-(int)($_SESSION['regenerated_at']??0)>900) {
+        session_regenerate_id(true); $_SESSION['regenerated_at']=time();
+    }
     static $checked = false;
     if (!$checked) {
         $record = query('SELECT u.id,u.role,u.company_id,u.full_name,u.is_active,c.is_active company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?',[$u['id']])->fetch();

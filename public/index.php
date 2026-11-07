@@ -51,19 +51,24 @@ try {
     if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
         $login = trim((string) ($_POST['username'] ?? ''));
+        $password=(string)($_POST['password']??'');
+        if (strlen($login)>100 || strlen($password)>4096) throw new RuntimeException('اطلاعات ورود نامعتبر است.');
         $attemptKey = login_attempt_key($login);
-        if (login_is_limited($attemptKey)) {
+        $ipKey=login_ip_key();
+        if (login_is_limited($attemptKey) || login_is_limited($ipKey,20)) {
             $error = 'تعداد تلاش‌های ناموفق زیاد است. ۱۵ دقیقه دیگر تلاش کنید.';
         } else {
-        $u = query('SELECT u.*, c.is_active AS company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.username=? LIMIT 1', [$login])->fetch();
-        if ($u && (int) $u['is_active'] === 1 && ($u['role'] === 'superadmin' || (int) $u['company_active'] === 1) && password_verify((string) ($_POST['password'] ?? ''), $u['password_hash'])) {
-            login_succeeded($attemptKey);
-            session_regenerate_id(true);
-            $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
-            unset($_SESSION['selected_company']); audit('login'); redirect('dashboard');
-        }
-        login_failed($attemptKey);
-        $error = 'نام کاربری یا رمز عبور نادرست است.';
+            $captchaValid=login_captcha_verify((string)($_POST['captcha_answer']??''));
+            $u=$captchaValid?query('SELECT u.*, c.is_active AS company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.username=? LIMIT 1', [$login])->fetch():false;
+            if ($captchaValid && $u && (int) $u['is_active'] === 1 && ($u['role'] === 'superadmin' || (int) $u['company_active'] === 1) && password_verify($password, $u['password_hash'])) {
+                login_succeeded($attemptKey);
+                session_regenerate_id(true);
+                $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
+                $_SESSION['last_activity']=time(); $_SESSION['regenerated_at']=time();
+                unset($_SESSION['selected_company']); audit('login'); redirect('dashboard');
+            }
+            login_failed($attemptKey); login_failed($ipKey);
+            $error = 'اطلاعات ورود یا پاسخ سؤال امنیتی نادرست است.';
         }
     }
     if ($page !== 'login') require_login();
@@ -298,13 +303,19 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
     } catch (RuntimeException $ex) { $error=$ex->getMessage(); $reportFilter=report_filters_default(); }
 }
 $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
+if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/png" href="assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css"><link rel="stylesheet" href="assets/refinements.css"></head><body>
 <?php if ($page==='login'): ?>
-<main class="login-wrap"><section class="login-card"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="64" height="64"></div><h1>ورود به صدوریار</h1><p class="muted">برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</p>
-<?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
-<form method="post" class="stack"><?=csrf_field()?><label>نام کاربری<input name="username" autocomplete="username" required autofocus></label><label>رمز عبور<input name="password" type="password" autocomplete="current-password" required></label><button>ورود به سامانه</button></form></section></main>
+<main class="login-wrap"><div class="login-layout">
+<section class="login-showcase" aria-labelledby="loginIntro"><div class="login-showcase-brand"><span class="login-showcase-symbol"><img src="assets/sodoryar-logo.png" width="78" height="78" alt=""></span><span><b>صدوریار</b><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></span></div><div class="login-showcase-content"><span class="login-eyebrow">پنل یکپارچه کارگزاری‌ها</span><h2 id="loginIntro">مدیریت خدمات، ساده و مطمئن</h2><p>صدور فاکتور، مدیریت کاربران و پیگیری گزارش‌های مالی هر شرکت در محیطی امن و منظم.</p><div class="login-features"><span>اطلاعات مستقل هر شرکت</span><span>مدیریت دسترسی کاربران</span><span>گزارش‌های مالی یکپارچه</span></div></div><p class="login-showcase-footer">سامانه اختصاصی خدمات کارگزاری‌های تاکسیرانی</p></section>
+<section class="login-card" aria-labelledby="loginTitle"><div class="login-form-head"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="64" height="64"></div><span class="login-pill">ورود امن</span></div><h1 id="loginTitle">ورود به حساب کاربری</h1><p class="muted">برای ادامه، اطلاعات حساب و پاسخ سؤال امنیتی را وارد کنید.</p>
+<?php if(isset($error)): ?><div class="alert error" role="alert"><?=e($error)?></div><?php endif; ?>
+<form method="post" class="stack login-form" autocomplete="on"><?=csrf_field()?><label for="loginUsername">نام کاربری<input id="loginUsername" name="username" autocomplete="username" maxlength="100" spellcheck="false" required autofocus value="<?=e(isset($error)?(string)($_POST['username']??''):'')?>" placeholder="نام کاربری خود را وارد کنید"></label><label for="loginPassword">رمز عبور<input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور"></label>
+<fieldset class="captcha-fieldset"><legend>تأیید امنیتی</legend><p class="captcha-hint">حاصل جمع اعداد زیر را وارد کنید.</p><div class="captcha-grid"><div class="captcha-question" id="captchaQuestion" aria-label="<?=e(fa_digits($captchaFirst).' به علاوه '.fa_digits($captchaSecond))?>"><span><?=fa_digits($captchaFirst)?></span><span aria-hidden="true">+</span><span><?=fa_digits($captchaSecond)?></span><span aria-hidden="true">=</span><span aria-hidden="true">؟</span></div><label for="loginCaptcha" class="captcha-answer-label">پاسخ<input id="loginCaptcha" name="captcha_answer" inputmode="numeric" autocomplete="off" pattern="[0-9۰-۹٠-٩]{1,2}" maxlength="2" required aria-describedby="captchaQuestion" placeholder="عدد"></label></div></fieldset>
+<button class="login-submit" type="submit"><span>ورود به سامانه</span><svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></button></form><p class="login-security-note"><span aria-hidden="true">●</span> ورود و اطلاعات حساب شما با کنترل امنیتی محافظت می‌شود.</p></section>
+</div></main>
 <?php else: ?>
 <div class="app-shell"><a class="skip-link" href="#mainContent">پرش به محتوای اصلی</a><aside class="sidebar" id="siteSidebar" aria-label="ناوبری صدوریار"><div class="brand"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="" width="48" height="48"></div><div><strong>صدوریار</strong><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></div></div>
 <button type="button" class="sidebar-toggle" aria-expanded="false" aria-controls="primaryNav" data-sidebar-toggle><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#menu"></use></svg><span data-sidebar-toggle-label>نمایش فهرست بخش‌ها</span></button>
