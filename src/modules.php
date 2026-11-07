@@ -20,8 +20,9 @@ function register_missing_driver(int $tenant, string $nationalCode, array $field
         $last=trim((string)($fields['last_name']??''));
         $mobile=trim((string)($fields['mobile']??''));
         $line=trim((string)($fields['line_area']??''));
-        if ($first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100 || mb_strlen($mobile)>30 || mb_strlen($line)>180) throw new RuntimeException('این کد ملی در بانک مرکزی وجود ندارد؛ نام و نام خانوادگی راننده جدید را وارد کنید.');
-        query('INSERT INTO global_drivers(national_code,first_name,last_name,mobile,line_area) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code)',[$nationalCode,$first,$last,$mobile,$line]);
+        $lineCode=trim((string)($fields['line_code']??''));
+        if ($first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100 || mb_strlen($mobile)>20 || mb_strlen($line)>180 || mb_strlen($lineCode)>40) throw new RuntimeException('این کد ملی در بانک مرکزی وجود ندارد؛ نام و نام خانوادگی و اطلاعات معتبر راننده جدید را وارد کنید.');
+        query('INSERT INTO global_drivers(national_code,first_name,last_name,mobile,line_area,line_code) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code)',[$nationalCode,$first,$last,$mobile,$line,$lineCode]);
         audit('global_driver.create',$nationalCode);
     }
     return attach_global_driver($tenant,$nationalCode);

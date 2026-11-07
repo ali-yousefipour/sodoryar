@@ -15,6 +15,12 @@ if ($page==='driver_lookup') {
     require_login(); tenant_id();
     if (!can('customers.view') && !can('invoices.create')) { http_response_code(403); exit; }
     header('Content-Type: application/json; charset=utf-8');
+    if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); echo json_encode(['error'=>'روش درخواست مجاز نیست.'],JSON_UNESCAPED_UNICODE); exit; }
+    // Per-session throttling reduces bulk national-code enumeration without storing extra PII.
+    $window=(int)($_SESSION['driver_lookup_window']??0);
+    if (time()-$window>=60) { $_SESSION['driver_lookup_window']=time(); $_SESSION['driver_lookup_count']=0; }
+    if ((int)($_SESSION['driver_lookup_count']??0)>=60) { http_response_code(429); header('Retry-After: 60'); echo json_encode(['error'=>'تعداد جست‌وجو زیاد است؛ کمی بعد دوباره تلاش کنید.'],JSON_UNESCAPED_UNICODE); exit; }
+    $_SESSION['driver_lookup_count']=(int)($_SESSION['driver_lookup_count']??0)+1;
     $code=trim((string)($_GET['national_code']??''));
     if (!preg_match('/^[0-9]{10}$/',$code)) { http_response_code(422); echo json_encode(['error'=>'کد ملی ده‌رقمی وارد کنید.'],JSON_UNESCAPED_UNICODE); exit; }
     $found=query('SELECT national_code,first_name,last_name,line_area,vehicle_plate FROM global_drivers WHERE national_code=?',[$code])->fetch();
@@ -117,9 +123,14 @@ try {
             require_permission('customers.create');
             $tenant = tenant_id(); $code = trim((string)($_POST['national_code'] ?? ''));
             $first = trim((string)($_POST['first_name'] ?? '')); $last = trim((string)($_POST['last_name'] ?? ''));
-            if (!preg_match('/^[0-9]{10}$/',$code) || $first==='' || $last==='') throw new RuntimeException('کد ملی ده‌رقمی و نام و نام خانوادگی الزامی هستند.');
-            query('INSERT INTO customers(company_id,national_code,first_name,last_name,mobile,line_area,line_code) VALUES(?,?,?,?,?,?,?)',[$tenant,$code,$first,$last,trim((string)($_POST['mobile'] ?? '')),trim((string)($_POST['line_area'] ?? '')),trim((string)($_POST['line_code'] ?? ''))]);
-            audit('customer.create',$code); redirect('customers','تاکسیران ثبت شد.');
+            if (!preg_match('/^[0-9]{10}$/',$code) || $first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100) throw new RuntimeException('کد ملی ده‌رقمی و نام و نام خانوادگی معتبر الزامی هستند.');
+            db()->beginTransaction();
+            try {
+                register_missing_driver($tenant,$code,['first_name'=>$first,'last_name'=>$last,'mobile'=>$_POST['mobile']??'','line_area'=>$_POST['line_area']??'','line_code'=>$_POST['line_code']??'']);
+                audit('customer.create',$code);
+                db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('customers','تاکسیران در بانک مرکزی و پرونده شرکت ثبت شد.');
         }
         if ($page==='customers' && $action==='link_global') {
             require_permission('customers.create');
@@ -180,7 +191,7 @@ $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant
 $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?=e($page==='login'?'ورود':$companyName.' | صدوریار')?></title><link rel="stylesheet" href="assets/app.css"></head><body>
+<title><?=e($page==='login'?'ورود':$companyName.' | صدوریار')?></title><link rel="stylesheet" href="assets/app.css"><link rel="stylesheet" href="assets/refinements.css"></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap"><section class="login-card"><div class="brand-mark">ص</div><h1>ورود به صدوریار</h1><p class="muted">سامانه یکپارچه خدمات تاکسیرانی</p>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
