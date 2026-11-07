@@ -1,4 +1,28 @@
 document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('[data-dialog-open]').forEach(button=>button.addEventListener('click',()=>{
+    const dialog=document.getElementById(button.dataset.dialogOpen);
+    if(dialog instanceof HTMLDialogElement){dialog.showModal();dialog.querySelector('input:not([type=hidden])')?.focus();}
+  }));
+  document.querySelectorAll('[data-dialog-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
+  document.querySelectorAll('dialog.app-dialog').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();}));
+  const editUser=document.getElementById('editUserSelect');
+  if(editUser){editUser.addEventListener('change',()=>{
+    const choice=editUser.selectedOptions[0];
+    document.getElementById('editUserName').value=choice.dataset.fullName||'';
+    document.getElementById('editUserUsername').value=choice.dataset.username||'';
+    document.getElementById('editUserActive').checked=choice.dataset.active==='1';
+  });}
+  const templateForm=document.getElementById('templateEditor');
+  const templatePreview=document.getElementById('templatePreview');
+  if(templateForm&&templatePreview){
+    const refreshPreview=()=>{
+      templatePreview.querySelector('[data-preview-header]').textContent=templateForm.elements.header_text.value.trim()||'فاکتور خدمات';
+      templatePreview.querySelector('[data-preview-footer]').textContent=templateForm.elements.footer_text.value.trim()||'با تشکر از مراجعه شما';
+      templatePreview.style.fontFamily=templateForm.elements.font_family.value==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif';
+      templatePreview.classList.toggle('a5',templateForm.elements.paper_type.value==='a5');
+    };
+    templateForm.addEventListener('input',refreshPreview);templateForm.addEventListener('change',refreshPreview);refreshPreview();
+  }
   const type=document.getElementById('paymentType');
   const ref=document.getElementById('posRef');
   if(type&&ref){const update=()=>{ref.required=type.value==='pos';ref.closest('label').hidden=type.value!=='pos';};type.addEventListener('change',update);update();}

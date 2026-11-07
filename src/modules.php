@@ -59,17 +59,44 @@ function handle_module_post(string $page, string $action): void {
     }
     if ($page === 'templates' && $action === 'add') {
         require_admin(); $title=trim((string)($_POST['title']??'')); $paper=(string)($_POST['paper_type']??'');
-        if ($title==='' || !in_array($paper,['thermal80','a5'],true)) throw new RuntimeException('عنوان یا اندازه کاغذ نامعتبر است.');
-        query('INSERT INTO print_templates(company_id,title,paper_type,header_text,footer_text,is_default) VALUES(?,?,?,?,?,0)',[$tenant,$title,$paper,trim((string)($_POST['header_text']??'')),trim((string)($_POST['footer_text']??''))]);
+        $font=(string)($_POST['font_family']??'Tahoma');
+        if ($title==='' || mb_strlen($title)>160 || !in_array($paper,['thermal80','a5'],true) || !in_array($font,['Tahoma','Vazirmatn'],true)) throw new RuntimeException('عنوان، قلم یا اندازه کاغذ نامعتبر است.');
+        $header=trim((string)($_POST['header_text']??'')); $footer=trim((string)($_POST['footer_text']??''));
+        if (mb_strlen($header)>1000 || mb_strlen($footer)>1000) throw new RuntimeException('متن سربرگ یا پانوشت طولانی است.');
+        query('INSERT INTO print_templates(company_id,title,paper_type,header_text,footer_text,layout_json,is_default) VALUES(?,?,?,?,?,?,0)',[$tenant,$title,$paper,$header,$footer,json_encode(['font'=>$font],JSON_THROW_ON_ERROR)]);
         audit('template.create',$title); redirect('templates','قالب چاپ ثبت شد.');
+    }
+    if ($page === 'templates' && $action === 'default') {
+        require_admin(); $id=filter_var($_POST['template_id']??null,FILTER_VALIDATE_INT);
+        if (!$id || !query('SELECT id FROM print_templates WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('قالب انتخاب‌شده معتبر نیست.');
+        db()->beginTransaction();
+        try {
+            query('UPDATE print_templates SET is_default=0 WHERE company_id=?',[$tenant]);
+            query('UPDATE print_templates SET is_default=1 WHERE id=? AND company_id=?',[$id,$tenant]);
+            audit('template.default',(string)$id); db()->commit();
+        } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        redirect('templates','قالب پیش‌فرض انتخاب شد.');
     }
     if ($page === 'settings' && $action === 'save') {
         require_admin();
-        foreach (['company_phone','company_address','invoice_footer','currency'] as $key) {
-            $value=trim((string)($_POST[$key]??''));
+        $post=(array)$_POST;
+        $post['commission_enabled']=isset($_POST['commission_enabled'])?'1':'0';
+        $type=(string)($_POST['commission_type']??'fixed');
+        $period=(string)($_POST['commission_period']??'monthly');
+        if (!in_array($type,['fixed','threshold'],true) || !in_array($period,['daily','monthly'],true)) throw new RuntimeException('تنظیمات پورسانت نامعتبر است.');
+        if (mb_strlen(trim((string)($_POST['company_name']??'')))>180) throw new RuntimeException('نام شرکت بیش از حد طولانی است.');
+        $website=trim((string)($_POST['company_website']??''));
+        if ($website!=='' && (!filter_var($website,FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($website,PHP_URL_SCHEME)),['http','https'],true))) throw new RuntimeException('آدرس وب‌سایت معتبر نیست.');
+        foreach (['commission_rate','commission_limit','commission_over_limit_rate'] as $key) {
+            $value=(string)($_POST[$key]??'0');
+            if (!is_numeric($value) || (float)$value<0 || (float)$value>($key==='commission_limit'?1000000000000:100)) throw new RuntimeException('درصد یا سقف پورسانت نامعتبر است.');
+        }
+        foreach (['company_name','company_phone','company_website','company_address','invoice_footer','currency','commission_enabled','commission_type','commission_period','commission_rate','commission_limit','commission_over_limit_rate'] as $key) {
+            $value=trim((string)($post[$key]??''));
             if (mb_strlen($value)>1000) throw new RuntimeException('متن تنظیمات بیش از حد طولانی است.');
             query('INSERT INTO app_settings(company_id,setting_key,setting_value) VALUES(?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[$tenant,$key,$value]);
         }
+        if (trim((string)($_POST['company_name']??''))!=='') query('UPDATE companies SET name=? WHERE id=?',[trim((string)$_POST['company_name']),$tenant]);
         audit('settings.update'); redirect('settings','تنظیمات ذخیره شد.');
     }
     if ($page === 'profile' && $action === 'password') {
@@ -94,7 +121,13 @@ function handle_module_post(string $page, string $action): void {
         $from=$period==='daily'?$date:$date.'-01';
         $to=$period==='daily'?(new DateTimeImmutable($date))->modify('+1 day')->format('Y-m-d'):(new DateTimeImmutable($from))->modify('+1 month')->format('Y-m-d');
         $total=(int)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND created_at>=? AND created_at<?',[$tenant,$userId,$from,$to])->fetchColumn();
-        $amount=(int)round($total*(float)$rate/100);
+        $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
+        if (($settings['commission_enabled']??'0')!=='1') throw new RuntimeException('ابتدا سیستم پورسانت را از تنظیمات شرکت فعال کنید.');
+        $limit=max(0,(float)($settings['commission_limit']??0));
+        $overRate=(float)($settings['commission_over_limit_rate']??0);
+        $amount=($settings['commission_enabled']??'0')==='1' && ($settings['commission_type']??'fixed')==='threshold'
+            ? (int)round(min($total,$limit)*(float)$rate/100 + max(0,$total-$limit)*$overRate/100)
+            : (int)round($total*(float)$rate/100);
         query('INSERT INTO commissions(company_id,user_id,period_type,period_key,sales_total,rate,amount) VALUES(?,?,?,?,?,?,?)',[$tenant,$userId,$period,$date,$total,$rate,$amount]);
         audit('commission.calculate',$date); redirect('commissions','پورسانت محاسبه و ثبت شد.');
     }
@@ -115,19 +148,21 @@ function render_module(string $page, int $tenant): void {
       <div class="card"><h2>دستگاه‌ها</h2><?php render_table(['برند','IP','پورت','فعال'],query('SELECT brand,ip_address,port,is_active FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
     <?php return; }
     if ($page==='templates') { require_admin(); ?>
-      <h1>قالب‌های چاپ</h1><div class="card"><h2>قالب جدید</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان<input name="title" required></label><label>سایز<select name="paper_type"><option value="thermal80">حرارتی ۸۰ میلی‌متری</option><option value="a5">A5</option></select></label><label>متن سربرگ<input name="header_text"></label><label>متن پانوشت<input name="footer_text"></label><button>ثبت قالب</button></form></div>
-      <div class="card"><h2>قالب‌های موجود</h2><?php render_table(['عنوان','سایز','پیش‌فرض'],query('SELECT title,paper_type,is_default FROM print_templates WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
+      <h1>طراحی قالب چاپ فاکتور</h1><p class="muted">تنظیم مشخصات قالب و مشاهده نمونه چاپ؛ برای استفاده در فاکتور، قالب موردنظر را پیش‌فرض کنید.</p>
+      <div class="template-designer"><div class="card"><h2>قالب جدید</h2><form method="post" class="stack" id="templateEditor"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان قالب<input name="title" required maxlength="160" placeholder="قالب پیش‌فرض شرکت"></label><label>نوع کاغذ<select name="paper_type"><option value="thermal80">حرارتی ۸ سانتی‌متر</option><option value="a5">A5</option></select></label><label>قلم<select name="font_family"><option value="Tahoma">Tahoma</option><option value="Vazirmatn">وزیرمتن</option></select></label><label>متن سربرگ<input name="header_text" maxlength="1000" placeholder="فاکتور خدمات"></label><label>متن پانوشت<input name="footer_text" maxlength="1000" placeholder="با تشکر از مراجعه شما"></label><button>ذخیره قالب جدید</button></form></div><div class="card"><h2>پیش‌نمایش فاکتور</h2><div class="invoice-paper" id="templatePreview"><h3 data-preview-header>فاکتور خدمات</h3><p>شماره فاکتور: ۱۴۰۵۰۸۱۶-۰۰۱</p><p>تاریخ: ۱۴۰۵/۰۸/۱۶</p><p>نام مشتری: نمونه نمایشی</p><p>کد ملی: ۰۰۰۰۰۰۰۰۰۰</p><table><thead><tr><th>شرح خدمت</th><th>مبلغ</th></tr></thead><tbody><tr><td>خدمت نمونه</td><td>۱۰۰٬۰۰۰ تومان</td></tr></tbody></table><h3>مبلغ کل: ۱۰۰٬۰۰۰ تومان</h3><p data-preview-footer>با تشکر از مراجعه شما</p></div></div></div>
+      <div class="card"><h2>قالب‌های ذخیره‌شده</h2><div class="table-wrap"><table><thead><tr><th>عنوان</th><th>کاغذ</th><th>پیش‌فرض</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,paper_type,is_default FROM print_templates WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $t): ?><tr><td><?=e($t['title'])?></td><td><?=e($t['paper_type'])?></td><td><?=$t['is_default']?'بله':'خیر'?></td><td><?php if(!$t['is_default']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="default"><input type="hidden" name="template_id" value="<?=e($t['id'])?>"><button class="small">انتخاب پیش‌فرض</button></form><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
     <?php return; }
     if ($page==='settings') { require_admin(); $s=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR); ?>
-      <h1>تنظیمات شرکت</h1><div class="card"><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="save"><label>تلفن شرکت<input name="company_phone" value="<?=e($s['company_phone']??'')?>"></label><label>نشانی شرکت<input name="company_address" value="<?=e($s['company_address']??'')?>"></label><label>واحد پول<select name="currency"><option value="rial" <?=($s['currency']??'')==='rial'?'selected':''?>>ریال</option><option value="toman" <?=($s['currency']??'')==='toman'?'selected':''?>>تومان</option></select></label><label>پانوشت فاکتور<input name="invoice_footer" value="<?=e($s['invoice_footer']??'')?>"></label><button>ذخیره تنظیمات</button></form></div>
+      <h1>اطلاعات شرکت و تنظیمات پورسانت</h1><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="save"><section class="card"><h2>اطلاعات شرکت</h2><div class="form-grid"><label>نام شرکت<input name="company_name" maxlength="180" value="<?=e(query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn())?>" required></label><label>تلفن شرکت<input name="company_phone" value="<?=e($s['company_phone']??'')?>"></label><label>وب‌سایت<input name="company_website" type="url" placeholder="https://example.com" value="<?=e($s['company_website']??'')?>"></label><label class="wide">آدرس شرکت<input name="company_address" value="<?=e($s['company_address']??'')?>"></label></div></section><section class="card"><h2>تنظیمات پورسانت</h2><label class="choice"><input type="checkbox" name="commission_enabled" value="1" <?=($s['commission_enabled']??'0')==='1'?'checked':''?>>سیستم پورسانت فعال باشد</label><div class="form-grid"><label>نوع پورسانت<select name="commission_type"><option value="fixed" <?=($s['commission_type']??'fixed')==='fixed'?'selected':''?>>درصد ثابت</option><option value="threshold" <?=($s['commission_type']??'')==='threshold'?'selected':''?>>درصد پس از سقف</option></select></label><label>درصد پایه<input name="commission_rate" type="number" min="0" max="100" step="0.001" value="<?=e($s['commission_rate']??'0')?>"></label><label>دوره محاسبه<select name="commission_period"><option value="monthly" <?=($s['commission_period']??'monthly')==='monthly'?'selected':''?>>ماهانه</option><option value="daily" <?=($s['commission_period']??'')==='daily'?'selected':''?>>روزانه</option></select></label><label>سقف مبلغ<input name="commission_limit" type="number" min="0" step="1" value="<?=e($s['commission_limit']??'0')?>"></label><label>درصد پس از سقف<input name="commission_over_limit_rate" type="number" min="0" max="100" step="0.001" value="<?=e($s['commission_over_limit_rate']??'0')?>"></label></div><p class="muted">در حالت ثابت، درصد پایه به کل فروش تعلق می‌گیرد. در حالت سقف‌دار، درصد دوم فقط به فروش مازاد تعلق می‌گیرد.</p></section><section class="card"><h2>تنظیمات فاکتور</h2><div class="form-grid"><label>واحد پول<select name="currency"><option value="rial" <?=($s['currency']??'')==='rial'?'selected':''?>>ریال</option><option value="toman" <?=($s['currency']??'')==='toman'?'selected':''?>>تومان</option></select></label><label class="wide">متن پانوشت فاکتور<input name="invoice_footer" value="<?=e($s['invoice_footer']??'')?>"></label></div></section><button>ذخیره تنظیمات</button></form>
     <?php return; }
     if ($page==='commissions') { require_permission('commissions.view'); ?>
       <h1>پورسانت کاربران</h1><p class="muted">محاسبه بر اساس فاکتورهای ثبت‌شده توسط هر کاربر و تاریخ میلادی ذخیره‌شده؛ این گزارش تسویه بانکی نیست.</p>
+      <?php $commissionSettings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR); if(($commissionSettings['commission_enabled']??'0')!=='1'): ?><div class="alert error">سیستم پورسانت غیرفعال است. مدیر شرکت می‌تواند آن را از بخش «تنظیمات شرکت» فعال کند.</div><?php endif; ?>
       <?php if(in_array(user()['role'],['superadmin','company_admin'],true)): ?><div class="card"><h2>محاسبه پورسانت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="calculate"><label>کاربر<select name="user_id"><?php foreach(query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1',[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label><label>نوع دوره<select name="period_type"><option value="daily">روزانه</option><option value="monthly">ماهانه</option></select></label><label>تاریخ دوره (میلادی)<input name="period_key" placeholder="2026-11-07" required></label><label>درصد پورسانت<input name="rate" type="number" min="0" max="100" step="0.001" required></label><button>محاسبه و ثبت</button></form></div><?php endif; ?>
       <div class="card"><h2>سوابق پورسانت</h2><?php render_table(['کاربر','دوره','تاریخ','جمع فروش','نرخ','پورسانت'],query('SELECT u.full_name,c.period_type,c.period_key,c.sales_total,c.rate,c.amount FROM commissions c JOIN users u ON u.id=c.user_id WHERE c.company_id=? ORDER BY c.id DESC LIMIT 100',[$tenant])->fetchAll(),['sales_total','amount']); ?></div>
     <?php return; }
     if ($page==='activity') { require_permission('activity.view'); ?>
-      <h1>گزارش فعالیت‌ها</h1><div class="card"><?php render_table(['تاریخ','کاربر','عملیات','جزئیات'],query('SELECT l.created_at,COALESCE(u.full_name,\'—\') name,l.action,l.details FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id WHERE l.company_id=? ORDER BY l.id DESC LIMIT 100',[$tenant])->fetchAll()); ?></div>
+      <h1>گزارش فعالیت کاربران</h1><p class="muted">بررسی فعالیت‌ها در شرکت جاری با فیلتر زمانی و کاربر</p><?php try {$filter=report_filters();}catch(RuntimeException $ex){$filter=report_filters_default();} render_report_filters('activity',$filter,false); ?><div class="card"><h2>آخرین فعالیت‌ها (۲۰۰ مورد)</h2><?php render_table(['تاریخ و ساعت','کاربر','عملیات','توضیحات'],activity_report($tenant,$filter)); ?></div>
     <?php }
 }
 

@@ -72,3 +72,43 @@ input:not([type=checkbox]):focus, select:focus { border-color: #087b70; box-shad
 }
 @media (prefers-reduced-motion: reduce) { .sidebar nav a, .stat, button { transition: none; } }
 @media print { .main-wrap > .topbar { display: none !important; } .content > .card { box-shadow: none; } }
+
+/* Reference-inspired dialogs, reporting, dashboard and compact administrative controls. */
+.app-dialog { width: min(94vw, 520px); max-height: min(90vh, 750px); overflow-y: auto; padding: 26px; border: 1px solid #dbe6e9; border-radius: 22px; box-shadow: 0 28px 90px #0e2b3c45; color: #193c46; }
+.app-dialog::backdrop { background: #122c3999; backdrop-filter: blur(3px); }
+.app-dialog .stack { display: grid; gap: 18px; }
+.app-dialog h2 { margin: 0; padding-bottom: 12px; border-bottom: 1px solid #e6eef0; }
+.dialog-actions, .filter-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dialog-actions { justify-content: flex-end; padding-top: 14px; border-top: 1px solid #e6eef0; }
+.secondary, button.secondary { color: #174d58; background: #eef4f6; border: 1px solid #d9e5e7; }
+.secondary:hover, button.secondary:hover { color: #0a454d; background: #e1eef0; }
+.button-link { display: inline-grid; place-items: center; min-height: 44px; padding: 9px 16px; border: 1px solid #d9e5e7; border-radius: 12px; font-weight: 700; }
+.status-chip { display: inline-flex; padding: 3px 11px; border-radius: 99px; font-size: .8rem; font-weight: 700; }
+.status-good { color: #146143; background: #ddf7eb; }
+.status-muted { color: #7a5151; background: #f8eded; }
+.dashboard-secondary { display: grid; grid-template-columns: minmax(0,2fr) minmax(270px,1fr); gap: 20px; }
+.ranking-chart { display: grid; gap: 16px; }
+.ranking-row { display: grid; grid-template-columns: minmax(95px,150px) minmax(0,1fr) 36px; align-items: center; gap: 12px; font-size: .9rem; }
+.ranking-track { height: 13px; border-radius: 100px; overflow: hidden; background: #e9f1f2; }
+.ranking-track span { display: block; height: 100%; min-width: 2px; background: linear-gradient(90deg,#158c86,#6ed0b5); border-radius: inherit; }
+.ranking-row b { font-variant-numeric: tabular-nums; color: #17565d; text-align: left; }
+.metrics-list { display: grid; gap: 14px; margin: 0; }
+.metrics-list > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 11px; border-bottom: 1px solid #e8eff1; }
+.metrics-list dt { color: #607881; }.metrics-list dd { margin: 0; font-weight: 800; color: #173f49; }
+.report-filter { display: grid; gap: 20px; }
+.report-filter .form-grid { align-items: end; }
+.filter-actions { justify-content: flex-start; }
+.form-grid .wide { grid-column: 1/-1; }
+@media(max-width:900px){ .dashboard-secondary { grid-template-columns: 1fr; } }
+@media(max-width:700px){ .app-dialog { padding: 20px; width: calc(100vw - 24px); } .ranking-row { grid-template-columns: 90px minmax(0,1fr) 28px; } .filter-actions > button, .filter-actions > a { flex: 1; } }
+.template-designer { display: grid; grid-template-columns: minmax(300px,1fr) minmax(360px,1.1fr); gap: 20px; align-items: start; }
+.template-designer > .card { margin-top: 0; }
+.invoice-paper { box-sizing: border-box; width: min(100%,390px); margin: 0 auto; padding: 26px 20px; min-height: 500px; border: 1px solid #d8e0e2; border-radius: 8px; background: #fff; box-shadow: 0 8px 20px #113e4710; font: 13px/2 Tahoma,sans-serif; color: #182b31; }
+.invoice-paper.a5 { width: min(100%,480px); }
+.invoice-paper h3 { text-align: center; padding: 8px 0; border-bottom: 1px solid #5c7076; }
+.invoice-paper p { border-bottom: 1px solid #dae1e3; margin: 12px 0; }
+.invoice-paper table { width: 100%; margin-top: 22px; font-size: .9em; }
+.invoice-paper th,.invoice-paper td { padding: 7px; white-space: normal; }
+@media(max-width:1000px){ .template-designer { grid-template-columns: 1fr; } }
+.receipt-footer { border-top: 1px solid #d5e1e2; padding-top: 20px; text-align: center; }
+@media print { .receipt-thermal { max-width: 80mm; width: 80mm; padding: 2mm; font-size: 10pt; } .receipt-thermal table { font-size: 9pt; } }
