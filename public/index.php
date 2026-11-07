@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require dirname(__DIR__) . '/src/bootstrap.php';
+require __DIR__ . '/_private/src/bootstrap.php';
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
 $valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt'];

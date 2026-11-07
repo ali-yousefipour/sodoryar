@@ -29,12 +29,13 @@ jobs:
       - name: Build isolated host payload
         run: |
           set -euo pipefail
-          mkdir -p deploy-payload/public deploy-payload/src
+          mkdir -p deploy-payload/public deploy-payload/_private/src
           cp -a public/. deploy-payload/public/
-          cp -a src/. deploy-payload/src/
+          cp -a src/. deploy-payload/_private/src/
+          cp -a deploy/private.htaccess deploy-payload/_private/.htaccess
           test -s deploy-payload/public/index.php
-          test -s deploy-payload/src/bootstrap.php
-          echo 'Deploying public/ and src/ only. Environment secrets and database imports are excluded.'
+          test -s deploy-payload/_private/src/bootstrap.php
+          echo 'Deploying public/ to the Sodoryar root and protected application code to _private/.'
 
       - name: Upload through FTP with host-compatible TLS
         env:
@@ -70,12 +71,13 @@ jobs:
           set net:timeout 60
           set net:reconnect-interval-base 2
           mkdir -p "$FTP_REMOTE_DIR"
-          mirror -R --verbose --no-perms --parallel=2 deploy-payload "$FTP_REMOTE_DIR"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
           bye
           EOF
 
       - name: Deployment notes
         run: |
-          echo 'Files uploaded to svg/public and svg/src.'
-          echo 'The host document root must point to svg/public.'
-          echo 'The host-side .env and MySQL schema must be configured separately.'
+          echo 'Contents of public/ uploaded directly to svg/ (Sodoryar site root).'
+          echo 'Protected PHP source uploaded to svg/_private/src.'
+          echo 'The host document root must point to svg/; configure svg/_private/.env separately.'
