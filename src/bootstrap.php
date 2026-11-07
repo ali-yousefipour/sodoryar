@@ -25,6 +25,12 @@ session_set_cookie_params([
     'samesite' => 'Lax', 'path' => '/',
 ]);
 session_start();
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('X-Frame-Options: SAMEORIGIN');
+header('Cache-Control: private, no-store');
+header('Content-Security-Policy: default-src \'self\'; script-src \'self\'; style-src \'self\' https://fonts.googleapis.com; font-src \'self\' https://fonts.gstatic.com; img-src \'self\' data:; object-src \'none\'; base-uri \'self\'; form-action \'self\'; frame-ancestors \'self\'');
+if (config('SESSION_SECURE', '1') === '1') header('Strict-Transport-Security: max-age=31536000');
 
 function db(): PDO {
     static $pdo;
@@ -41,6 +47,18 @@ function db(): PDO {
 }
 function query(string $sql, array $params = []): PDOStatement {
     $stmt = db()->prepare($sql); $stmt->execute($params); return $stmt;
+}
+function login_attempt_key(string $username): string {
+    return hash('sha256', strtolower(trim($username)) . '|' . ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+}
+function login_is_limited(string $key): bool {
+    return (int) query('SELECT COUNT(*) FROM login_attempts WHERE attempt_key=? AND created_at >= NOW() - INTERVAL 15 MINUTE',[$key])->fetchColumn() >= 5;
+}
+function login_failed(string $key): void {
+    query('INSERT INTO login_attempts(attempt_key) VALUES(?)',[$key]);
+}
+function login_succeeded(string $key): void {
+    query('DELETE FROM login_attempts WHERE attempt_key=?',[$key]);
 }
 function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function money(int|string $amount): string { return number_format((int) $amount); }

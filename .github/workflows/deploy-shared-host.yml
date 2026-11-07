@@ -33,6 +33,7 @@ jobs:
           cp -a public/. deploy-payload/public/
           cp -a src/. deploy-payload/_private/src/
           cp -a deploy/private.htaccess deploy-payload/_private/.htaccess
+          cp .env.example deploy-payload/_private/.env.example
           test -s deploy-payload/public/index.php
           test -s deploy-payload/_private/src/bootstrap.php
           echo 'Deploying public/ to the Sodoryar root and protected application code to _private/.'
@@ -42,7 +43,7 @@ jobs:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
-          FTP_REMOTE_DIR: svg
+          FTP_REMOTE_DIR: .
         run: |
           set -euo pipefail
           if [ -z "$FTP_USER" ] || [ -z "$FTP_PASS" ]; then
@@ -70,7 +71,6 @@ jobs:
           set net:max-retries 5
           set net:timeout 60
           set net:reconnect-interval-base 2
-          mkdir -p "$FTP_REMOTE_DIR"
           mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
           mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
           bye
@@ -78,6 +78,6 @@ jobs:
 
       - name: Deployment notes
         run: |
-          echo 'Contents of public/ uploaded directly to svg/ (Sodoryar site root).'
-          echo 'Protected PHP source uploaded to svg/_private/src.'
-          echo 'The host document root must point to svg/; configure svg/_private/.env separately.'
+          echo 'Contents of public/ uploaded directly to the FTP account root.'
+          echo 'Protected PHP source uploaded to _private/src alongside index.php.'
+          echo 'Copy _private/.env.example to _private/.env on the host and set DB_PASS manually.'

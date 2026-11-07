@@ -14,13 +14,20 @@ try {
     if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         verify_csrf();
         $login = trim((string) ($_POST['username'] ?? ''));
+        $attemptKey = login_attempt_key($login);
+        if (login_is_limited($attemptKey)) {
+            $error = 'تعداد تلاش‌های ناموفق زیاد است. ۱۵ دقیقه دیگر تلاش کنید.';
+        } else {
         $u = query('SELECT u.*, c.is_active AS company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.username=? LIMIT 1', [$login])->fetch();
         if ($u && (int) $u['is_active'] === 1 && ($u['role'] === 'superadmin' || (int) $u['company_active'] === 1) && password_verify((string) ($_POST['password'] ?? ''), $u['password_hash'])) {
+            login_succeeded($attemptKey);
             session_regenerate_id(true);
             $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
             unset($_SESSION['selected_company']); audit('login'); redirect('dashboard');
         }
+        login_failed($attemptKey);
         $error = 'نام کاربری یا رمز عبور نادرست است.';
+        }
     }
     if ($page !== 'login') require_login();
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && $page !== 'login') {
@@ -141,7 +148,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <?php elseif($page==='reports'): ?>
 <h1>گزارش مالی</h1><?php $r=query('SELECT payment_type,COUNT(*) qty,COALESCE(SUM(total_amount),0) total FROM invoices WHERE company_id=? GROUP BY payment_type',[$tenant])->fetchAll(); ?><div class="stats"><?php foreach($r as $x): ?><article class="stat"><span><?=$x['payment_type']==='cash'?'پرداخت نقدی':'پرداخت کارتخوان'?></span><b><?=money($x['total'])?></b><small><?=money($x['qty'])?> فاکتور</small></article><?php endforeach; ?></div><div class="card"><h2>فاکتورهای ثبت‌شده</h2><?php render_invoices($tenant,100); ?></div>
 <?php elseif($page==='receipt'): ?>
-<?php $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id'] ?? 0),$tenant])->fetch(); if(!$invoice): ?><div class="alert error">فاکتور پیدا نشد.</div><?php else: ?><div class="receipt card"><div class="heading"><h1>فاکتور خدمات</h1><button onclick="window.print()" type="button">چاپ فاکتور</button></div><p><?=e($companyName)?></p><p>شماره: <?=e($invoice['invoice_number'])?> | تاریخ: <?=e($invoice['created_at'])?></p><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e($invoice['national_code'])?></p><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money($i['price'])?></td></tr><?php endforeach; ?></tbody></table><h2>جمع کل: <?=money($invoice['total_amount'])?></h2><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e($invoice['pos_ref'])?></p></div><?php endif; ?>
+<?php $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id'] ?? 0),$tenant])->fetch(); if(!$invoice): ?><div class="alert error">فاکتور پیدا نشد.</div><?php else: ?><div class="receipt card"><div class="heading"><h1>فاکتور خدمات</h1><button data-print-receipt type="button">چاپ فاکتور</button></div><p><?=e($companyName)?></p><p>شماره: <?=e($invoice['invoice_number'])?> | تاریخ: <?=e($invoice['created_at'])?></p><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e($invoice['national_code'])?></p><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money($i['price'])?></td></tr><?php endforeach; ?></tbody></table><h2>جمع کل: <?=money($invoice['total_amount'])?></h2><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e($invoice['pos_ref'])?></p></div><?php endif; ?>
 <?php endif; ?>
 </main></div></div>
 <?php endif; ?><script src="assets/app.js" defer></script></body></html>
