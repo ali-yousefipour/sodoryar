@@ -2,4 +2,5 @@
 /storage/*.log
 /storage/*.sql
 /vendor/
+*.sql.gz
 /.idea/

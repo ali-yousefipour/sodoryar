@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 
+function attach_global_driver(int $tenant, string $nationalCode): int {
+    $nationalCode=trim($nationalCode);
+    if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی باید ده رقم باشد.');
+    $driver=query('SELECT national_code,first_name,last_name,mobile,line_area,line_code FROM global_drivers WHERE national_code=?',[$nationalCode])->fetch();
+    if (!$driver) throw new RuntimeException('کد ملی در بانک مرکزی تاکسیرانان یافت نشد.');
+    query('INSERT INTO customers(company_id,national_code,first_name,last_name,mobile,line_area,line_code) VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',[
+        $tenant,$driver['national_code'],$driver['first_name'],$driver['last_name'],$driver['mobile'],$driver['line_area'],$driver['line_code']
+    ]);
+    return (int)db()->lastInsertId();
+}
+
 function module_page_permission(string $page): ?string {
     return [
         'bills'=>'bills.view', 'commissions'=>'commissions.view',

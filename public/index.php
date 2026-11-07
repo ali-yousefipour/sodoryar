@@ -4,8 +4,18 @@ require __DIR__ . '/_private/src/bootstrap.php';
 require __DIR__ . '/_private/src/modules.php';
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','bills','commissions','pos','templates','settings','activity','profile'];
+$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','bills','commissions','pos','templates','settings','activity','profile','driver_lookup'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
+if ($page==='driver_lookup') {
+    require_login(); tenant_id();
+    if (!can('customers.view') && !can('invoices.create')) { http_response_code(403); exit; }
+    header('Content-Type: application/json; charset=utf-8');
+    $code=trim((string)($_GET['national_code']??''));
+    if (!preg_match('/^[0-9]{10}$/',$code)) { http_response_code(422); echo json_encode(['error'=>'کد ملی ده‌رقمی وارد کنید.'],JSON_UNESCAPED_UNICODE); exit; }
+    $found=query('SELECT national_code,first_name,last_name,line_area,vehicle_plate FROM global_drivers WHERE national_code=?',[$code])->fetch();
+    if (!$found) { http_response_code(404); echo json_encode(['error'=>'تاکسیران پیدا نشد.'],JSON_UNESCAPED_UNICODE); exit; }
+    echo json_encode(['driver'=>$found],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR); exit;
+}
 
 try {
     if ($page === 'logout') {
@@ -99,6 +109,12 @@ try {
             query('INSERT INTO customers(company_id,national_code,first_name,last_name,mobile,line_area,line_code) VALUES(?,?,?,?,?,?,?)',[$tenant,$code,$first,$last,trim((string)($_POST['mobile'] ?? '')),trim((string)($_POST['line_area'] ?? '')),trim((string)($_POST['line_code'] ?? ''))]);
             audit('customer.create',$code); redirect('customers','تاکسیران ثبت شد.');
         }
+        if ($page==='customers' && $action==='link_global') {
+            require_permission('customers.create');
+            $national=trim((string)($_POST['national_code']??''));
+            attach_global_driver(tenant_id(),$national);
+            audit('customer.link_global',$national); redirect('customers','تاکسیران به پرونده این شرکت اضافه شد.');
+        }
         if ($page === 'services' && $action === 'add') {
             require_admin(); $title = trim((string)($_POST['title'] ?? ''));
             $price = filter_var($_POST['price'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
@@ -109,11 +125,13 @@ try {
         if ($page === 'invoices' && $action === 'add') {
             require_permission('invoices.create');
             $tenant = tenant_id(); $customer = filter_var($_POST['customer_id'] ?? null,FILTER_VALIDATE_INT);
+            $national=trim((string)($_POST['driver_national_code']??''));
             $selected = array_unique(array_filter(array_map('intval',(array)($_POST['service_ids'] ?? [])),static fn($v)=>$v>0));
             $payment = (string)($_POST['payment_type'] ?? ''); $ref = trim((string)($_POST['pos_ref'] ?? ''));
-            if (!$customer || !$selected || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && $ref==='')) throw new RuntimeException('مشتری، خدمات و شیوه پرداخت را کامل کنید.');
+            if ((!$customer && $national==='') || !$selected || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && $ref==='')) throw new RuntimeException('مشتری، خدمات و شیوه پرداخت را کامل کنید.');
             db()->beginTransaction();
             try {
+                if ($national!=='') $customer=attach_global_driver($tenant,$national);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
                 $marks = implode(',',array_fill(0,count($selected),'?'));
                 $items = query("SELECT id,title,price FROM services WHERE company_id=? AND is_active=1 AND id IN ($marks)",array_merge([$tenant],$selected))->fetchAll();
@@ -194,13 +212,14 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 <h1>کاربران شرکت</h1><p class="muted">مدیر شرکت به همه بخش‌های شرکت خود دسترسی دارد؛ مجوزهای اپراتورها جداگانه تنظیم می‌شوند.</p><div class="card"><h2>ایجاد کاربر</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام و نام خانوادگی<input name="full_name" required></label><label>نام کاربری<input name="username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه (حداقل ۱۲ کاراکتر)<input type="password" minlength="12" name="password" autocomplete="new-password" required></label><label>نقش<select name="role"><option value="operator">اپراتور</option><option value="company_admin">مدیر شرکت</option></select></label><fieldset class="wide"><legend>دسترسی‌های اختیاری اپراتور</legend><div class="choices"><?php foreach(permission_catalog() as $key=>$title): ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><button>ایجاد کاربر</button></form></div>
 <div class="card"><h2>فهرست کاربران و ویرایش مجوزها</h2><div class="table-wrap"><table><thead><tr><th>نام</th><th>نام کاربری</th><th>نقش</th><th>وضعیت</th><th>دسترسی‌های اپراتور</th></tr></thead><tbody><?php foreach(query('SELECT id,full_name,username,role,is_active FROM users WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['full_name'])?></td><td><?=e($r['username'])?></td><td><?=e($r['role'])?></td><td><?=$r['is_active']?'فعال':'غیرفعال'?></td><td><?php if($r['role']==='operator'): ?><?php $granted=query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$r['id']])->fetchAll(PDO::FETCH_COLUMN); ?><form method="post"><input type="hidden" name="action" value="permissions"><input type="hidden" name="user_id" value="<?=e($r['id'])?>"><?=csrf_field()?><details><summary>انتخاب دسترسی‌ها</summary><div class="permission-list"><?php foreach(permission_catalog() as $key=>$title): ?><label><input type="checkbox" name="permissions[]" value="<?=e($key)?>" <?=in_array($key,$granted,true)?'checked':''?>><?=e($title)?></label><?php endforeach; ?></div><button class="small">ذخیره</button></details></form><?php else: ?>تمام دسترسی‌های شرکت<?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='customers'): ?>
+<?php if(can('customers.create')): ?><div class="card"><h2>فراخوانی از بانک مرکزی تاکسیرانان</h2><p class="muted">کد ملی را وارد کنید تا راننده به پرونده این شرکت متصل شود؛ سوابق مالی شرکت‌های دیگر منتقل یا نمایش داده نمی‌شوند.</p><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="link_global"><label>کد ملی<input name="national_code" data-driver-lookup inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required><small class="lookup-result" data-driver-result role="status" aria-live="polite"></small></label><button>افزودن به پرونده شرکت</button></form></div><?php endif; ?>
 <h1>تاکسیرانان</h1><?php if(can('customers.create')): ?><div class="card"><h2>ثبت تاکسیران</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>کد ملی<input name="national_code" inputmode="numeric" pattern="[0-9]{10}" required></label><label>نام<input name="first_name" required></label><label>نام خانوادگی<input name="last_name" required></label><label>تلفن همراه<input name="mobile" inputmode="tel"></label><label>خط فعالیت<input name="line_area"></label><label>کد در خط<input name="line_code"></label><button>ثبت تاکسیران</button></form></div><?php endif; ?>
 <div class="card"><h2>فهرست تاکسیرانان</h2><div class="table-wrap"><table><thead><tr><th>کد ملی</th><th>نام</th><th>همراه</th><th>خط</th></tr></thead><tbody><?php foreach(query('SELECT * FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 100',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['national_code'])?></td><td><?=e($r['first_name'].' '.$r['last_name'])?></td><td><?=e($r['mobile'])?></td><td><?=e($r['line_area'])?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='services'): ?>
 <h1>خدمات و تعرفه‌ها</h1><?php if(user()['role']!=='operator'): ?><div class="card"><h2>افزودن خدمت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>عنوان خدمت<input name="title" required></label><label>مبلغ<input name="price" type="number" min="0" required></label><button>ثبت خدمت</button></form></div><?php endif; ?>
 <div class="card table-wrap"><table><thead><tr><th>عنوان</th><th>مبلغ</th><th>وضعیت</th></tr></thead><tbody><?php foreach(query('SELECT * FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['title'])?></td><td><?=money($r['price'])?></td><td><?=$r['is_active']?'فعال':'غیرفعال'?></td></tr><?php endforeach; ?></tbody></table></div>
 <?php elseif($page==='invoices'): ?>
-<?php if(can('invoices.create')): ?><h1>صدور فاکتور</h1><div class="card"><h2>فاکتور جدید</h2><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><div class="form-grid"><label>تاکسیران<select name="customer_id" required><option value="">انتخاب کنید</option><?php foreach(query('SELECT id,first_name,last_name,national_code FROM customers WHERE company_id=? ORDER BY last_name LIMIT 500',[$tenant])->fetchAll() as $r): ?><option value="<?=e($r['id'])?>"><?=e($r['first_name'].' '.$r['last_name'].' — '.$r['national_code'])?></option><?php endforeach; ?></select></label><label>نوع پرداخت<select name="payment_type" id="paymentType" required><option value="cash">نقدی</option><option value="pos">کارتخوان (ثبت دستی شماره پیگیری)</option></select></label><label>شماره پیگیری کارتخوان<input name="pos_ref" id="posRef" placeholder="برای پرداخت کارتی الزامی است"></label></div>
+<?php if(can('invoices.create')): ?><h1>صدور فاکتور</h1><div class="card"><h2>فاکتور جدید</h2><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><div class="form-grid"><label>جستجوی کد ملی در بانک مرکزی<input name="driver_national_code" data-driver-lookup inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="کد ملی ده‌رقمی"><small class="lookup-result" data-driver-result role="status" aria-live="polite">با واردکردن کد ملی، اطلاعات راننده بررسی می‌شود.</small></label><label>یا انتخاب از پرونده‌های ثبت‌شده شرکت<select name="customer_id"><option value="">انتخاب کنید</option><?php foreach(query('SELECT id,first_name,last_name,national_code FROM customers WHERE company_id=? ORDER BY last_name LIMIT 500',[$tenant])->fetchAll() as $r): ?><option value="<?=e($r['id'])?>"><?=e($r['first_name'].' '.$r['last_name'].' — '.$r['national_code'])?></option><?php endforeach; ?></select></label><label>نوع پرداخت<select name="payment_type" id="paymentType" required><option value="cash">نقدی</option><option value="pos">کارتخوان (ثبت دستی شماره پیگیری)</option></select></label><label>شماره پیگیری کارتخوان<input name="pos_ref" id="posRef" placeholder="برای پرداخت کارتی الزامی است"></label></div>
 <fieldset><legend>خدمات ارائه‌شده</legend><div class="choices"><?php foreach(query('SELECT * FROM services WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll() as $r): ?><label class="choice"><input type="checkbox" name="service_ids[]" value="<?=e($r['id'])?>"><span><?=e($r['title'])?></span><strong><?=money($r['price'])?></strong></label><?php endforeach; ?></div></fieldset><button>ثبت نهایی فاکتور</button></form></div>
 <?php endif; ?><div class="card"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div>
 <?php elseif($page==='reports'): ?>
