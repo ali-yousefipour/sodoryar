@@ -1,0 +1,14 @@
+name: PHP syntax check
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check PHP syntax
+        run: find public src scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Check required files
+        run: test -s database/schema.sql && test -s public/assets/app.css && test -s .env.example

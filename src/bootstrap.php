@@ -1,0 +1,90 @@
+<?php
+declare(strict_types=1);
+
+function config(string $key, string $default = ''): string {
+    static $values = null;
+    if ($values === null) {
+        $values = [];
+        $path = dirname(__DIR__) . '/.env';
+        if (is_readable($path)) {
+            foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                if (str_starts_with(trim($line), '#') || !str_contains($line, '=')) continue;
+                [$k, $v] = explode('=', $line, 2);
+                $values[trim($k)] = trim($v, " \t\r\n\"'");
+            }
+        }
+    }
+    return (string) (getenv($key) ?: ($values[$key] ?? $default));
+}
+
+ini_set('display_errors', config('APP_ENV', 'production') === 'development' ? '1' : '0');
+ini_set('session.use_strict_mode', '1');
+session_name('sodoryar_session');
+session_set_cookie_params([
+    'httponly' => true, 'secure' => config('SESSION_SECURE', '1') === '1',
+    'samesite' => 'Lax', 'path' => '/',
+]);
+session_start();
+
+function db(): PDO {
+    static $pdo;
+    if (!$pdo) {
+        $dsn = sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+            config('DB_HOST', 'localhost'), config('DB_PORT', '3306'), config('DB_NAME'));
+        $pdo = new PDO($dsn, config('DB_USER'), config('DB_PASS'), [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+    }
+    return $pdo;
+}
+function query(string $sql, array $params = []): PDOStatement {
+    $stmt = db()->prepare($sql); $stmt->execute($params); return $stmt;
+}
+function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+function money(int|string $amount): string { return number_format((int) $amount); }
+function user(): ?array { return $_SESSION['user'] ?? null; }
+function is_super(): bool { return (user()['role'] ?? '') === 'superadmin'; }
+function require_login(): array {
+    $u = user(); if (!$u) { header('Location: ?page=login'); exit; }
+    static $checked = false;
+    if (!$checked) {
+        $record = query('SELECT u.id,u.role,u.company_id,u.full_name,u.is_active,c.is_active company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?',[$u['id']])->fetch();
+        if (!$record || !(int)$record['is_active'] || ($record['role']!=='superadmin' && !(int)$record['company_active'])) {
+            $_SESSION=[]; session_regenerate_id(true); header('Location: ?page=login'); exit;
+        }
+        $_SESSION['user']=['id'=>(int)$record['id'],'role'=>$record['role'],'company_id'=>$record['company_id'],'full_name'=>$record['full_name']];
+        $checked=true;
+    }
+    return $_SESSION['user'];
+}
+function tenant_id(): int {
+    $u = require_login();
+    if (is_super()) {
+        $id = (int) ($_SESSION['selected_company'] ?? 0);
+        if ($id < 1) throw new RuntimeException('ابتدا یک شرکت انتخاب کنید.');
+        return $id;
+    }
+    return (int) $u['company_id'];
+}
+function require_admin(): void {
+    if (!in_array(user()['role'] ?? '', ['superadmin','company_admin'], true)) {
+        http_response_code(403); exit('دسترسی مجاز نیست');
+    }
+}
+function csrf_token(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
+function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">'; }
+function verify_csrf(): void {
+    if (!hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''))) {
+        http_response_code(419); exit('نشست یا توکن امنیتی نامعتبر است.');
+    }
+}
+function redirect(string $page, string $message = ''): never {
+    if ($message !== '') $_SESSION['flash'] = $message;
+    header('Location: ?page=' . rawurlencode($page)); exit;
+}
+function audit(string $action, string $details = '', ?int $company = null): void {
+    query('INSERT INTO activity_logs(company_id,user_id,action,details) VALUES(?,?,?,?)',
+        [$company ?? (is_super() ? ($_SESSION['selected_company'] ?? null) : (user()['company_id'] ?? null)), user()['id'] ?? null, $action, $details]);
+}

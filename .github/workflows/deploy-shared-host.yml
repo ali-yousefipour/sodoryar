@@ -1,0 +1,76 @@
+name: Deploy Sodoryar to shared Linux host
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'src/**'
+      - '.github/workflows/deploy-shared-host.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sodoryar-ftp-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Verify PHP syntax and JavaScript
+        run: |
+          set -euo pipefail
+          find public src -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check public/assets/app.js
+
+      - name: Build isolated host payload
+        run: |
+          set -euo pipefail
+          mkdir -p deploy-payload/public deploy-payload/src
+          cp -a public/. deploy-payload/public/
+          cp -a src/. deploy-payload/src/
+          test -s deploy-payload/public/index.php
+          test -s deploy-payload/src/bootstrap.php
+          echo 'Deploying public/ and src/ only. Environment secrets and database imports are excluded.'
+
+      - name: Upload through FTP over explicit TLS
+        env:
+          FTP_USER: ${{ secrets.ftp }}
+          FTP_PASS: ${{ secrets.pass }}
+          FTP_HOST: 2870352177.cloudylink.com
+          FTP_REMOTE_DIR: svg
+        run: |
+          set -euo pipefail
+          if [ -z "$FTP_USER" ] || [ -z "$FTP_PASS" ]; then
+            echo 'Required GitHub secrets ftp and pass are missing.' >&2
+            exit 1
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp
+          # An encrypted FTP control and data channel is required to protect the stored credentials.
+          # Never delete files from the remote host: the database and .env are managed separately.
+          lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          set cmd:fail-exit yes
+          set ftp:ssl-allow true
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ftp:passive-mode true
+          set net:max-retries 2
+          set net:timeout 20
+          mkdir -p "$FTP_REMOTE_DIR"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload "$FTP_REMOTE_DIR"
+          bye
+          EOF
+
+      - name: Deployment notes
+        run: |
+          echo 'Files uploaded to svg/public and svg/src.'
+          echo 'The host document root must point to svg/public.'
+          echo 'The host-side .env and MySQL schema must be configured separately.'

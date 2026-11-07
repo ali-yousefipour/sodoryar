@@ -1,0 +1,5 @@
+/.env
+/storage/*.log
+/storage/*.sql
+/vendor/
+/.idea/
