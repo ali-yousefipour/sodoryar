@@ -404,7 +404,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/png" href="assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css"><link rel="stylesheet" href="assets/refinements.css"></head><body>
+<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/png" href="assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css"><link rel="stylesheet" href="assets/refinements.css"><link rel="stylesheet" href="assets/workspace-v2.css?v=20261108.1"></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap"><div class="login-layout">
 <section class="login-showcase" aria-labelledby="loginIntro"><div class="login-showcase-brand"><span class="login-showcase-symbol"><img src="assets/sodoryar-logo.png" width="78" height="78" alt=""></span><span><b>صدوریار</b><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></span></div><div class="login-showcase-content"><span class="login-eyebrow">پنل یکپارچه کارگزاری‌ها</span><h2 id="loginIntro">مدیریت خدمات، ساده و مطمئن</h2><p>صدور فاکتور، مدیریت کاربران و پیگیری گزارش‌های مالی هر شرکت در محیطی امن و منظم.</p><div class="login-features"><span>اطلاعات مستقل هر شرکت</span><span>مدیریت دسترسی کاربران</span><span>گزارش‌های مالی یکپارچه</span></div></div><p class="login-showcase-footer">سامانه اختصاصی خدمات کارگزاری‌های تاکسیرانی</p></section>
@@ -417,6 +417,7 @@ if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 <?php else: ?>
 <div class="app-shell"><a class="skip-link" href="#mainContent">پرش به محتوای اصلی</a><aside class="sidebar" id="siteSidebar" aria-label="ناوبری صدوریار"><div class="brand"><div class="brand-mark"><img src="assets/sodoryar-logo.png" alt="" width="48" height="48"></div><div><strong>صدوریار</strong><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></div></div>
 <button type="button" class="sidebar-toggle" aria-expanded="false" aria-controls="primaryNav" data-sidebar-toggle><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#menu"></use></svg><span data-sidebar-toggle-label>نمایش فهرست بخش‌ها</span></button>
+<div class="sidebar-search"><label for="sidebarNavSearch">جستجوی بخش‌های سامانه</label><div class="sidebar-search-field"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#search"></use></svg><input id="sidebarNavSearch" type="search" placeholder="نام بخش را بنویسید…" autocomplete="off" aria-controls="primaryNav" data-nav-search></div><small data-nav-search-status aria-live="polite"></small></div>
 <?php
 $navItems=[['dashboard',is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت','dashboard','اصلی']];
 if (is_super() && !$tenant) $navItems[]=['companies','مدیریت شرکت‌ها','companies','مدیریت کل'];
@@ -439,12 +440,13 @@ $navGroup=null;
 <nav id="primaryNav" aria-label="منوی اصلی صدوریار" data-nav-menu>
 <?php foreach($navItems as [$navPage,$navLabel,$navIcon,$navCategory]): ?>
 <?php if ($navCategory!==$navGroup): $navGroup=$navCategory; ?><p class="nav-section-label"><?=e($navCategory)?></p><?php endif; ?>
-<a class="nav-link<?=$page===$navPage?' active':''?>" href="?page=<?=e($navPage)?>" <?=$page===$navPage?'aria-current="page"':''?>><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#<?=e($navIcon)?>"></use></svg><span class="nav-link-label"><?=e($navLabel)?></span></a>
-<?php endforeach; ?></nav>
+<a class="nav-link<?=$page===$navPage?' active':''?>" href="?page=<?=e($navPage)?>" data-nav-category="<?=e($navCategory)?>" <?=$page===$navPage?'aria-current="page"':''?>><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#<?=e($navIcon)?>"></use></svg><span class="nav-link-label"><?=e($navLabel)?></span></a>
+<?php endforeach; ?><p class="sidebar-no-results" data-nav-empty hidden>بخشی با این عبارت پیدا نشد.</p></nav>
 <div class="sidebar-footer">
 <?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="sidebar-action" type="submit"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#back"></use></svg><span>بازگشت به مدیریت کل</span></button></form><?php endif; ?>
 <form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="sidebar-action sidebar-logout"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#logout"></use></svg><span>خروج از حساب</span></button></form></div></aside>
-<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>برنامه مدیریت خدمات کارگزاریهای تاکسیرانی</small><strong><?=e($companyName ?: 'مدیریت کل شرکت‌ها')?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=my_photo" alt="تصویر پروفایل" width="38" height="38"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
+<?php $activeNavLabel='داشبورد'; foreach($navItems as [$navPage,$navLabel]) { if($navPage===$page){$activeNavLabel=$navLabel;break;} } ?>
+<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>صدوریار / <?=e($companyName ?: 'مدیریت کل')?></small><strong><?=e($activeNavLabel)?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=my_photo" alt="تصویر پروفایل" width="38" height="38"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
 <main class="content" id="mainContent" tabindex="-1">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
@@ -531,7 +533,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
-<?php endif; ?><script src="assets/app.js" defer></script></body></html>
+<?php endif; ?><script src="assets/app.js?v=20261108.nav2" defer></script></body></html>
 <?php
 function render_invoices(int $tenant, int $limit): void {
     $voidColumn=database_table_exists('invoice_voids')?'v.reason AS void_reason, v.voided_at':'NULL AS void_reason, NULL AS voided_at';
