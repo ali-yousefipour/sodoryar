@@ -138,6 +138,46 @@ document.addEventListener('DOMContentLoaded',()=>{
     }));
   }
   const extraItems=document.getElementById('extraInvoiceItems');
+  const servicePicker=document.querySelector('[data-invoice-services]');
+  if(servicePicker){
+    const search=servicePicker.querySelector('[data-service-search]');
+    const clear=servicePicker.querySelector('[data-service-clear]');
+    const options=[...servicePicker.querySelectorAll('[data-service-option]')];
+    const count=servicePicker.querySelector('[data-service-count]');
+    const selected=servicePicker.querySelector('[data-service-selected]');
+    const total=servicePicker.querySelector('[data-service-total]');
+    const empty=servicePicker.querySelector('[data-service-empty]');
+    const normalize=value=>String(value).normalize('NFKC').replace(/[ي]/g,'ی').replace(/[ك]/g,'ک').replace(/[\u064B-\u065F\u0670\u200C]/g,'').replace(/\s+/g,' ').trim().toLocaleLowerCase('fa');
+    const moneyFormat=new Intl.NumberFormat('fa-IR');
+    const updateServices=()=>{
+      const term=normalize(search.value);
+      let visible=0,chosen=0,sum=0;
+      options.forEach(option=>{
+        const checkbox=option.querySelector('input[type="checkbox"]');
+        const matches=normalize(option.dataset.serviceTitle).includes(term);
+        option.hidden=!matches;
+        if(matches)visible++;
+        option.classList.toggle('is-selected',checkbox.checked);
+        if(checkbox.checked){chosen++;sum+=Number(checkbox.dataset.servicePrice)||0;}
+      });
+      count.textContent=`${moneyFormat.format(visible)} خدمت از ${moneyFormat.format(options.length)} خدمت`;
+      selected.textContent=`${moneyFormat.format(chosen)} خدمت انتخاب شده`;
+      total.textContent=`جمع خدمات: ${moneyFormat.format(sum)} تومان`;
+      empty.hidden=visible!==0;
+      clear.hidden=!search.value;
+    };
+    search.addEventListener('input',updateServices);
+    search.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&search.value){search.value='';updateServices();event.preventDefault();}
+      if(event.key==='ArrowDown'){
+        const first=options.find(option=>!option.hidden);
+        if(first){first.querySelector('input').focus();event.preventDefault();}
+      }
+    });
+    clear.addEventListener('click',()=>{search.value='';updateServices();search.focus();});
+    servicePicker.addEventListener('change',event=>{if(event.target.matches('input[type="checkbox"]'))updateServices();});
+    updateServices();
+  }
   const extraAdd=document.querySelector('[data-add-invoice-item]');
   if(extraItems&&extraAdd){
     extraAdd.addEventListener('click',()=>{
