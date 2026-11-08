@@ -363,3 +363,46 @@ html { scroll-padding-top: 100px; }
 button.danger{background:#b42332;color:#fff}
 button.danger:hover{background:#8b1724}
 @media(max-width:700px){.management-actions{min-width:220px}.management-actions .small{flex:1}}
+/* Unified Sodoryar enterprise surface language */
+:root{--surface:#fff;--surface-subtle:#f8f9fd;--brand-ink:#302b5c;--brand-violet:#624ba5;--brand-teal:#087e75;--soft-border:#e2e5ef}
+body{background:radial-gradient(circle at 92% 0%,#e9e7f568,transparent 36%),#f5f7fb;color:#243148}
+.content{max-width:1500px;padding:clamp(16px,2.5vw,36px)}
+.content>h1,.heading>h1{font-size:clamp(24px,2.4vw,32px);font-weight:900;color:var(--brand-ink);letter-spacing:-.45px;margin-bottom:18px}
+.content>h1::after,.heading>h1::after{content:'';display:block;width:58px;height:4px;border-radius:5px;background:linear-gradient(90deg,#3bb6a5,#7b63bf);margin-top:10px}
+.content>.card,.content>form>.card,.content>.stack>.card,.invoice-workspace{background:#fff;border:1px solid var(--soft-border);border-radius:20px;box-shadow:0 10px 30px #32365a0b}
+.card h2{font-size:clamp(17px,1.4vw,21px);font-weight:850;color:var(--brand-ink)}
+.card h2:not(:only-child){margin-bottom:15px}
+.stat{border:1px solid var(--soft-border);border-radius:18px;background:linear-gradient(145deg,#fff,#fafbff);box-shadow:0 10px 24px #30285e0b;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;background:linear-gradient(#7762bd,#35b8a9)}
+.stat b{color:#38316e;font-size:clamp(23px,2vw,30px)}
+.form-grid{gap:16px}.stack{gap:16px}
+.form-grid label,.stack label{color:#353d5d;font-weight:750}
+input:not([type=checkbox]),select,textarea{border-radius:12px;border:1px solid #cfd5e4;background:#fbfcff;min-height:46px;transition:border-color .17s,box-shadow .17s,background .17s}
+input:not([type=checkbox]):focus,select:focus,textarea:focus{border-color:#7866b9;background:#fff;box-shadow:0 0 0 3px #7866b924;outline:none}
+button:not(.ghost),.button-link{transition:transform .15s,box-shadow .15s,background .15s}
+button:not(.ghost):hover,.button-link:hover{transform:translateY(-1px);box-shadow:0 5px 14px #202b4b1a}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #e9b857;outline-offset:2px}
+.table-wrap{border-radius:14px;border:1px solid #e6e9f2;scrollbar-color:#bcb5d8 transparent}
+table{font-variant-numeric:tabular-nums}
+th{background:#eeedf7;color:#47416c;font-size:13px;position:sticky;top:0;z-index:1}
+td{color:#343a55}tr:hover td{background:#f8f6ff}
+fieldset{border-color:#e0e4ef;border-radius:15px;background:#fdfdff}legend{color:#4c437d;font-weight:850}
+.payment-native-select{display:none!important}
+.payment-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px;border:1px solid #dcd6f0;border-radius:14px;background:#f0edf8;min-height:49px}
+.payment-switch-button{min-height:43px!important;border-radius:10px!important;background:transparent!important;color:#51467e!important;padding:8px 12px!important;box-shadow:none!important}
+.payment-switch-button.is-active{background:#5945a0!important;color:white!important;box-shadow:0 4px 12px #42348238!important}
+.payment-switch-button:not(.is-active):hover{background:#e5dff3!important;transform:none!important}
+.receipt{background:#fff!important;color:#1d2634;max-width:850px;border:1px solid #d8dce8!important;box-shadow:0 18px 48px #2c2e4a16!important;padding:clamp(22px,3vw,42px)!important}
+.receipt h1{text-align:center;font-size:25px;color:#302a61;margin-bottom:5px}.receipt>p{text-align:center}.receipt table{margin:22px 0;white-space:normal}.receipt th,.receipt td{white-space:normal}.receipt th{position:static;background:#eae8f5}.receipt h2{text-align:center;background:#f0ecfb;border-radius:12px;padding:14px;color:#302a61}
+.receipt-a5{max-width:148mm;min-height:190mm}
+@media(max-width:700px){.content{padding:14px}.card{padding:16px}.receipt{padding:18px!important}.receipt-a5{min-height:0}.payment-switch-button{font-size:14px}}
+@media(prefers-reduced-motion:reduce){button:not(.ghost),.button-link,input:not([type=checkbox]),select,textarea{transition:none}}
+@media print{
+  body,.content{background:#fff!important;padding:0!important;margin:0!important}
+  .content .receipt{box-shadow:none!important;border:0!important;border-radius:0!important;margin:0 auto!important;max-width:none;min-height:0;padding:8mm!important;break-inside:avoid}
+  .receipt-a5{width:148mm!important}
+  .receipt-thermal{width:80mm!important;padding:2mm!important}
+  .receipt table{page-break-inside:auto}.receipt tr{break-inside:avoid}
+  .receipt h2,.receipt th{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+  .receipt-toolbar{display:none!important}
+}
