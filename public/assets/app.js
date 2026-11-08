@@ -23,6 +23,35 @@ document.addEventListener('DOMContentLoaded',()=>{
     mobileViewport.addEventListener('change',()=>setMenuOpen(false));
     setMenuOpen(false);
   }
+  const navSearch=document.querySelector('[data-nav-search]');
+  if(navSearch&&sidebarNav){
+    const links=[...sidebarNav.querySelectorAll('.nav-link')];
+    const sections=[...sidebarNav.querySelectorAll('.nav-section-label')];
+    const result=sidebarNav.querySelector('[data-nav-empty]');
+    const status=document.querySelector('[data-nav-search-status]');
+    const clean=value=>String(value).normalize('NFKC').replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[\u064B-\u065F\u0670\u200C]/g,'').replace(/\s+/g,' ').trim().toLocaleLowerCase('fa');
+    const refresh=()=>{
+      const words=clean(navSearch.value).split(' ').filter(Boolean);
+      let visible=0;
+      links.forEach(link=>{const text=clean(link.textContent+' '+(link.dataset.navCategory||''));const match=words.every(word=>text.includes(word));link.hidden=!match;if(match)visible++;});
+      sections.forEach(section=>{
+        let next=section.nextElementSibling,found=false;
+        while(next&&!next.classList.contains('nav-section-label')){if(next.classList.contains('nav-link')&&!next.hidden)found=true;next=next.nextElementSibling;}
+        section.hidden=!found;
+      });
+      result.hidden=visible!==0;
+      status.textContent=words.length?`${new Intl.NumberFormat('fa-IR').format(visible)} بخش پیدا شد`:'';
+    };
+    navSearch.addEventListener('input',refresh);
+    navSearch.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&navSearch.value){navSearch.value='';refresh();event.stopPropagation();event.preventDefault();}
+      if(event.key==='ArrowDown'||event.key==='Enter'){
+        const first=links.find(link=>!link.hidden);
+        if(first){if(event.key==='Enter')first.click();else first.focus();event.preventDefault();}
+      }
+    });
+    refresh();
+  }
   const persianDigits=value=>String(value).replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
   const persianCalendar=new Intl.DateTimeFormat('en-US-u-ca-persian',{year:'numeric',month:'numeric',day:'numeric',timeZone:'UTC'});
   const persianParts=date=>{
