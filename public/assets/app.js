@@ -224,7 +224,28 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   const type=document.getElementById('paymentType');
   const ref=document.getElementById('posRef');
-  if(type&&ref){const update=()=>{ref.required=type.value==='pos';ref.closest('label').hidden=type.value!=='pos';};type.addEventListener('change',update);update();}
+  if(type&&ref){
+    const group=document.createElement('div');group.className='payment-switch';group.setAttribute('role','group');group.setAttribute('aria-label','انتخاب نوع پرداخت');
+    const options=[['cash','نقدی'],['pos','کارتخوان']];
+    const buttons=options.map(([value,label])=>{
+      const button=document.createElement('button');button.type='button';button.className='payment-switch-button';button.textContent=label;button.dataset.payment=value;
+      button.addEventListener('click',()=>{type.value=value;type.dispatchEvent(new Event('change',{bubbles:true}));});
+      group.append(button);return button;
+    });
+    type.insertAdjacentElement('afterend',group);
+    // Keep the native select for form submission and as a no-JavaScript fallback.
+    type.classList.add('payment-native-select');type.tabIndex=-1;type.setAttribute('aria-hidden','true');
+    group.addEventListener('keydown',event=>{
+      if(!['ArrowLeft','ArrowRight'].includes(event.key))return;
+      const next=type.value==='cash'?'pos':'cash';
+      group.querySelector(`[data-payment="${next}"]`).click();group.querySelector(`[data-payment="${next}"]`).focus();event.preventDefault();
+    });
+    const update=()=>{
+      ref.required=type.value==='pos';ref.closest('label').hidden=type.value!=='pos';
+      buttons.forEach(button=>{const active=button.dataset.payment===type.value;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
+    };
+    type.addEventListener('change',update);update();
+  }
   document.querySelectorAll('[data-print-receipt]').forEach(button=>button.addEventListener('click',()=>window.print()));
   document.querySelectorAll('[data-driver-lookup]').forEach(input=>{
     const result=input.closest('label').querySelector('[data-driver-result]');

@@ -5,6 +5,7 @@ require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
+require __DIR__ . '/_private/src/default_services.php';
 
 function archive_ready(string $table): bool {
     if (!in_array($table,['users','companies'],true)) return false;
@@ -107,6 +108,7 @@ try {
                 query('INSERT INTO companies(name,slug) VALUES(?,?)',[$name,$slug]);
                 $companyId=(int)db()->lastInsertId();
                 query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$companyId,$manager,password_hash($managerPass,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                initialize_company_catalog($companyId,$name);
                 audit('company.create',$slug,$companyId);
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
@@ -501,7 +503,7 @@ $navGroup=null;
 <?php elseif($page==='receipt'): ?>
 <?php
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
-$selectedTemplate=query('SELECT id,title,paper_type,header_text,footer_text,logo_path,layout_json FROM print_templates WHERE company_id=? AND is_default=1 LIMIT 1',[$tenant])->fetch();
+$selectedTemplate=query('SELECT id,title,paper_type,header_text,footer_text,logo_path,layout_json FROM print_templates WHERE company_id=? ORDER BY is_default DESC,id DESC LIMIT 1',[$tenant])->fetch();
 $templateStyle=$selectedTemplate?json_decode((string)$selectedTemplate['layout_json'],true):[];
 ?>
 <?php if(!$invoice): ?><div class="alert error">فاکتور پیدا نشد.</div><?php else: ?>
@@ -511,7 +513,7 @@ $configuredOrder=$templateStyle['order']??null;
 if (is_array($configuredOrder) && count($configuredOrder)===count($receiptSections) && count(array_diff($receiptSections,$configuredOrder))===0 && count(array_unique($configuredOrder))===count($receiptSections)) $receiptSections=$configuredOrder;
 $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_at FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetch():false;
 ?>
-<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':''?>" style="font-family:<?=($templateStyle['font']??'')==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif'?>">
+<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':'receipt-a5'?>" style="font-family:<?=($templateStyle['font']??'')==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif'?>">
 <div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ فاکتور</button></div>
 <?php if($voidRecord): ?><div class="alert error"><strong>فاکتور باطل شده است؛ برای ارائه به مشتری معتبر نیست.</strong><p>دلیل: <?=e($voidRecord['reason'])?></p></div><?php endif; ?>
 <?php foreach($receiptSections as $section): ?>
