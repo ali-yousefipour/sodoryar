@@ -36,10 +36,24 @@ function default_company_services(): array {
     ];
 }
 
-function initialize_company_catalog(int $companyId, string $companyName): void {
+/** Add only missing catalog titles; preserve company-specific prices and states. */
+function add_missing_default_services(int $companyId): int {
+    $existing = query('SELECT title FROM services WHERE company_id=?',[$companyId])->fetchAll(PDO::FETCH_COLUMN);
+    $known = [];
+    foreach ($existing as $title) $known[mb_strtolower(trim((string)$title),'UTF-8')] = true;
+    $added = 0;
     foreach (default_company_services() as [$title,$price]) {
+        $key = mb_strtolower(trim($title),'UTF-8');
+        if (isset($known[$key])) continue;
         query('INSERT INTO services(company_id,title,price) VALUES(?,?,?)',[$companyId,$title,$price]);
+        $known[$key] = true;
+        $added++;
     }
+    return $added;
+}
+
+function initialize_company_catalog(int $companyId, string $companyName): void {
+    add_missing_default_services($companyId);
     query('INSERT INTO print_templates(company_id,title,paper_type,header_text,footer_text,layout_json,is_default) VALUES(?,?,?,?,?,?,1)',[
         $companyId,'قالب پیش‌فرض '.$companyName,'a5','فاکتور خدمات','با سپاس از مراجعه شما',
         json_encode(['font'=>'Vazirmatn','order'=>['header','invoice_number','date','customer','items','total','payment','footer']],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),

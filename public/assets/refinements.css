@@ -406,3 +406,7 @@ fieldset{border-color:#e0e4ef;border-radius:15px;background:#fdfdff}legend{color
   .receipt h2,.receipt th{print-color-adjust:exact;-webkit-print-color-adjust:exact}
   .receipt-toolbar{display:none!important}
 }
+.company-defaults-form{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:14px;align-items:end;max-width:850px}
+.company-defaults-form label{display:grid;gap:8px;min-width:0}
+.company-defaults-form button{min-height:46px}
+@media(max-width:680px){.company-defaults-form{grid-template-columns:1fr}.company-defaults-form button{width:100%}}
