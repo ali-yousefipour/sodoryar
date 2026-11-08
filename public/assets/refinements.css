@@ -144,6 +144,28 @@ input:not([type=checkbox]):focus, select:focus { border-color: #087b70; box-shad
   .return-global { margin: 0; }
 }
 .extra-invoice-row{display:grid;grid-template-columns:minmax(180px,2fr) minmax(140px,1fr) auto;gap:12px;align-items:center;margin-block:8px}
+.invoice-workspace{max-width:1120px;margin-inline:auto}
+.invoice-workspace form.stack{gap:16px}
+.invoice-workspace fieldset{min-width:0;border:1px solid #e0e3ef;border-radius:16px;padding:16px;background:#fcfbff}
+.invoice-workspace fieldset legend{padding:0 9px;font-weight:800;color:#353062}
+.invoice-service-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
+.invoice-search-label{flex:1 1 320px;min-width:0;font-weight:700}
+.invoice-search-label input{width:100%;min-height:46px;background:#fff;border-color:#c9c5e4;padding-inline:13px}
+.invoice-service-summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;margin:14px 0;padding:11px 14px;border-radius:12px;background:#f0edf9;color:#453875;font-size:13px}
+.invoice-service-summary strong:last-child{margin-inline-start:auto;color:#17675d}
+.invoice-service-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:340px;overflow-y:auto;overscroll-behavior:contain;padding:3px;scrollbar-color:#b9afd9 transparent}
+.invoice-service-option{display:flex!important;align-items:center;gap:10px;min-width:0;min-height:52px;padding:10px 12px;border:1px solid #e2e2ec;background:white;border-radius:11px;cursor:pointer;font-weight:600;transition:border-color .15s,background .15s}
+.invoice-service-option:hover{border-color:#9e90cb;background:#f9f7ff}
+.invoice-service-option.is-selected{background:#f0ecfb;border-color:#7665bd}
+.invoice-service-option:focus-within{outline:3px solid #d9c077;outline-offset:1px}
+.invoice-service-option input{flex:none;width:18px;height:18px;accent-color:#6550ac}
+.invoice-service-title{flex:1;min-width:0;line-height:1.7;overflow-wrap:anywhere}
+.invoice-service-option strong{flex:none;color:#286d65;font-size:12px;white-space:nowrap}
+.invoice-service-option[hidden],.invoice-service-empty[hidden],.invoice-clear-search[hidden]{display:none!important}
+.invoice-service-empty{padding:18px;text-align:center;background:#fff;border:1px dashed #d4d0e3;border-radius:12px;color:#6d6482}
+.invoice-service-help{font-size:12px;margin:12px 0 0}
+@media(max-width:750px){.invoice-service-list{grid-template-columns:1fr;max-height:340px}.invoice-service-summary strong:last-child{margin-inline-start:0}.invoice-workspace fieldset{padding:12px}.invoice-service-option{min-height:48px}}
+@media(prefers-reduced-motion:reduce){.invoice-service-option{transition:none}}
 .extra-invoice-row input{min-width:0}
 .template-order{display:grid;gap:8px}.template-order-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border:1px solid #dbe6ef;border-radius:10px;background:#f6f9fc;cursor:grab}.template-order-item button{margin-inline-start:5px}.receipt-toolbar{display:flex;justify-content:flex-end;margin-bottom:12px}
 .receipt-logo{display:block;max-width:140px;max-height:90px;object-fit:contain;margin:0 auto 12px}
