@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       });
       count.textContent=`${moneyFormat.format(visible)} خدمت از ${moneyFormat.format(options.length)} خدمت`;
       selected.textContent=`${moneyFormat.format(chosen)} خدمت انتخاب شده`;
-      total.textContent=`جمع خدمات: ${moneyFormat.format(sum)} تومان`;
+      total.textContent=moneyFormat.format(sum);
       empty.hidden=visible!==0;
       clear.hidden=!search.value;
     };
