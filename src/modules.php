@@ -31,6 +31,11 @@ function invoice_extensions_ready(): bool {
     } catch (PDOException $ex) { return false; }
 }
 
+/** Authorised national-code autocomplete accepts 6-10 ASCII digits only. */
+function valid_driver_lookup_prefix(string $prefix): bool {
+    return preg_match('/^[0-9]{6,10}$/D',$prefix)===1;
+}
+
 function attach_global_driver(int $tenant, string $nationalCode): int {
     $nationalCode=trim($nationalCode);
     if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی باید ده رقم باشد.');
