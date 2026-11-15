@@ -28,14 +28,14 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id JOIN users u ON u.id=i.user_id WHERE i.company_id=?';
     if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
     $params=[$tenant];
-    if ($filter['date_from']!=='') { $sql.=' AND i.created_at>=?'; $params[]=$filter['date_from'].' 00:00:00'; }
-    if ($filter['date_to']!=='') { $sql.=' AND i.created_at<?'; $params[]=(new DateTimeImmutable($filter['date_to']))->modify('+1 day')->format('Y-m-d').' 00:00:00'; }
+    if ($filter['date_from']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))>=?'; $params[]=$filter['date_from']; }
+    if ($filter['date_to']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))<=?'; $params[]=$filter['date_to']; }
     if ($filter['national_code']!=='') { $sql.=' AND c.national_code LIKE ?'; $params[]=$filter['national_code'].'%'; }
     if ($filter['invoice_number']!=='') { $sql.=' AND i.invoice_number LIKE ?'; $params[]='%'.$filter['invoice_number'].'%'; }
     if ($filter['payment_type']!=='') { $sql.=' AND i.payment_type=?'; $params[]=$filter['payment_type']; }
     if ($filter['user_id']!=='') { $sql.=' AND i.user_id=?'; $params[]=(int)$filter['user_id']; }
     $total=query('SELECT COUNT(*) qty,COALESCE(SUM(i.total_amount),0) total '.$sql,$params)->fetch();
-    $rows=query('SELECT i.id,i.invoice_number,i.created_at,i.payment_type,i.pos_ref,i.total_amount,c.national_code,CONCAT(c.first_name,\' \',c.last_name) customer,u.full_name operator_name '.$sql.' ORDER BY i.id DESC LIMIT '.(int)$limit,$params)->fetchAll();
+    $rows=query('SELECT i.id,i.invoice_number,COALESCE(i.invoice_date, DATE(i.created_at)) AS invoice_date,i.created_at,i.payment_type,i.pos_ref,i.total_amount,c.national_code,CONCAT(c.first_name,\' \',c.last_name) customer,u.full_name operator_name '.$sql.' ORDER BY i.id DESC LIMIT '.(int)$limit,$params)->fetchAll();
     return ['summary'=>$total,'rows'=>$rows];
 }
 
