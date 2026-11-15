@@ -76,6 +76,24 @@ jobs:
           bye
           EOF
 
+      - name: Verify public invoice stylesheet matches deployed commit
+        run: |
+          set -euo pipefail
+          expected="$(sha256sum public/assets/invoice-redesign.css | cut -d' ' -f1)"
+          # A unique URL and no-cache headers bypass stale browser/CDN copies.
+          curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
+            -H 'Cache-Control: no-cache' \
+            "https://taxiranico.ir/assets/invoice-redesign.css?deploy=${GITHUB_SHA}" \
+            -o /tmp/sodoryar-invoice-live.css
+          actual="$(sha256sum /tmp/sodoryar-invoice-live.css | cut -d' ' -f1)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::Hosted domain is serving a different invoice-redesign.css. Verify FTP remote directory, domain document root and caches."
+            echo "Expected SHA256: $expected"
+            echo "Live SHA256: $actual"
+            exit 1
+          fi
+          echo "Hosted CSS matches this exact commit ($expected)."
+
       - name: Deployment notes
         run: |
           echo 'Contents of public/ uploaded directly to the FTP account root.'
