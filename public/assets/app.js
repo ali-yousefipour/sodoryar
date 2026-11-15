@@ -374,7 +374,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     type.addEventListener('change',update);update();
   }
   document.querySelectorAll('[data-print-receipt]').forEach(button=>button.addEventListener('click',()=>window.print()));
-  document.querySelectorAll('[data-driver-lookup]').forEach(input=>{
+  document.querySelectorAll('[data-driver-lookup]:not([data-driver-autocomplete])').forEach(input=>{
     const result=input.closest('label').querySelector('[data-driver-result]');
     const manual=input.closest('form')?.querySelector('[data-driver-manual]');
     const toggleManual=show=>{
@@ -412,6 +412,164 @@ document.addEventListener('DOMContentLoaded',()=>{
       },350);
     });
   });
+  // Invoice-specific national-code autocomplete. Other driver screens retain exact lookup.
+  const invoiceDriverInput=document.querySelector('#invoiceCreateForm [data-driver-autocomplete]');
+  if(invoiceDriverInput){
+    const form=invoiceDriverInput.closest('form');
+    const status=form.querySelector('[data-driver-result]');
+    const list=form.querySelector('[data-driver-suggestions]');
+    const dialog=form.querySelector('dialog[data-driver-manual]');
+    const confirm=dialog.querySelector('[data-driver-dialog-confirm]');
+    const cancel=dialog.querySelector('[data-driver-dialog-cancel]');
+    const required=[...dialog.querySelectorAll('[data-driver-required]')];
+    const allFields=[...dialog.querySelectorAll('input')];
+    const newNational=dialog.querySelector('[data-driver-new-national]');
+    const toAscii=s=>String(s??'').replace(/[۰-۹]/g,n=>String(n.charCodeAt(0)-1776)).replace(/[٠-٩]/g,n=>String(n.charCodeAt(0)-1632));
+    const toPersian=s=>String(s??'').replace(/[0-9]/g,n=>'۰۱۲۳۴۵۶۷۸۹'[Number(n)]);
+    let debounce=null,controller=null,requestNumber=0;
+    let selected=null,confirmedNational='',lastPrompted='',matches=[],active=-1,lookupState='idle';
+    const setStatus=(message,state='idle')=>{
+      status.textContent=message;
+      status.dataset.status=state;
+      lookupState=state;
+    };
+    const hideList=()=>{
+      list.hidden=true;list.replaceChildren();active=-1;
+      invoiceDriverInput.setAttribute('aria-expanded','false');
+      invoiceDriverInput.removeAttribute('aria-activedescendant');
+    };
+    const setActive=i=>{
+      active=i;
+      const options=[...list.querySelectorAll('[role="option"]')];
+      options.forEach((item,index)=>item.setAttribute('aria-selected',String(index===active)));
+      if(options[active]){
+        invoiceDriverInput.setAttribute('aria-activedescendant',options[active].id);
+        options[active].scrollIntoView({block:'nearest'});
+      }else invoiceDriverInput.removeAttribute('aria-activedescendant');
+    };
+    const choose=driver=>{
+      clearTimeout(debounce);controller?.abort();requestNumber++;
+      selected=driver;confirmedNational='';lastPrompted='';
+      allFields.forEach(field=>{field.value='';field.required=false;});
+      invoiceDriverInput.value=driver.national_code;
+      setStatus('✓ '+driver.first_name+' '+driver.last_name+(driver.line_area?' — '+driver.line_area:''),'found');
+      hideList();
+      if(dialog.open)dialog.close();
+    };
+    const showMatches=drivers=>{
+      matches=drivers;
+      list.replaceChildren();active=-1;
+      if(!drivers.length){hideList();return;}
+      drivers.forEach((driver,index)=>{
+        const option=document.createElement('button');
+        option.type='button';option.className='invoice-driver-option';
+        option.setAttribute('role','option');option.setAttribute('aria-selected','false');
+        option.id='invoice-driver-choice-'+index;
+        const name=document.createElement('span');
+        name.className='invoice-driver-option-name';name.textContent=driver.first_name+' '+driver.last_name;
+        const code=document.createElement('b');
+        code.className='invoice-driver-option-code';code.textContent=toPersian(driver.national_code);
+        const detail=document.createElement('small');
+        detail.textContent=driver.line_area||'خط ثبت نشده';
+        option.append(name,code,detail);
+        option.addEventListener('click',()=>choose(driver));
+        list.append(option);
+      });
+      list.hidden=false;
+      invoiceDriverInput.setAttribute('aria-expanded','true');
+    };
+    const openRegistration=()=>{
+      if(invoiceDriverInput.value.length!==10)return;
+      selected=null;hideList();
+      if(dialog.open)return;
+      newNational.textContent=toPersian(invoiceDriverInput.value);
+      lastPrompted=invoiceDriverInput.value;
+      setStatus('راننده‌ای با این کد ملی یافت نشد. مشخصات او را ثبت کنید.','missing');
+      dialog.showModal();
+      required[0]?.focus();
+    };
+    cancel.addEventListener('click',()=>{
+      allFields.forEach(field=>{field.required=false;field.value='';});
+      confirmedNational='';
+      dialog.close();invoiceDriverInput.focus();
+    });
+    confirm.addEventListener('click',()=>{
+      required.forEach(field=>field.required=true);
+      const firstInvalid=required.find(field=>!field.value.trim()||!field.checkValidity());
+      if(firstInvalid){firstInvalid.reportValidity();firstInvalid.focus();return;}
+      confirmedNational=invoiceDriverInput.value;
+      setStatus('✓ مشخصات راننده جدید آماده ثبت همراه فاکتور است.','found');
+      dialog.close();
+      form.querySelector('[data-service-search]')?.focus();
+    });
+    dialog.addEventListener('cancel',()=>{
+      if(confirmedNational!==invoiceDriverInput.value){
+        required.forEach(field=>field.required=false);
+      }
+    });
+    const fetchMatches=async code=>{
+      controller?.abort();controller=new AbortController();
+      const serial=++requestNumber;
+      setStatus('در حال جستجوی رانندگان…','loading');
+      try{
+        const response=await fetch('?page=driver_lookup&prefix='+encodeURIComponent(code),{
+          credentials:'same-origin',signal:controller.signal,headers:{Accept:'application/json'}
+        });
+        const data=await response.json();
+        if(serial!==requestNumber||invoiceDriverInput.value!==code)return;
+        if(!response.ok){
+          hideList();
+          setStatus(data.error||'جستجو ناموفق بود؛ دوباره تلاش کنید.','error');
+          return;
+        }
+        const drivers=Array.isArray(data.drivers)?data.drivers:[];
+        const exact=code.length===10?drivers.find(driver=>driver.national_code===code):null;
+        if(exact){choose(exact);return;}
+        if(code.length===10){
+          hideList();
+          if(lastPrompted!==code)openRegistration();
+          else setStatus('برای این کد ملی، مشخصات راننده جدید را تکمیل کنید.','missing');
+          return;
+        }
+        showMatches(drivers);
+        setStatus(drivers.length?toPersian(drivers.length)+' راننده مشابه یافت شد؛ یک مورد را انتخاب کنید.':'راننده‌ای با این پیشوند پیدا نشد.','idle');
+      }catch(error){
+        if(error.name==='AbortError')return;
+        if(serial!==requestNumber)return;
+        hideList();setStatus('ارتباط با بانک رانندگان برقرار نشد؛ دوباره تلاش کنید.','error');
+      }
+    };
+    invoiceDriverInput.addEventListener('input',()=>{
+      const code=toAscii(invoiceDriverInput.value).replace(/[^0-9]/g,'').slice(0,10);
+      invoiceDriverInput.value=code;
+      clearTimeout(debounce);controller?.abort();requestNumber++;
+      hideList();selected=null;confirmedNational='';
+      allFields.forEach(field=>{field.required=false;field.value='';});
+      if(dialog.open)dialog.close();
+      lastPrompted='';
+      if(code.length<6){setStatus('از رقم ششم کد ملی، جستجو آغاز می‌شود.');return;}
+      debounce=setTimeout(()=>fetchMatches(code),280);
+    });
+    invoiceDriverInput.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&!list.hidden){hideList();event.preventDefault();return;}
+      if(list.hidden)return;
+      if(event.key==='ArrowDown'){setActive((active+1)%matches.length);event.preventDefault();}
+      if(event.key==='ArrowUp'){setActive(active<=0?matches.length-1:active-1);event.preventDefault();}
+      if(event.key==='Enter'&&active>=0){choose(matches[active]);event.preventDefault();}
+    });
+    document.addEventListener('pointerdown',event=>{
+      if(!list.hidden&&!event.target.closest('.invoice-driver-wrap'))hideList();
+    });
+    form.addEventListener('submit',event=>{
+      const code=invoiceDriverInput.value;
+      if(code.length!==10)return;
+      if(selected?.national_code===code||confirmedNational===code)return;
+      event.preventDefault();
+      if(lookupState==='loading'){setStatus('جستجوی کد ملی هنوز در حال انجام است.','loading');invoiceDriverInput.focus();return;}
+      if(lookupState==='error'){setStatus('ابتدا اتصال را بررسی و کد ملی را دوباره جستجو کنید.','error');invoiceDriverInput.focus();return;}
+      openRegistration();
+    });
+  }
   // Render-only Persian numerals for labels, counters and table content.
   // Inputs, URLs, machine identifiers and Latin technical strings are deliberately excluded.
   const localizeVisibleDigits=root=>{
