@@ -422,8 +422,28 @@ document.addEventListener('DOMContentLoaded',()=>{
     const confirm=dialog.querySelector('[data-driver-dialog-confirm]');
     const cancel=dialog.querySelector('[data-driver-dialog-cancel]');
     const required=[...dialog.querySelectorAll('[data-driver-required]')];
-    const allFields=[...dialog.querySelectorAll('input')];
+    const allFields=[...dialog.querySelectorAll('input,select')];
     const newNational=dialog.querySelector('[data-driver-new-national]');
+    const mobileField=dialog.querySelector('[data-driver-mobile]');
+    const lineSearch=dialog.querySelector('[data-driver-line-search]');
+    const lineSelect=dialog.querySelector('[data-driver-line-select]');
+    const lineOptions=[...lineSelect.options].slice(1).map(option=>({value:option.value,label:option.textContent}));
+    const normalizeLine=value=>String(value??'').normalize('NFKC').replace(/ي/g,'ی').replace(/ك/g,'ک').trim().toLocaleLowerCase('fa');
+    const updateLineOptions=()=>{
+      const query=normalizeLine(lineSearch.value);
+      const selected=lineSelect.value;
+      lineSelect.replaceChildren(new Option('بدون انتخاب خط',''));
+      lineOptions.filter(option=>normalizeLine(option.label).includes(query)).forEach(option=>lineSelect.add(new Option(option.label,option.value)));
+      if([...lineSelect.options].some(option=>option.value===selected))lineSelect.value=selected;
+      if(!lineOptions.length)lineSearch.placeholder='خطی در بانک مرکزی ثبت نشده است';
+    };
+    lineSearch.addEventListener('input',updateLineOptions);
+    const normalizeMobile=value=>{
+      let number=toAscii(String(value??'')).replace(/[\\s\\-()]+/g,'');
+      if(/^\\+989[0-9]{9}$/.test(number))number='0'+number.slice(3);
+      return number;
+    };
+    mobileField.addEventListener('input',()=>mobileField.setCustomValidity(''));
     const toAscii=s=>String(s??'').replace(/[۰-۹]/g,n=>String(n.charCodeAt(0)-1776)).replace(/[٠-٩]/g,n=>String(n.charCodeAt(0)-1632));
     const toPersian=s=>String(s??'').replace(/[0-9]/g,n=>'۰۱۲۳۴۵۶۷۸۹'[Number(n)]);
     let debounce=null,controller=null,requestNumber=0;
@@ -451,6 +471,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       clearTimeout(debounce);controller?.abort();requestNumber++;
       selected=driver;confirmedNational='';lastPrompted='';
       allFields.forEach(field=>{field.value='';field.required=false;});
+      mobileField.setCustomValidity('');lineSearch.value='';updateLineOptions();
       invoiceDriverInput.value=driver.national_code;
       setStatus('✓ '+driver.first_name+' '+driver.last_name+(driver.line_area?' — '+driver.line_area:''),'found');
       hideList();
@@ -490,11 +511,14 @@ document.addEventListener('DOMContentLoaded',()=>{
     };
     cancel.addEventListener('click',()=>{
       allFields.forEach(field=>{field.required=false;field.value='';});
+      mobileField.setCustomValidity('');lineSearch.value='';updateLineOptions();
       confirmedNational='';
       dialog.close();invoiceDriverInput.focus();
     });
     confirm.addEventListener('click',()=>{
       required.forEach(field=>field.required=true);
+      mobileField.value=normalizeMobile(mobileField.value);
+      mobileField.setCustomValidity(/^09[0-9]{9}$/.test(mobileField.value)?'':'شماره همراه معتبر ۱۱ رقمی با ۰۹ وارد کنید.');
       const firstInvalid=required.find(field=>!field.value.trim()||!field.checkValidity());
       if(firstInvalid){firstInvalid.reportValidity();firstInvalid.focus();return;}
       confirmedNational=invoiceDriverInput.value;
@@ -545,6 +569,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       clearTimeout(debounce);controller?.abort();requestNumber++;
       hideList();selected=null;confirmedNational='';
       allFields.forEach(field=>{field.required=false;field.value='';});
+      mobileField.setCustomValidity('');lineSearch.value='';updateLineOptions();
       if(dialog.open)dialog.close();
       lastPrompted='';
       if(code.length<6){setStatus('از رقم ششم کد ملی، جستجو آغاز می‌شود.');return;}
