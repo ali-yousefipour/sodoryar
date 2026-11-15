@@ -23,6 +23,34 @@ document.addEventListener('DOMContentLoaded',()=>{
     mobileViewport.addEventListener('change',()=>setMenuOpen(false));
     setMenuOpen(false);
   }
+  // Desktop mini-sidebar is independent of the existing mobile disclosure.
+  const shell=document.querySelector('.app-shell');
+  const collapseButton=document.querySelector('[data-sidebar-collapse]');
+  const collapsedSearchButton=document.querySelector('[data-sidebar-search-expand]');
+  const desktopSidebar=window.matchMedia('(min-width: 901px)');
+  const sidebarPreferenceKey='sodoryar.sidebar.collapsed.v1';
+  let sidebarCollapsed=false;
+  try{sidebarCollapsed=window.localStorage.getItem(sidebarPreferenceKey)==='1';}catch(_error){}
+  const setSidebarCollapsed=(collapsed,{persist=true}={})=>{
+    sidebarCollapsed=Boolean(collapsed);
+    shell?.classList.toggle('sidebar-is-collapsed',sidebarCollapsed&&desktopSidebar.matches);
+    if(collapseButton){
+      const label=sidebarCollapsed?'باز کردن منوی کناری':'جمع کردن منوی کناری';
+      collapseButton.setAttribute('aria-label',label);
+      collapseButton.setAttribute('title',label);
+      collapseButton.setAttribute('aria-expanded',String(!sidebarCollapsed));
+      const icon=collapseButton.querySelector('use');
+      if(icon)icon.setAttribute('href','assets/sidebar-icons.svg#'+(sidebarCollapsed?'panel-expand':'panel-collapse'));
+    }
+    if(persist){try{window.localStorage.setItem(sidebarPreferenceKey,sidebarCollapsed?'1':'0');}catch(_error){}}
+  };
+  collapseButton?.addEventListener('click',()=>setSidebarCollapsed(!sidebarCollapsed));
+  collapsedSearchButton?.addEventListener('click',()=>{
+    setSidebarCollapsed(false);
+    document.querySelector('[data-nav-search]')?.focus();
+  });
+  desktopSidebar.addEventListener('change',()=>setSidebarCollapsed(sidebarCollapsed,{persist:false}));
+  setSidebarCollapsed(sidebarCollapsed,{persist:false});
   const navSearch=document.querySelector('[data-nav-search]');
   if(navSearch&&sidebarNav){
     const links=[...sidebarNav.querySelectorAll('.nav-link')];
