@@ -224,7 +224,7 @@ function render_table(array $headings, array $rows, array $moneyColumns=[]): voi
     echo '<div class="table-wrap"><table><thead><tr>';
     foreach ($headings as $h) echo '<th>'.e($h).'</th>';
     echo '</tr></thead><tbody>';
-    foreach ($rows as $row) { echo '<tr>'; foreach ($row as $key=>$value) echo '<td>'.(in_array($key,$moneyColumns,true)?money($value):e(ui_value($value,(string)$key))).'</td>'; echo '</tr>'; }
+    foreach ($rows as $row) { echo '<tr>'; foreach ($row as $key=>$value) echo '<td>'.(in_array($key,$moneyColumns,true)?'<span class="money-value">'.e(money_toman($value)).'</span>':e(ui_value($value,(string)$key))).'</td>'; echo '</tr>'; }
     if (!$rows) echo '<tr><td colspan="'.count($headings).'" class="empty-state">هنوز موردی ثبت نشده است.</td></tr>';
     echo '</tbody></table></div>';
 }
