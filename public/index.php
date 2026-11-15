@@ -290,7 +290,7 @@ try {
         }
         if ($page === 'services' && $action === 'add') {
             require_admin(); $title = trim((string)($_POST['title'] ?? ''));
-            $price = filter_var($_POST['price'] ?? null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $price = parse_money_input($_POST['price'] ?? null);
             if ($title==='' || mb_strlen($title)>200 || $price===false) throw new RuntimeException('عنوان و مبلغ معتبر وارد کنید.');
             query('INSERT INTO services(company_id,title,price) VALUES(?,?,?)',[tenant_id(),$title,$price]);
             audit('service.create',$title); redirect('services','خدمت ثبت شد.');
@@ -299,7 +299,7 @@ try {
             require_admin(); $tenant=tenant_id();
             $id=filter_var($_POST['service_id']??null,FILTER_VALIDATE_INT);
             $title=trim((string)($_POST['title']??''));
-            $price=filter_var($_POST['price']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $price=parse_money_input($_POST['price']??null);
             $active=isset($_POST['is_active'])?1:0;
             if (!$id || $title==='' || mb_strlen($title)>200 || $price===false) throw new RuntimeException('مشخصات خدمت معتبر نیست.');
             if (!query('SELECT id FROM services WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('خدمت به این شرکت تعلق ندارد.');
@@ -318,7 +318,7 @@ try {
             foreach ($extraTitles as $key=>$title) {
                 if (!is_string($title) || !is_scalar($extraPrices[$key]??null)) throw new RuntimeException('ردیف اضافی نامعتبر است.');
                 $title=trim($title);
-                $rawPrice=ascii_digits(trim((string)$extraPrices[$key]));
+                $rawPrice=ascii_digits(str_replace([',','٬','،',' '], '',trim((string)$extraPrices[$key])));
                 if ($title==='' && $rawPrice==='') continue;
                 if ($title==='' || mb_strlen($title)>200 || !ctype_digit($rawPrice) || (int)$rawPrice<1 || (int)$rawPrice>100000000000) throw new RuntimeException('عنوان و مبلغ ردیف اضافی معتبر نیست.');
                 $extras[]=['title'=>$title,'price'=>(int)$rawPrice];
@@ -510,8 +510,8 @@ $navGroup=null;
 <div class="card"><h2>فهرست تاکسیرانان</h2><div class="table-wrap"><table><thead><tr><th>کد ملی</th><th>نام</th><th>همراه</th><th>خط</th></tr></thead><tbody><?php foreach(query('SELECT * FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 100',[$tenant])->fetchAll() as $r): ?><tr><td><?=e(fa_digits($r['national_code']))?></td><td><?=e($r['first_name'].' '.$r['last_name'])?></td><td><?=e(fa_digits((string)$r['mobile']))?></td><td><?=e($r['line_area'])?></td></tr><?php endforeach; ?></tbody></table></div></div>
 <?php elseif($page==='services'): ?>
 <div class="heading"><h1>تعریف خدمات و تعرفه‌ها</h1><?php if(user()['role']!=='operator'): ?><button type="button" data-dialog-open="serviceCreate">+ خدمت جدید</button><?php endif; ?></div>
-<?php if(user()['role']!=='operator'): ?><dialog id="serviceCreate" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><h2>ثبت خدمت جدید</h2><label>عنوان خدمت<input name="title" maxlength="200" placeholder="مثلاً هزینه تمدید پروانه تاکسیرانی" required></label><label>مبلغ (تومان)<input name="price" type="number" min="0" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره خدمت</button></div></form></dialog><?php endif; ?>
-<div class="card table-wrap"><table><thead><tr><th>شناسه</th><th>عنوان خدمت</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,price,is_active FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['id'])?></td><td><?=e($r['title'])?></td><td><span class="money-value"><?=money_toman($r['price'])?></span></td><td><span class="status-chip <?=$r['is_active']?'status-good':'status-muted'?>"><?=$r['is_active']?'فعال':'غیرفعال'?></span></td><td><?php if(user()['role']!=='operator'): ?><button type="button" class="small secondary" data-dialog-open="serviceEdit<?=e($r['id'])?>">ویرایش</button><dialog id="serviceEdit<?=e($r['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="service_id" value="<?=e($r['id'])?>"><h2>ویرایش خدمت</h2><label>عنوان خدمت<input name="title" maxlength="200" value="<?=e($r['title'])?>" required></label><label>مبلغ (تومان)<input name="price" type="number" min="0" value="<?=e($r['price'])?>" required></label><label class="choice"><input type="checkbox" name="is_active" value="1" <?=$r['is_active']?'checked':''?>>فعال باشد</label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
+<?php if(user()['role']!=='operator'): ?><dialog id="serviceCreate" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><h2>ثبت خدمت جدید</h2><label>عنوان خدمت<input name="title" maxlength="200" placeholder="مثلاً هزینه تمدید پروانه تاکسیرانی" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره خدمت</button></div></form></dialog><?php endif; ?>
+<div class="card table-wrap"><table><thead><tr><th>شناسه</th><th>عنوان خدمت</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,price,is_active FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['id'])?></td><td><?=e($r['title'])?></td><td><span class="money-value"><?=money_toman($r['price'])?></span></td><td><span class="status-chip <?=$r['is_active']?'status-good':'status-muted'?>"><?=$r['is_active']?'فعال':'غیرفعال'?></span></td><td><?php if(user()['role']!=='operator'): ?><button type="button" class="small secondary" data-dialog-open="serviceEdit<?=e($r['id'])?>">ویرایش</button><dialog id="serviceEdit<?=e($r['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="service_id" value="<?=e($r['id'])?>"><h2>ویرایش خدمت</h2><label>عنوان خدمت<input name="title" maxlength="200" value="<?=e($r['title'])?>" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" value="<?=e($r['price'])?>" required></label><label class="choice"><input type="checkbox" name="is_active" value="1" <?=$r['is_active']?'checked':''?>>فعال باشد</label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
 <?php elseif($page==='invoices'): ?>
 <?php if(can('invoices.create')): ?><div class="invoice-page-heading"><div><span class="invoice-eyebrow">عملیات مالی / صدور سند</span><h1>صدور فاکتور</h1><p>مشخصات تاکسیران، تاریخ، خدمات و روش پرداخت را به ترتیب تکمیل کنید.</p></div></div>
 <div class="card invoice-workspace">
