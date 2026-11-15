@@ -251,8 +251,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   const moneyDigits=text=>String(text??'').replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776))
     .replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632)).replace(/[^0-9]/g,'');
   const persianMoney=new Intl.NumberFormat('fa-IR',{maximumFractionDigits:0});
+  const decorateMoneyInput=field=>{
+    if(field.parentElement?.classList.contains('money-input-shell'))return;
+    const shell=document.createElement('span');
+    shell.className='money-input-shell';
+    field.parentNode.insertBefore(shell,field);
+    shell.append(field);
+    const unit=document.createElement('span');
+    unit.className='money-input-unit';
+    unit.textContent=field.dataset.currency||'تومان';
+    unit.setAttribute('aria-hidden','true');
+    shell.append(unit);
+  };
   const formatMoneyField=(field,keepCaret=false)=>{
     if(field.dataset.moneyComposing==='1')return;
+    decorateMoneyInput(field);
     const previous=field.value;
     const before=keepCaret?moneyDigits(previous.slice(0,field.selectionStart??previous.length)).length:0;
     const digits=moneyDigits(previous).slice(0,15);
@@ -279,7 +292,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       const title=document.createElement('input');title.name='extra_title[]';title.maxLength=200;title.placeholder='عنوان خدمت موردی';title.setAttribute('aria-label','عنوان خدمت موردی');
       const price=document.createElement('input');price.name='extra_price[]';price.type='text';price.inputMode='numeric';price.maxLength=22;price.dataset.moneyInput='';price.dataset.currency='تومان';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
       const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>row.remove());
-      row.append(title,price,remove);extraItems.append(row);title.focus();
+      row.append(title,price,remove);extraItems.append(row);decorateMoneyInput(price);title.focus();
     });
   }
   const templateForm=document.getElementById('templateEditor');
