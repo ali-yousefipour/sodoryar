@@ -439,8 +439,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     };
     lineSearch.addEventListener('input',updateLineOptions);
     const normalizeMobile=value=>{
-      let number=toAscii(String(value??'')).replace(/[\\s\\-()]+/g,'');
-      if(/^\\+989[0-9]{9}$/.test(number))number='0'+number.slice(3);
+      let number=toAscii(String(value??'')).replace(/[\s()-]+/g,'');
+      if(/^\+989[0-9]{9}$/.test(number))number='0'+number.slice(3);
       return number;
     };
     mobileField.addEventListener('input',()=>mobileField.setCustomValidity(''));
