@@ -65,7 +65,22 @@ document.addEventListener('DOMContentLoaded', () => {
     limit.value=rows.length<=15?'all':'15';
     limit.setAttribute('aria-label','تعداد ردیف‌های قابل مشاهده');
     limitBox.append(limit);
-    toolbar.append(searchBox,count,limitBox);
+    const statusColumn=[...head.cells].findIndex(th=>/^(وضعیت|فعال)$/.test(th.textContent.trim()));
+    const statuses=statusColumn>=0?[...new Set(rows.map(row=>cellText(row.cells[statusColumn])).filter(Boolean))]:[];
+    let statusFilter=null;
+    if(statuses.length>=2&&statuses.length<=8){
+      const statusBox=document.createElement('label');
+      statusBox.className='sd-table-status';
+      statusBox.append(document.createTextNode('وضعیت'));
+      statusFilter=document.createElement('select');
+      statusFilter.setAttribute('aria-label','فیلتر بر اساس وضعیت');
+      const all=document.createElement('option');all.value='';all.textContent='همه وضعیت‌ها';statusFilter.append(all);
+      statuses.forEach(value=>{
+        const option=document.createElement('option');option.value=value;option.textContent=value;statusFilter.append(option);
+      });
+      statusBox.append(statusFilter);
+      toolbar.append(searchBox,statusBox,count,limitBox);
+    }else toolbar.append(searchBox,count,limitBox);
     wrap.parentNode.insertBefore(toolbar,wrap);
     const pager=document.createElement('div');
     pager.className='sd-table-pager';
@@ -85,7 +100,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let page=0,sortIndex=-1,direction=1;
     const update=()=>{
       const words=normalize(search.value).split(' ').filter(Boolean);
-      const filtered=records.filter(record=>words.every(word=>record.searchable.includes(word)));
+      const filtered=records.filter(record=>words.every(word=>record.searchable.includes(word))
+        &&(!statusFilter?.value||record.cells[statusColumn]===statusFilter.value));
       if(sortIndex>=0)filtered.sort((a,b)=>{
         const av=a.cells[sortIndex]||'',bv=b.cells[sortIndex]||'';
         const an=numeric(av),bn=numeric(bv),ad=dateKey(av),bd=dateKey(bv);
@@ -125,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     search.addEventListener('input',()=>{page=0;update();});
     search.addEventListener('keydown',event=>{if(event.key==='Escape'&&search.value){search.value='';page=0;update();}});
+    statusFilter?.addEventListener('change',()=>{page=0;update();});
     limit.addEventListener('change',()=>{page=0;update();});
     prev.addEventListener('click',()=>{page--;update();});
     next.addEventListener('click',()=>{page++;update();});
