@@ -54,7 +54,7 @@ if ($page==='driver_lookup') {
     $prefix=ascii_digits(trim((string)($_GET['prefix']??'')));
     if (isset($_GET['prefix'])) {
         if (!can('invoices.create')) { http_response_code(403); echo json_encode(['error'=>'دسترسی مجاز نیست.'],JSON_UNESCAPED_UNICODE); exit; }
-        if (!preg_match('/^[0-9]{6,10}$/D',$prefix)) { http_response_code(422); echo json_encode(['error'=>'حداقل شش رقم کد ملی وارد کنید.'],JSON_UNESCAPED_UNICODE); exit; }
+        if (!valid_driver_lookup_prefix($prefix)) { http_response_code(422); echo json_encode(['error'=>'حداقل شش رقم کد ملی وارد کنید.'],JSON_UNESCAPED_UNICODE); exit; }
         $drivers=query('SELECT national_code,first_name,last_name,line_area,vehicle_plate FROM global_drivers WHERE national_code LIKE ? ORDER BY national_code ASC LIMIT 8',[$prefix.'%'])->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['drivers'=>$drivers,'exact'=>strlen($prefix)===10 && count($drivers)===1 && $drivers[0]['national_code']===$prefix],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR); exit;
     }
