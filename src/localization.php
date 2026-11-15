@@ -42,6 +42,16 @@ function jalali_to_gregorian_date(string $jalali): string {
     throw new RuntimeException('تاریخ شمسی معتبر نیست.');
 }
 
+/** Parse localized integer money inputs without changing the stored numeric unit. */
+function parse_money_input(mixed $value, int $minimum=0, int $maximum=100000000000): int|false {
+    if (!is_scalar($value)) return false;
+    $digits=ascii_digits(trim((string)$value));
+    $digits=str_replace([',','٬','،',' '], '', $digits);
+    if ($digits==='' || !ctype_digit($digits) || strlen($digits)>15) return false;
+    $number=filter_var($digits,FILTER_VALIDATE_INT,['options'=>['min_range'=>$minimum,'max_range'=>$maximum]]);
+    return $number===false?false:(int)$number;
+}
+
 /** Display monetary values in the existing stored unit (toman). */
 function money_toman(int|string $amount): string {
     return money($amount).' تومان';
