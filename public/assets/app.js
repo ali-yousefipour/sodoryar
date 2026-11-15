@@ -33,6 +33,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   try{sidebarCollapsed=window.localStorage.getItem(sidebarPreferenceKey)==='1';}catch(_error){}
   const setSidebarCollapsed=(collapsed,{persist=true}={})=>{
     sidebarCollapsed=Boolean(collapsed);
+    if(sidebarCollapsed&&desktopSidebar.matches){
+      const search=document.querySelector('[data-nav-search]');
+      if(search?.value){search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));}
+    }
     shell?.classList.toggle('sidebar-is-collapsed',sidebarCollapsed&&desktopSidebar.matches);
     if(collapseButton){
       const label=sidebarCollapsed?'باز کردن منوی کناری':'جمع کردن منوی کناری';
