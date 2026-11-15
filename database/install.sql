@@ -41,9 +41,10 @@ CREATE TABLE IF NOT EXISTS invoices (
  invoice_number VARCHAR(60) NOT NULL, customer_id BIGINT UNSIGNED NOT NULL,
  user_id BIGINT UNSIGNED NOT NULL, total_amount BIGINT UNSIGNED NOT NULL,
  payment_type ENUM('cash','pos') NOT NULL, pos_ref VARCHAR(120),
+ invoice_date DATE NULL DEFAULT NULL,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  UNIQUE KEY uq_invoice_number(company_id,invoice_number),
- UNIQUE KEY uq_invoice_id_company(id,company_id), INDEX idx_invoice_date(company_id,created_at),
+ UNIQUE KEY uq_invoice_id_company(id,company_id), INDEX idx_invoice_date(company_id,created_at), INDEX idx_invoice_service_date(company_id,invoice_date),
  CONSTRAINT fk_invoice_company FOREIGN KEY(company_id) REFERENCES companies(id),
  CONSTRAINT fk_invoice_customer FOREIGN KEY(customer_id,company_id) REFERENCES customers(id,company_id),
  CONSTRAINT fk_invoice_user FOREIGN KEY(user_id) REFERENCES users(id)
