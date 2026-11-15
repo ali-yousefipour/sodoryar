@@ -1,0 +1,89 @@
+/* Sodoryar: shared density, monetary controls, tables and responsive layout.
+   Applies to authenticated pages without overriding the receipt/print template. */
+:root{
+  --ux-radius:14px;--ux-gap:14px;--ux-line:#e5e3ed;
+  --ux-focus:#785eae;--ux-ink:#302a49
+}
+.main-wrap>.content{width:100%;min-width:0;margin-inline:auto}
+.main-wrap>.content>.card,.main-wrap>.content>.heading,
+.main-wrap>.content>.dashboard-secondary,.main-wrap>.content>.stats{max-width:100%}
+.main-wrap>.content .heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.main-wrap>.content .heading>div{min-width:0}
+.main-wrap>.content .heading h1,.main-wrap>.content>.heading h1{margin:0;line-height:1.5}
+.main-wrap>.content .heading .muted{margin:3px 0 0;line-height:1.7}
+.main-wrap>.content .card:not(.receipt):not(.invoice-paper){
+  border-radius:var(--ux-radius);min-width:0
+}
+.main-wrap>.content .card:not(.receipt)>h2{font-size:16px;margin:0 0 12px;line-height:1.6}
+.main-wrap>.content .card>.muted,.main-wrap>.content .card p.muted{font-size:12.5px;line-height:1.8}
+.main-wrap>.content .form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px 15px}
+.main-wrap>.content .form-grid label{min-width:0}
+.main-wrap>.content .stack{min-width:0}
+.main-wrap>.content .stack>label{min-width:0}
+.main-wrap>.content :where(form label){font-weight:700}
+.main-wrap>.content :where(input:not([type=checkbox]),select,textarea){max-width:100%;font-size:13.5px}
+.main-wrap>.content :where(button,.button-link){line-height:1.45}
+.main-wrap>.content .table-wrap{
+  max-width:100%;overflow:auto;overscroll-behavior:contain;
+  border:1px solid var(--ux-line);border-radius:12px;scrollbar-width:thin
+}
+.main-wrap>.content .table-wrap table{min-width:650px;border-spacing:0}
+.main-wrap>.content .table-wrap thead th{
+  position:sticky;top:0;z-index:1;background:#f1eff8;
+  padding:10px 12px;color:#4b426b;font-size:12px;white-space:nowrap
+}
+.main-wrap>.content .table-wrap td{padding:9px 12px;line-height:1.7;font-size:12.5px}
+.main-wrap>.content .table-wrap tr:nth-child(even) td{background:#fbfafe}
+.main-wrap>.content .table-wrap tr:hover td{background:#f5f2fc}
+.main-wrap>.content .table-wrap .status-chip{white-space:nowrap}
+.main-wrap>.content .management-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.main-wrap>.content .table-wrap .small{min-height:33px;padding:5px 10px}
+.main-wrap>.content .empty-state{padding:22px;color:#736d83}
+.main-wrap>.content :where(.stat b,.metrics-list dd,.money-value){font-variant-numeric:tabular-nums}
+.main-wrap>.content .money-value{display:inline-block;direction:rtl;unicode-bidi:isolate;color:#236c60;font-weight:800;white-space:nowrap}
+.main-wrap>.content .stat small{display:block;color:#6b6181;margin-top:2px}
+.main-wrap>.content .metrics-list dd{font-size:14px;overflow-wrap:anywhere}
+.money-input-shell{display:flex;align-items:center;width:100%;position:relative;gap:0;min-width:0;border:1px solid #d3cfdf;border-radius:10px;background:#fff;overflow:hidden}
+.money-input-shell:focus-within{outline:2px solid #8a70b8;outline-offset:1px}
+.main-wrap>.content .money-input-shell input[data-money-input]{flex:1;min-width:0;border:0!important;box-shadow:none!important;outline:none!important;padding:10px 12px!important;background:transparent!important;text-align:right;direction:ltr;font-variant-numeric:tabular-nums}
+.money-input-shell .money-input-unit{flex:none;padding:0 12px;align-self:stretch;display:flex;align-items:center;border-inline-start:1px solid #e7e2ef;background:#f7f5fc;color:#5c5078;font-size:12px;font-weight:750}
+.invoice-form .invoice-service-price{display:flex;align-items:baseline;gap:4px;white-space:nowrap;direction:rtl;unicode-bidi:isolate}
+.invoice-form .invoice-service-price small{color:#5b6878;font-size:10.5px;font-weight:650;line-height:1.5}
+.invoice-form .invoice-service-price{font-size:13px!important}
+.invoice-form .invoice-total-amount{display:flex;align-items:baseline;gap:8px}
+.app-dialog{max-width:min(92vw,620px);overflow-y:auto;overflow-x:hidden}
+.app-dialog form{min-width:0}
+.app-dialog :where(input,select,textarea){max-width:100%}
+.app-dialog .dialog-actions{display:flex;justify-content:flex-start;flex-wrap:wrap;gap:8px}
+.template-designer{min-width:0}
+.template-designer>*{min-width:0}
+.content .report-filter{min-width:0}
+.content .report-filter .form-grid{align-items:end}
+@media(max-width:1150px){
+ .main-wrap>.content .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .template-designer{grid-template-columns:1fr}
+}
+@media(max-width:900px){
+ .main-wrap>.content{padding:14px}
+ .main-wrap>.content .card{margin:12px 0}
+ .main-wrap>.content .stats{gap:9px}
+}
+@media(max-width:660px){
+ .main-wrap>.content .form-grid{grid-template-columns:1fr}
+ .main-wrap>.content .heading{align-items:stretch}
+ .main-wrap>.content .heading>button{width:100%}
+ .main-wrap>.content .card:not(.receipt):not(.invoice-paper){padding:13px}
+ .main-wrap>.content .table-wrap th{padding:9px 10px}
+ .main-wrap>.content .table-wrap td{padding:8px 10px}
+ .main-wrap>.content .management-actions{flex-wrap:nowrap}
+ .main-wrap>.content .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .main-wrap>.content .stat{min-width:0;padding:12px}
+ .main-wrap>.content .stat b{font-size:19px;overflow-wrap:anywhere}
+ .app-dialog{width:calc(100vw - 20px);max-height:90dvh;padding:16px}
+}
+@media(max-width:380px){.main-wrap>.content .stats{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.main-wrap>.content *{scroll-behavior:auto}}
+@media print{
+ .main-wrap>.content .table-wrap{max-height:none;overflow:visible}
+ .main-wrap>.content .table-wrap th{position:static}
+}
