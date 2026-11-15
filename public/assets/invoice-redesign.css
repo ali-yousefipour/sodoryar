@@ -1,10 +1,10 @@
 /* Sodoryar invoice composition — compact, consistent RTL form.
    Single source of truth for invoice-specific styling; shared components stay intact. */
-.invoice-page-heading{max-width:1080px;margin:0 auto 12px}
+.invoice-page-heading{max-width:1280px;width:100%;margin:0 auto 12px}
 .invoice-page-heading h1{font-size:22px;line-height:1.5;font-weight:850;color:#30264c;margin:2px 0 3px}
 .invoice-page-heading p{font-size:12.5px;line-height:1.7;color:#716b7d;margin:0}
 .invoice-eyebrow{font-size:11px;font-weight:750;color:#66549d}
-.content .invoice-workspace{max-width:1080px!important;margin:0 auto 18px!important;padding:16px 18px!important;border-radius:15px!important;border:1px solid #e4e0ed!important;background:#fff!important;box-shadow:0 9px 26px -23px #3b2a60!important}
+.content .invoice-workspace{max-width:1280px!important;width:100%;margin:0 auto 16px!important;padding:15px 17px!important;border-radius:15px!important;border:1px solid #e4e0ed!important;background:#fff!important;box-shadow:0 9px 26px -23px #3b2a60!important}
 .invoice-form{display:grid;gap:12px!important}
 .content .invoice-form .invoice-panel{min-width:0;margin:0!important;padding:13px 15px!important;border:1px solid #e5e2ed!important;background:#fff!important;border-radius:12px!important}
 .invoice-panel-heading{display:flex;align-items:center;gap:9px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #eeecf3}
@@ -12,12 +12,12 @@
 .invoice-panel-heading p{font-size:11.5px;line-height:1.55;color:#80798c;margin:1px 0 0}
 .invoice-form .invoice-step{display:inline-flex;align-items:center;justify-content:center;flex:none;width:25px;height:25px;margin-left:5px;border-radius:7px;background:#ece7f8;color:#5a4699;font-size:12px;font-weight:850}
 .invoice-form .invoice-panel-heading .invoice-step{margin-left:0}
-.invoice-details-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px 16px;align-items:start}
-.invoice-details-grid>label,.invoice-details-grid>.invoice-date-wrap,.invoice-details-grid>.invoice-payment-wrap{min-width:0;display:grid;gap:5px;color:#47405e;font-size:12.5px!important;font-weight:750!important}
-.invoice-details-grid input:not([type=checkbox]),.invoice-details-grid select{box-sizing:border-box;min-height:40px!important;width:100%;font-size:13px!important;padding:7px 11px!important;border-radius:9px!important}
-.invoice-form .lookup-result,.invoice-form .invoice-help{min-height:0;font-size:11px!important;line-height:1.55;font-weight:400;color:#7b7388}
+.invoice-details-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px 18px;align-items:start}
+.invoice-details-grid>label,.invoice-details-grid>.invoice-date-wrap,.invoice-details-grid>.invoice-payment-wrap{min-width:0;display:grid;gap:5px;color:#47405e;font-size:13px!important;font-weight:750!important}
+.invoice-details-grid input:not([type=checkbox]),.invoice-details-grid select{box-sizing:border-box;min-height:40px!important;width:100%;font-size:13.5px!important;padding:7px 11px!important;border-radius:9px!important}
+.invoice-form .lookup-result,.invoice-form .invoice-help{min-height:0;font-size:11.5px!important;line-height:1.6;font-weight:400;color:#7b7388}
 .invoice-date-picker{display:flex;align-items:center;min-height:40px;gap:6px;min-width:0}
-.invoice-date-picker .jalali-picker-button{flex:1;min-width:0;min-height:40px!important;padding:7px 10px!important;text-align:right;border-radius:9px!important;border:1px solid #d7d0e6!important;background:#fcfbff!important;color:#413260!important;font-size:13px!important;font-weight:700!important}
+.invoice-date-picker .jalali-picker-button{flex:1;min-width:0;min-height:40px!important;padding:7px 10px!important;text-align:right;border-radius:9px!important;border:1px solid #d7d0e6!important;background:#fcfbff!important;color:#413260!important;font-size:13.5px!important;font-weight:700!important}
 .invoice-date-picker .invoice-date-today{flex:none;min-width:60px;min-height:40px!important;padding:6px 9px!important;border-radius:9px!important;border:1px solid #e1daed!important;background:#f2eefa!important;color:#55438a!important;font-size:12px!important}
 .invoice-required{color:#ac3852}
 .invoice-payment-control{min-width:0}
@@ -42,17 +42,17 @@
 .invoice-form .invoice-total-amount{display:flex;align-items:baseline;gap:7px;margin-top:1px;direction:rtl;white-space:nowrap}
 .invoice-form .invoice-total-amount strong{font-size:clamp(21px,2vw,26px)!important;line-height:1.35!important;font-weight:900;color:#fff!important;margin:0!important;font-variant-numeric:tabular-nums}
 .invoice-form .invoice-total-amount span{font-size:12px;color:#f1ecff}
-.invoice-form .invoice-service-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:290px!important;overflow-y:auto;scrollbar-width:thin;padding:2px 3px 3px}
-.invoice-form .invoice-service-option{display:flex!important;align-items:center;min-width:0;min-height:44px!important;gap:8px;padding:7px 10px!important;border-radius:9px!important;border:1px solid #e5e3ec!important;background:#fff!important;box-shadow:none!important;cursor:pointer}
+.invoice-form .invoice-service-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:310px!important;overflow-y:auto;scrollbar-width:thin;padding:2px 3px 3px}
+.invoice-form .invoice-service-option{display:flex!important;align-items:center;min-width:0;min-height:47px!important;gap:9px;padding:7px 11px!important;border-radius:9px!important;border:1px solid #e5e3ec!important;background:#fff!important;box-shadow:none!important;cursor:pointer}
 .invoice-form .invoice-service-option:hover{background:#faf9fd!important;border-color:#b6a7d7!important}
 .invoice-form .invoice-service-option.is-selected{background:#f3effb!important;border-color:#9078c3!important}
 .invoice-form .invoice-service-option:focus-within{outline:2px solid #aa91df;outline-offset:1px}
 .invoice-form .invoice-service-option input[type=checkbox]{width:16px;height:16px;flex:none;margin:0;accent-color:#5c469b;appearance:auto}
-.invoice-form .invoice-service-title{flex:1;min-width:0;color:#41394f;font-size:12.5px!important;line-height:1.45!important;font-weight:650!important;overflow-wrap:anywhere}
-.invoice-form .invoice-service-option>strong{flex:none;font-size:12.5px!important;font-weight:800!important;white-space:nowrap;color:#236e60!important;font-variant-numeric:tabular-nums}
+.invoice-form .invoice-service-title{flex:1;min-width:0;color:#41394f;font-size:13.5px!important;line-height:1.55!important;font-weight:650!important;overflow-wrap:anywhere}
+.invoice-form .invoice-service-option>strong{flex:none;font-size:13px!important;font-weight:800!important;white-space:nowrap;color:#236e60!important;font-variant-numeric:tabular-nums}
 .invoice-form .invoice-service-help{font-size:11px!important;line-height:1.6!important;margin:8px 0 0!important;color:#817a8d}
 .invoice-form .invoice-extras{background:#fcfbfe!important}
-.invoice-form .invoice-extras>.muted{font-size:11.5px!important;line-height:1.65!important;margin:3px 0 10px!important}
+.invoice-form .invoice-extras>.muted{font-size:12px!important;line-height:1.7!important;margin:3px 0 10px!important}
 .invoice-form .invoice-extras [data-add-invoice-item]{min-height:36px!important;padding:5px 12px!important;font-size:12.5px!important}
 .invoice-form .extra-invoice-row{gap:8px;margin-block:5px}
 .invoice-form-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;background:#f5f2fa;border:1px solid #e8e3f0;border-radius:10px}
@@ -74,6 +74,31 @@
  .invoice-form .invoice-service-option{padding:7px 8px!important}
  .invoice-form .invoice-service-option>strong{font-size:12px!important}
  .invoice-date-picker .invoice-date-today{min-width:56px}
+}
+/* The invoice creation area and history share one aligned content width. */
+.content:has(.invoice-form) .invoice-page-heading,
+.content:has(.invoice-form) .invoice-workspace,
+.content .invoice-history{width:100%;max-width:1280px!important;margin-inline:auto!important}
+.content .invoice-history{padding:16px 18px!important;border-radius:14px}
+.content .invoice-history>h2{font-size:15px!important;margin:0 0 13px!important;line-height:1.5}
+.content .invoice-history .table-wrap{max-height:440px;overflow:auto;scrollbar-width:thin}
+.content .invoice-history .table-wrap th{position:sticky;top:0;z-index:1;background:#f1eff8;font-size:12px;padding:10px 11px;white-space:nowrap}
+.content .invoice-history .table-wrap td{font-size:12.5px;padding:9px 11px;line-height:1.55}
+.content .invoice-history .table-wrap table{min-width:750px}
+.invoice-form .invoice-service-option>strong{direction:ltr;unicode-bidi:isolate}
+.invoice-form .invoice-service-list{align-content:start}
+.invoice-form .invoice-service-meta{justify-content:center}
+@media(min-width:1220px){
+ .invoice-details-grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)}
+ .invoice-driver-field{grid-column:1;grid-row:1}
+ .invoice-date-wrap{grid-column:2;grid-row:1}
+ .invoice-payment-wrap{grid-column:3;grid-row:1}
+ .invoice-pos-field:not([hidden]){grid-column:3;grid-row:2}
+}
+@media(max-width:760px){
+ .content .invoice-history{padding:12px!important}
+ .content .invoice-history .table-wrap{max-height:390px}
+ .invoice-form .invoice-service-title{font-size:13.5px!important}
 }
 @media(prefers-reduced-motion:reduce){.invoice-form *{transition:none!important}}
 @media print{.invoice-page-heading,.invoice-form,.invoice-workspace{display:none!important}}
