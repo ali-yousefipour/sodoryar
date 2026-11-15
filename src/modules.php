@@ -68,7 +68,7 @@ function register_missing_driver(int $tenant, string $nationalCode, array $field
             ? normalize_invoice_driver_mobile((string)($fields['mobile']??''))
             : trim((string)($fields['mobile']??''));
         $line=trim((string)($fields['line_area']??''));
-        if ($invoiceRegistration && $line!=='' && !query('SELECT 1 FROM global_drivers WHERE line_area=? LIMIT 1',[$line])->fetchColumn()) {
+        if ($invoiceRegistration && $line!=='' && !query('SELECT 1 FROM global_drivers WHERE TRIM(line_area)=? LIMIT 1',[$line])->fetchColumn()) {
             throw new RuntimeException('خط فعالیت انتخاب‌شده در بانک مرکزی رانندگان وجود ندارد.');
         }
         $lineCode=trim((string)($fields['line_code']??''));
