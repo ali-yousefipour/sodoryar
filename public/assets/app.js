@@ -188,7 +188,27 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('[data-dialog-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
   document.querySelectorAll('dialog.app-dialog').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();}));
   const editUser=document.getElementById('editUserSelect');
-  if(editUser){editUser.addEventListener('change',()=>{
+  if(editUser){
+    const userSearch=document.getElementById('editUserSearch');
+    const allUsers=[...editUser.options].filter(option=>option.value!=='');
+    const foldUser=text=>String(text??'').normalize('NFKC').replace(/ي/g,'ی').replace(/ك/g,'ک').replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776)).replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632)).trim().toLocaleLowerCase('fa');
+    const filterUsers=()=>{
+      if(!userSearch)return;
+      const words=foldUser(userSearch.value).split(/\s+/).filter(Boolean);
+      const selectedId=editUser.value;
+      allUsers.forEach(option=>{
+        const haystack=foldUser([option.textContent,option.dataset.username,option.dataset.nationalCode].join(' '));
+        option.hidden=words.length>0&&!words.every(word=>haystack.includes(word))&&option.value!==selectedId;
+      });
+      // Rebuild the select from the visible options, since some browsers ignore hidden <option>.
+      allUsers.forEach(option=>{if(option.hidden)option.remove();else editUser.append(option);});
+    };
+    userSearch?.addEventListener('input',filterUsers);
+    userSearch?.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&userSearch.value){userSearch.value='';filterUsers();event.preventDefault();}
+      if(event.key==='ArrowDown'){editUser.focus();event.preventDefault();}
+    });
+    editUser.addEventListener('change',()=>{
     const choice=editUser.selectedOptions[0];
     document.getElementById('editUserName').value=choice.dataset.fullName||'';
     document.getElementById('editUserUsername').value=choice.dataset.username||'';
@@ -199,6 +219,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('editUserActive').checked=choice.dataset.active==='1';
   });
     document.querySelectorAll('[data-edit-user-id]').forEach(button=>button.addEventListener('click',()=>{
+      if(userSearch){userSearch.value='';allUsers.forEach(option=>{option.hidden=false;if(!option.isConnected)editUser.append(option);});}
       editUser.value=button.dataset.editUserId;
       editUser.dispatchEvent(new Event('change'));
       document.getElementById('userEdit')?.showModal();
