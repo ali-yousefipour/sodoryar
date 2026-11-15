@@ -94,6 +94,24 @@ jobs:
           fi
           echo "Hosted CSS matches this exact commit ($expected)."
 
+      - name: Verify global UI stylesheet and script are served from the deployed commit
+        run: |
+          set -euo pipefail
+          for file in ux-unified.css app.js; do
+            local_file="public/assets/$file"
+            expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
+            curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
+              -H 'Cache-Control: no-cache' \
+              "https://taxiranico.ir/assets/$file?deploy=${GITHUB_SHA}" \
+              -o "/tmp/sodoryar-live-$file"
+            actual="$(sha256sum "/tmp/sodoryar-live-$file" | cut -d' ' -f1)"
+            if [ "$expected" != "$actual" ]; then
+              echo "::error::Live $file does not match the deployed commit."
+              exit 1
+            fi
+            echo "Verified deployed $file ($expected)"
+          done
+
       - name: Deployment notes
         run: |
           echo 'Contents of public/ uploaded directly to the FTP account root.'
