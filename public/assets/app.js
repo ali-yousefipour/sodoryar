@@ -246,13 +246,38 @@ document.addEventListener('DOMContentLoaded',()=>{
     servicePicker.addEventListener('change',event=>{if(event.target.matches('input[type="checkbox"]'))updateServices();});
     updateServices();
   }
+  // Toman inputs accept localized digits and display grouped Persian numbers.
+  // The server parses the same representation, so no hidden alternate value is needed.
+  const moneyDigits=text=>String(text??'').replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776))
+    .replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632)).replace(/[^0-9]/g,'');
+  const persianMoney=new Intl.NumberFormat('fa-IR',{maximumFractionDigits:0});
+  const formatMoneyField=(field,keepCaret=false)=>{
+    if(field.dataset.moneyComposing==='1')return;
+    const previous=field.value;
+    const before=keepCaret?moneyDigits(previous.slice(0,field.selectionStart??previous.length)).length:0;
+    const digits=moneyDigits(previous).slice(0,15);
+    const formatted=digits?persianMoney.format(BigInt(digits)):'';
+    if(previous!==formatted)field.value=formatted;
+    if(keepCaret&&document.activeElement===field){
+      let offset=0,seen=0;
+      if(before){for(;offset<formatted.length;offset++){if(/[۰-۹]/.test(formatted[offset]))seen++;if(seen>=before){offset++;break;}}}
+      field.setSelectionRange(offset,offset);
+    }
+  };
+  document.querySelectorAll('[data-money-input]').forEach(field=>formatMoneyField(field));
+  document.addEventListener('input',event=>{
+    const field=event.target;
+    if(field instanceof HTMLInputElement&&field.matches('[data-money-input]'))formatMoneyField(field,true);
+  });
+  document.addEventListener('compositionstart',event=>{if(event.target?.matches?.('[data-money-input]'))event.target.dataset.moneyComposing='1';});
+  document.addEventListener('compositionend',event=>{if(event.target?.matches?.('[data-money-input]')){delete event.target.dataset.moneyComposing;formatMoneyField(event.target,true);}});
   const extraAdd=document.querySelector('[data-add-invoice-item]');
   if(extraItems&&extraAdd){
     extraAdd.addEventListener('click',()=>{
       if(extraItems.children.length>=10)return;
       const row=document.createElement('div');row.className='extra-invoice-row';
       const title=document.createElement('input');title.name='extra_title[]';title.maxLength=200;title.placeholder='عنوان خدمت موردی';title.setAttribute('aria-label','عنوان خدمت موردی');
-      const price=document.createElement('input');price.name='extra_price[]';price.type='number';price.min='1';price.max='100000000000';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
+      const price=document.createElement('input');price.name='extra_price[]';price.type='text';price.inputMode='numeric';price.maxLength=22;price.dataset.moneyInput='';price.dataset.currency='تومان';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
       const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>row.remove());
       row.append(title,price,remove);extraItems.append(row);title.focus();
     });
