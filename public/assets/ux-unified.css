@@ -133,3 +133,8 @@
  .main-wrap>.content .sd-table-toolbar + .table-wrap th{white-space:nowrap}
  .main-wrap>.content .sd-sort-button{min-height:40px!important}
 }
+
+
+.sd-table-status{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:12px;font-weight:750;color:#655b80}
+.sd-table-status select{width:auto!important;min-width:115px;max-width:175px;min-height:38px!important;padding:6px 10px!important;border-radius:9px!important;background:#fff!important;font-size:12px!important}
+@media(max-width:660px){.sd-table-status{flex:1 1 auto}.sd-table-status select{max-width:none}}
