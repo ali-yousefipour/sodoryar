@@ -87,7 +87,14 @@ document.addEventListener('DOMContentLoaded',()=>{
       const parts=hidden.value.split('/');
       hidden.value=periodType.value==='monthly'?parts.slice(0,2).join('/'):parts.slice(0,2).join('/')+'/'+(parts[2]||'01');update();
     });
-    clear.addEventListener('click',()=>{hidden.value='';update();});
+    clear?.addEventListener('click',()=>{hidden.value='';update();});
+    field.querySelector('[data-jalali-today]')?.addEventListener('click',()=>{
+      // Use the timezone of the issuing company, not the computer's UTC day.
+      const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      const date=Object.fromEntries(parts.filter(part=>['year','month','day'].includes(part.type)).map(part=>[part.type,part.value]));
+      hidden.value=`${date.year}-${date.month}-${date.day}`;
+      update();
+    });
     open.addEventListener('click',()=>{
       let source=new Date();
       if(jalaliOutput&&hidden.value){
