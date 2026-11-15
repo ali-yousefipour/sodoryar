@@ -105,3 +105,29 @@
 }
 @media(prefers-reduced-motion:reduce){.invoice-form *{transition:none!important}}
 @media print{.invoice-page-heading,.invoice-form,.invoice-workspace{display:none!important}}
+
+
+/* Invoice header-field alignment: prevent the required asterisk becoming a grid row. */
+.invoice-details-grid>.invoice-driver-field,
+.invoice-details-grid>.invoice-date-wrap,
+.invoice-details-grid>.invoice-payment-wrap{
+  align-content:start;
+  grid-template-rows:22px 40px auto;
+  row-gap:5px;
+}
+.invoice-details-grid>.invoice-date-wrap>label#invoiceDateLabel{
+  display:inline-flex!important;align-items:center;justify-content:flex-start;
+  align-self:center;gap:4px;height:22px;min-height:22px;line-height:22px;
+  white-space:nowrap;margin:0;font-size:13px
+}
+.invoice-details-grid>.invoice-date-wrap .invoice-required{
+  display:inline-block;flex:none;margin:0;line-height:1;position:static;vertical-align:middle
+}
+.invoice-details-grid>.invoice-payment-wrap>label#invoicePaymentLabel{
+  display:block;align-self:center;margin:0;height:22px;min-height:22px;line-height:22px
+}
+.invoice-details-grid>.invoice-driver-field{line-height:22px}
+.invoice-details-grid>.invoice-date-wrap>.invoice-date-picker,
+.invoice-details-grid>.invoice-payment-wrap>.invoice-payment-control{
+  min-height:40px;align-self:start;margin:0
+}
