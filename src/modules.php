@@ -47,14 +47,30 @@ function attach_global_driver(int $tenant, string $nationalCode): int {
     return (int)db()->lastInsertId();
 }
 
-function register_missing_driver(int $tenant, string $nationalCode, array $fields): int {
+/** Invoice-only mobile validation; accepts Persian digits and optional +98 prefix. */
+function normalize_invoice_driver_mobile(string $value): string {
+    $mobile=ascii_digits(trim($value));
+    $mobile=preg_replace('/[\\s\\-()]+/u','',$mobile)??'';
+    if (preg_match('/^\\+989[0-9]{9}$/D',$mobile)) $mobile='0'.substr($mobile,3);
+    if (!preg_match('/^09[0-9]{9}$/D',$mobile)) {
+        throw new RuntimeException('شماره همراه راننده الزامی است و باید ۱۱ رقم معتبر با ۰۹ باشد.');
+    }
+    return $mobile;
+}
+
+function register_missing_driver(int $tenant, string $nationalCode, array $fields, bool $invoiceRegistration=false): int {
     if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی راننده باید ده‌رقمی باشد.');
     $existing=query('SELECT id FROM global_drivers WHERE national_code=?',[$nationalCode])->fetchColumn();
     if (!$existing) {
         $first=trim((string)($fields['first_name']??''));
         $last=trim((string)($fields['last_name']??''));
-        $mobile=trim((string)($fields['mobile']??''));
+        $mobile=$invoiceRegistration
+            ? normalize_invoice_driver_mobile((string)($fields['mobile']??''))
+            : trim((string)($fields['mobile']??''));
         $line=trim((string)($fields['line_area']??''));
+        if ($invoiceRegistration && $line!=='' && !query('SELECT 1 FROM global_drivers WHERE line_area=? LIMIT 1',[$line])->fetchColumn()) {
+            throw new RuntimeException('خط فعالیت انتخاب‌شده در بانک مرکزی رانندگان وجود ندارد.');
+        }
         $lineCode=trim((string)($fields['line_code']??''));
         if ($first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100 || mb_strlen($mobile)>20 || mb_strlen($line)>180 || mb_strlen($lineCode)>40) throw new RuntimeException('این کد ملی در بانک مرکزی وجود ندارد؛ نام و نام خانوادگی و اطلاعات معتبر راننده جدید را وارد کنید.');
         query('INSERT INTO global_drivers(national_code,first_name,last_name,mobile,line_area,line_code) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code)',[$nationalCode,$first,$last,$mobile,$line,$lineCode]);
