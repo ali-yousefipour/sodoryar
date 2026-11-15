@@ -42,9 +42,30 @@ function jalali_to_gregorian_date(string $jalali): string {
     throw new RuntimeException('تاریخ شمسی معتبر نیست.');
 }
 
+/** Parse localized integer money inputs without changing the stored numeric unit. */
+function parse_money_input(mixed $value, int $minimum=0, int $maximum=100000000000): int|false {
+    if (!is_scalar($value)) return false;
+    $digits=ascii_digits(trim((string)$value));
+    $digits=str_replace([',','٬','،',' '], '', $digits);
+    if ($digits==='' || !ctype_digit($digits) || strlen($digits)>15) return false;
+    $number=filter_var($digits,FILTER_VALIDATE_INT,['options'=>['min_range'=>$minimum,'max_range'=>$maximum]]);
+    return $number===false?false:(int)$number;
+}
+
+/** Display monetary values in the existing stored unit (toman). */
+function money_toman(int|string $amount): string {
+    return money($amount).' تومان';
+}
+
+/** Date-aware conversion for common table fields; other values keep their meaning. */
 function ui_value(mixed $value, string $key=''): string {
     $value=(string)($value??'');
-    if ($key==='period_key' && preg_match('/^1[34]\d{2}-\d{2}(?:-\d{2})?$/',$value)) return fa_digits(str_replace('-','/',$value));
-    if (in_array($key,['created_at','period_key','date','timestamp'],true) && preg_match('/^\d{4}-\d{2}/',$value)) return jalali_datetime($value);
+    $key=strtolower($key);
+    if ($key==='period_key' && preg_match('/^1[34]\\d{2}-\\d{2}(?:-\\d{2})?$/',$value)) return fa_digits(str_replace('-','/',$value));
+    $dateFields=['created_at','updated_at','deleted_at','archived_at','invoice_date','payment_date','paid_at','issued_at','approved_at','expires_at','due_date','date','timestamp','start_date','end_date','from_date','to_date'];
+    if ((in_array($key,$dateFields,true) || preg_match('/(?:_date|_at)$/',$key))
+        && preg_match('/^\\d{4}-\\d{2}-\\d{2}(?:[ T]\\d{2}:\\d{2})?/',$value)) {
+        return jalali_datetime($value);
+    }
     return fa_digits($value);
 }
