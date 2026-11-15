@@ -16,5 +16,7 @@ jobs:
         run: node --check public/assets/app.js && node --check public/assets/table-experience.js
       - name: Verify Persian number, money and Jalali date formatting
         run: php tests/locale-formatting.php
+      - name: Verify safe national-code prefix rules
+        run: php tests/driver-lookup-validation.php
       - name: Verify numeric login CAPTCHA
         run: php tests/login-captcha.php
