@@ -104,7 +104,7 @@
   border-radius:0 0 12px 12px!important;margin-top:0!important
 }
 .main-wrap>.content .sd-table-toolbar + .table-wrap table{width:100%}
-.main-wrap>.content .sd-table-toolbar + .table-wrap th{padding:0!important}
+.main-wrap>.content .sd-table-toolbar + .table-wrap th:has(.sd-sort-button){padding:0!important}
 .main-wrap>.content .sd-table-toolbar + .table-wrap th:has(.sd-sort-button){vertical-align:middle}
 .sd-sort-button{
   display:flex;align-items:center;justify-content:space-between;gap:9px;
