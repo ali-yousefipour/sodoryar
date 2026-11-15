@@ -13,7 +13,7 @@ jobs:
       - name: Check required files
         run: test -s database/install.sql && test -s database/migrations/001_initial.sql && test -s database/migrations/002_login_rate_limit.sql && test -s database/migrations/003_user_permissions.sql && test -s database/migrations/004_global_drivers.sql && test -s database/migrations/005_user_photos.sql && test -s public/assets/app.css && test -s public/assets/refinements.css && test -s .env.example
       - name: Check browser scripts
-        run: node --check public/assets/app.js
+        run: node --check public/assets/app.js && node --check public/assets/table-experience.js
       - name: Verify Persian number, money and Jalali date formatting
         run: php tests/locale-formatting.php
       - name: Verify numeric login CAPTCHA
