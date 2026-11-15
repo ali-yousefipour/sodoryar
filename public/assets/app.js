@@ -391,4 +391,20 @@ document.addEventListener('DOMContentLoaded',()=>{
       },350);
     });
   });
+  // Render-only Persian numerals for labels, counters and table content.
+  // Inputs, URLs, machine identifiers and Latin technical strings are deliberately excluded.
+  const localizeVisibleDigits=root=>{
+    if(!root)return;
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode()){
+      const node=walker.currentNode,raw=node.nodeValue||'';
+      if(!/[0-9]/.test(raw)||/[A-Za-z]/.test(raw))continue;
+      const parent=node.parentElement;
+      if(parent?.closest('script,style,code,pre,textarea,select,option,[contenteditable="true"],[data-keep-latin]'))continue;
+      nodes.push(node);
+    }
+    nodes.forEach(node=>{node.nodeValue=node.nodeValue.replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]);});
+  };
+  document.querySelectorAll('.main-wrap>.content,.main-wrap>.topbar,.app-shell>.sidebar').forEach(localizeVisibleDigits);
 });
