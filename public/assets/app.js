@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         option.hidden=words.length>0&&!words.every(word=>haystack.includes(word))&&option.value!==selectedId;
       });
       // Rebuild the select from the visible options, since some browsers ignore hidden <option>.
-      allUsers.forEach(option=>{if(option.hidden)option.remove();else if(!option.isConnected)editUser.append(option);});
+      allUsers.forEach(option=>{if(option.hidden)option.remove();else editUser.append(option);});
     };
     userSearch?.addEventListener('input',filterUsers);
     userSearch?.addEventListener('keydown',event=>{
