@@ -163,10 +163,35 @@ def main() -> None:
             if width > viewport + 2:
                 manager_a.screenshot(path=str(OUTPUT / f"route-{route}-overflow.png"), full_page=True)
                 raise AssertionError(f"{route} overflows 390px viewport ({width}px > {viewport}px)")
+        # Verify the real authenticated workflow at compact mobile, tablet and
+        # desktop widths, not just the isolated component fixture.
+        for width in (320, 768, 1440):
+            manager_a.set_viewport_size({"width": width, "height": 900})
+            for route in ("dashboard", "invoices", "bills", "templates", "reports", "settings"):
+                response = manager_a.goto(f"{ORIGIN}/?page={route}", wait_until="domcontentloaded")
+                status = response.status if response else 0
+                if status != 200:
+                    raise AssertionError(f"{route} returned HTTP {status} at {width}px")
+                document_width = manager_a.evaluate("document.documentElement.scrollWidth")
+                actual_viewport = manager_a.evaluate("window.innerWidth")
+                if document_width > actual_viewport + 2:
+                    manager_a.screenshot(
+                        path=str(OUTPUT / f"responsive-{route}-{width}-overflow.png"),
+                        full_page=True,
+                    )
+                    raise AssertionError(
+                        f"{route} overflows {width}px viewport ({document_width}px > {actual_viewport}px)"
+                    )
+            manager_a.goto(f"{ORIGIN}/?page=receipt&id={invoice_id.group(1)}")
+            expect(manager_a.locator(".receipt")).to_be_visible()
+            assert manager_a.evaluate("document.documentElement.scrollWidth") <= width + 2, (
+                f"Invoice receipt overflows {width}px viewport"
+            )
+        manager_a.set_viewport_size({"width": 390, "height": 844})
         context_b.close()
         context_a.close()
         browser.close()
-    print("PASS: isolated real-login, invoice, PDF, POS bill, tenant boundaries and 14 responsive authenticated routes")
+    print("PASS: isolated real-login, finance PDF, tenant boundaries, 14 protected routes and multi-breakpoint authenticated views")
 
 
 if __name__ == "__main__":
