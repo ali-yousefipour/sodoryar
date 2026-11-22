@@ -147,10 +147,16 @@ function handle_module_post(string $page, string $action): void {
                 $previous=query('SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant])->fetchAll(PDO::FETCH_COLUMN);
                 query('DELETE FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant]);
                 foreach($permissions as $permission) query('INSERT INTO company_role_permissions(role_id,company_id,permission_key) VALUES(?,?,?)',[$id,$tenant,$permission]);
+                if (auth_version_ready()) {
+                    query('UPDATE users u JOIN user_role_assignments a ON a.user_id=u.id AND a.company_id=u.company_id SET u.auth_version=u.auth_version+1 WHERE a.role_id=? AND a.company_id=? AND u.role=?',[$id,$tenant,'operator']);
+                }
                 audit('role.update',json_encode(['role_id'=>$id,'granted'=>array_values(array_diff($permissions,$previous)),'revoked'=>array_values(array_diff($previous,$permissions))],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
             } elseif ($action==='toggle') {
                 $active=(int)$existing['is_active']===1?0:1;
                 query('UPDATE company_roles SET is_active=?'.(!$active?',is_default=0':'').' WHERE id=? AND company_id=?',[$active,$id,$tenant]);
+                if (auth_version_ready()) {
+                    query('UPDATE users u JOIN user_role_assignments a ON a.user_id=u.id AND a.company_id=u.company_id SET u.auth_version=u.auth_version+1 WHERE a.role_id=? AND a.company_id=? AND u.role=?',[$id,$tenant,'operator']);
+                }
                 audit('role.status',json_encode(['role_id'=>$id,'active'=>$active],JSON_THROW_ON_ERROR));
             } elseif ($action==='default') {
                 if (!(int)$existing['is_active']) throw new RuntimeException('نقش غیرفعال را نمی‌توان پیش‌فرض کرد.');
