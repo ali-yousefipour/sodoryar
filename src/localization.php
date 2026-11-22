@@ -52,6 +52,29 @@ function parse_money_input(mixed $value, int $minimum=0, int $maximum=1000000000
     return $number===false?false:(int)$number;
 }
 
+/** Validate invoice-selected service identifiers before building an IN query. */
+function normalize_invoice_service_ids(mixed $submitted): array {
+    if (!is_array($submitted) || count($submitted)>500) {
+        throw new RuntimeException('تعداد خدمات انتخاب‌شده یا ساختار درخواست نامعتبر است.');
+    }
+    $ids=[];
+    foreach ($submitted as $value) {
+        if (!is_string($value) && !is_int($value)) {
+            throw new RuntimeException('شناسه خدمت انتخاب‌شده نامعتبر است.');
+        }
+        $raw=(string)$value;
+        if (!preg_match('/^[1-9][0-9]*$/D',$raw)) {
+            throw new RuntimeException('شناسه خدمت انتخاب‌شده نامعتبر است.');
+        }
+        $id=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if ($id===false) {
+            throw new RuntimeException('شناسه خدمت انتخاب‌شده خارج از محدوده معتبر است.');
+        }
+        $ids[$id]=$id;
+    }
+    return array_values($ids);
+}
+
 /** Sum integer monetary lines safely; never silently round an overflowing invoice. */
 function sum_invoice_line_amounts(array $lines): int {
     $total=0;
