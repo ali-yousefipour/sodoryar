@@ -180,6 +180,11 @@ function require_document_owner(int $ownerId): void {
         throw new RuntimeException('این سند خارج از محدوده دسترسی شماست.');
     }
 }
+/** Permissions only for company managers; never delegate these to operators. */
+function operator_permission_assignable(string $permission): bool {
+    return array_key_exists($permission,permission_catalog())
+        && !in_array($permission,['users.manage','roles.manage'],true);
+}
 function permission_groups(): array {
     $names=[
         'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
