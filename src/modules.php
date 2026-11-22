@@ -160,11 +160,24 @@ function handle_module_post(string $page, string $action): void {
         $method=(string)($_POST['paid_method']??'');
         $amount=parse_money_input($_POST['amount']??null,1);
         $bill=trim((string)($_POST['bill_id']??'')); $payment=trim((string)($_POST['payment_id']??''));
-        if (!in_array($type,['abonman','citizen','other'],true) || !in_array($method,['manual','pos'],true) || !$amount || $bill==='' || $payment==='') throw new RuntimeException('مشخصات قبض یا مبلغ نامعتبر است.');
-        query('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,ref_code,response_code,national_code,driver_name,paid_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[
-            $tenant,user()['id'],$type,$bill,$payment,$amount,trim((string)($_POST['ref_code']??'')),null,trim((string)($_POST['national_code']??'')),trim((string)($_POST['driver_name']??'')),$method
-        ]);
-        audit('bill.create',$bill); redirect('bills','قبض به‌صورت دستی ثبت شد؛ تأیید بانکی انجام نشده است.');
+        $reference=trim((string)($_POST['ref_code']??''));
+        $national=ascii_digits(trim((string)($_POST['national_code']??'')));
+        $driver=trim((string)($_POST['driver_name']??''));
+        if (!in_array($type,['abonman','citizen','other'],true) || !in_array($method,['manual','pos'],true) || !$amount || $bill==='' || $payment===''
+            || mb_strlen($bill)>100 || mb_strlen($payment)>100 || mb_strlen($reference)>120
+            || ($national!=='' && !preg_match('/^[0-9]{10}$/D',$national)) || mb_strlen($driver)>200) {
+            throw new RuntimeException('مشخصات قبض یا مبلغ نامعتبر است.');
+        }
+        db()->beginTransaction();
+        try {
+            query('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,ref_code,response_code,national_code,driver_name,paid_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[
+                $tenant,user()['id'],$type,$bill,$payment,$amount,$reference,null,$national,$driver,$method
+            ]);
+            $recordId=(int)db()->lastInsertId();
+            audit('bill.create',json_encode(['record_id'=>$recordId,'bill_id'=>$bill],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+            db()->commit();
+        } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        redirect('bills','قبض به‌صورت دستی ثبت شد؛ تأیید بانکی انجام نشده است.');
     }
     if ($page === 'bills' && in_array($action, ['trash','restore','permanent_delete'], true)) {
         if (!bill_trash_ready()) throw new RuntimeException('ابتدا مهاجرت ۰۰۹ پایگاه داده را اجرا کنید.');
