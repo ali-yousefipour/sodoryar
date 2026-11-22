@@ -427,6 +427,7 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
     try {
         $reportFilter=report_filters();
         if (($_GET['export']??'')==='excel') {
+            require_permission($page==='reports' ? 'reports.export' : 'activity.export');
             if ($page==='reports') {
                 $reportData=invoice_report($tenant,$reportFilter,10000);
                 $rows=array_map(static fn($r)=>[fa_digits($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',fa_digits((string)$r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
