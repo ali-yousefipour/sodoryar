@@ -102,7 +102,13 @@ def main() -> None:
         expect(form.locator('[name="ref_code"]')).to_have_attribute("required", "")
         form.locator('[name="ref_code"]').fill("CI-E2E-REF")
         form.locator("button").last.click()
-        manager_a.wait_for_url(lambda url: "page=bills" in url, timeout=15000)
+        manager_a.wait_for_load_state("domcontentloaded")
+        if manager_a.get_by_text("CI-E2E-BILL").count() == 0:
+            manager_a.screenshot(path=str(OUTPUT / "bill-error.png"), full_page=True)
+            raise AssertionError(
+                "POS bill not visible after save; URL=" + manager_a.url
+                + "; body=" + manager_a.locator("body").inner_text()[:2300]
+            )
         expect(manager_a.get_by_text("CI-E2E-BILL")).to_be_visible()
 
         manager_a.goto(f"{ORIGIN}/?page=reports")
