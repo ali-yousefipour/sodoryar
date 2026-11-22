@@ -121,7 +121,7 @@ function handle_module_post(string $page, string $action): void {
         if ($action!=='create' && !$existing) throw new RuntimeException('نقش متعلق به این شرکت نیست.');
         $permissions=array_unique((array)($_POST['permissions']??[]));
         foreach($permissions as $permission) {
-            if (!is_string($permission) || !array_key_exists($permission,permission_catalog()) || in_array($permission,['roles.manage','users.manage'],true)) {
+            if (!is_string($permission) || !operator_permission_assignable($permission)) {
                 throw new RuntimeException('مجوز انتخاب‌شده قابل واگذاری به نقش اپراتور نیست.');
             }
         }
@@ -137,7 +137,7 @@ function handle_module_post(string $page, string $action): void {
                 $newId=(int)db()->lastInsertId();
                 if ($action==='copy') {
                     $copied=query('SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant])->fetchAll(PDO::FETCH_COLUMN);
-                    $permissions=array_values(array_filter($copied,static fn($key)=>array_key_exists($key,permission_catalog()) && !in_array($key,['roles.manage','users.manage'],true)));
+                    $permissions=array_values(array_filter($copied,static fn($key)=>operator_permission_assignable($key)));
                 }
                 foreach($permissions as $permission) query('INSERT INTO company_role_permissions(role_id,company_id,permission_key) VALUES(?,?,?)',[$newId,$tenant,$permission]);
                 audit('role.create',json_encode(['role_id'=>$newId,'source_id'=>$action==='copy'?$id:null,'permissions'=>$permissions],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
@@ -384,7 +384,7 @@ function render_module(string $page, int $tenant): void {
       <?php if(!company_roles_ready()): ?><div class="alert error">ابتدا مهاجرت دیتابیس ۰۱۰ را روی سرور اعمال کنید؛ کاربران و مجوزهای فعلی بدون تغییر باقی می‌مانند.</div><?php else: ?>
       <div class="card"><h2>تعریف نقش جدید</h2><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="create">
       <div class="form-grid"><label>نام نقش<input name="name" maxlength="120" required placeholder="مثلاً مسئول صدور فاکتور"></label><label>توضیحات<input name="description" maxlength="500" placeholder="شرح مسئولیت‌های این نقش"></label></div>
-      <fieldset class="permission-matrix"><legend>مجوزهای نقش</legend><div class="permission-groups"><?php foreach(permission_groups() as $group=>$items): ?><fieldset class="permission-group"><legend><?=e($group)?></legend><div class="choices"><?php foreach($items as $key=>$title): if(in_array($key,['users.manage','roles.manage'],true))continue; ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><?php endforeach; ?></div></fieldset><button>ایجاد نقش</button></form></div>
+      <fieldset class="permission-matrix"><legend>مجوزهای نقش</legend><div class="permission-groups"><?php foreach(permission_groups() as $group=>$items): ?><fieldset class="permission-group"><legend><?=e($group)?></legend><div class="choices"><?php foreach($items as $key=>$title): if(!operator_permission_assignable($key))continue; ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><?php endforeach; ?></div></fieldset><button>ایجاد نقش</button></form></div>
       <div class="card"><h2>نقش‌های تعریف‌شده</h2>
       <?php $companyRoles=query('SELECT r.id,r.name,r.description,r.is_active,r.is_default,(SELECT COUNT(*) FROM user_role_assignments a WHERE a.role_id=r.id AND a.company_id=r.company_id) assigned_users FROM company_roles r WHERE r.company_id=? ORDER BY r.id DESC',[$tenant])->fetchAll(); ?>
       <?php if(!$companyRoles): ?><p class="muted">هنوز نقش سفارشی تعریف نشده است.</p><?php endif; ?>
@@ -392,7 +392,7 @@ function render_module(string $page, int $tenant): void {
       <details class="role-editor"><summary><strong><?=e($role['name'])?></strong> — <?=$role['is_active']?'فعال':'غیرفعال'?> <?=$role['is_default']?'— پیش‌فرض':''?> — <?=money($role['assigned_users'])?> کاربر</summary>
       <form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="role_id" value="<?=e($role['id'])?>">
       <div class="form-grid"><label>عنوان نقش<input name="name" maxlength="120" value="<?=e($role['name'])?>" required></label><label>توضیحات<input name="description" maxlength="500" value="<?=e($role['description'])?>"></label></div>
-      <fieldset class="permission-matrix"><legend>دسترسی‌های نقش</legend><div class="permission-groups"><?php foreach(permission_groups() as $group=>$items): ?><fieldset class="permission-group"><legend><?=e($group)?></legend><div class="choices"><?php foreach($items as $key=>$title): if(in_array($key,['users.manage','roles.manage'],true))continue; ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>" <?=in_array($key,$grants,true)?'checked':''?>><?=e($title)?></label><?php endforeach; ?></div></fieldset><?php endforeach; ?></div></fieldset><button>ذخیره تغییرات</button></form>
+      <fieldset class="permission-matrix"><legend>دسترسی‌های نقش</legend><div class="permission-groups"><?php foreach(permission_groups() as $group=>$items): ?><fieldset class="permission-group"><legend><?=e($group)?></legend><div class="choices"><?php foreach($items as $key=>$title): if(!operator_permission_assignable($key))continue; ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>" <?=in_array($key,$grants,true)?'checked':''?>><?=e($title)?></label><?php endforeach; ?></div></fieldset><?php endforeach; ?></div></fieldset><button>ذخیره تغییرات</button></form>
       <div class="management-actions">
       <form method="post"><?=csrf_field()?><input type="hidden" name="action" value="toggle"><input type="hidden" name="role_id" value="<?=e($role['id'])?>"><button class="small secondary"><?=$role['is_active']?'غیرفعال کردن':'فعال کردن'?></button></form>
       <?php if($role['is_active'] && !$role['is_default']): ?><form method="post"><?=csrf_field()?><input type="hidden" name="action" value="default"><input type="hidden" name="role_id" value="<?=e($role['id'])?>"><button class="small secondary">تنظیم به‌عنوان نقش پیش‌فرض</button></form><?php endif; ?>
