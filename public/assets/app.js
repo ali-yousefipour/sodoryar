@@ -240,17 +240,23 @@ document.addEventListener('DOMContentLoaded',()=>{
     const moneyFormat=new Intl.NumberFormat('fa-IR');
     const updateServices=()=>{
       const term=normalize(search.value);
-      let visible=0,chosen=0,sum=0;
+      let visible=0,chosen=0,sum=0n;
       options.forEach(option=>{
         const checkbox=option.querySelector('input[type="checkbox"]');
         const matches=normalize(option.dataset.serviceTitle).includes(term);
         option.hidden=!matches;
         if(matches)visible++;
         option.classList.toggle('is-selected',checkbox.checked);
-        if(checkbox.checked){chosen++;sum+=Number(checkbox.dataset.servicePrice)||0;}
+        if(checkbox.checked){chosen++;sum+=BigInt(checkbox.dataset.servicePrice||'0');}
       });
       count.textContent=`${moneyFormat.format(visible)} خدمت از ${moneyFormat.format(options.length)} خدمت`;
       selected.textContent=`${moneyFormat.format(chosen)} خدمت انتخاب شده`;
+      // Preview includes ad-hoc rows and uses exact integer arithmetic.
+      extraItems?.querySelectorAll('input[name="extra_price[]"]').forEach(field=>{
+        const digits=String(field.value).replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776))
+          .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632)).replace(/[^0-9]/g,'');
+        if(digits)sum+=BigInt(digits);
+      });
       total.textContent=moneyFormat.format(sum);
       empty.hidden=visible!==0;
       clear.hidden=!search.value;
@@ -265,6 +271,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
     clear.addEventListener('click',()=>{search.value='';updateServices();search.focus();});
     servicePicker.addEventListener('change',event=>{if(event.target.matches('input[type="checkbox"]'))updateServices();});
+    extraItems?.addEventListener('input',updateServices);
     updateServices();
   }
   // Toman inputs accept localized digits and display grouped Persian numbers.
@@ -312,8 +319,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       const row=document.createElement('div');row.className='extra-invoice-row';
       const title=document.createElement('input');title.name='extra_title[]';title.maxLength=200;title.placeholder='عنوان خدمت موردی';title.setAttribute('aria-label','عنوان خدمت موردی');
       const price=document.createElement('input');price.name='extra_price[]';price.type='text';price.inputMode='numeric';price.maxLength=22;price.dataset.moneyInput='';price.dataset.currency='تومان';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
-      const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>row.remove());
-      row.append(title,price,remove);extraItems.append(row);decorateMoneyInput(price);title.focus();
+      const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>{row.remove();extraItems.dispatchEvent(new Event('input',{bubbles:true}));});
+      row.append(title,price,remove);extraItems.append(row);decorateMoneyInput(price);title.focus();extraItems.dispatchEvent(new Event('input',{bubbles:true}));
     });
   }
   const templateForm=document.getElementById('templateEditor');
@@ -616,6 +623,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       openRegistration();
     });
   }
+  const invoiceForm=document.getElementById('invoiceCreateForm');
+  invoiceForm?.addEventListener('submit',event=>{
+    if(event.defaultPrevented)return;
+    const submit=invoiceForm.querySelector('button[type="submit"]');
+    if(submit){submit.disabled=true;submit.setAttribute('aria-busy','true');submit.textContent='در حال ثبت فاکتور…';}
+  });
   // Render-only Persian numerals for labels, counters and table content.
   // Inputs, URLs, machine identifiers and Latin technical strings are deliberately excluded.
   const localizeVisibleDigits=root=>{
