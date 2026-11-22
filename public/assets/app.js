@@ -319,8 +319,13 @@ document.addEventListener('DOMContentLoaded',()=>{
       const row=document.createElement('div');row.className='extra-invoice-row';
       const title=document.createElement('input');title.name='extra_title[]';title.maxLength=200;title.placeholder='عنوان خدمت موردی';title.setAttribute('aria-label','عنوان خدمت موردی');
       const price=document.createElement('input');price.name='extra_price[]';price.type='text';price.inputMode='numeric';price.maxLength=22;price.dataset.moneyInput='';price.dataset.currency='تومان';price.placeholder='مبلغ به تومان';price.setAttribute('aria-label','مبلغ خدمت موردی');
-      const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.addEventListener('click',()=>{row.remove();extraItems.dispatchEvent(new Event('input',{bubbles:true}));});
-      row.append(title,price,remove);extraItems.append(row);decorateMoneyInput(price);title.focus();extraItems.dispatchEvent(new Event('input',{bubbles:true}));
+      const titleLabel=document.createElement('label');titleLabel.className='invoice-extra-label';titleLabel.textContent='عنوان خدمت موردی';titleLabel.append(title);
+      const priceLabel=document.createElement('label');priceLabel.className='invoice-extra-label';priceLabel.textContent='مبلغ (تومان)';priceLabel.append(price);
+      const remove=document.createElement('button');remove.type='button';remove.className='secondary small';remove.textContent='حذف ردیف';remove.setAttribute('aria-label','حذف این ردیف خدمت موردی');
+      remove.addEventListener('click',()=>{row.remove();extraAdd.disabled=false;extraItems.dispatchEvent(new Event('input',{bubbles:true}));});
+      row.append(titleLabel,priceLabel,remove);extraItems.append(row);decorateMoneyInput(price);
+      extraAdd.disabled=extraItems.children.length>=10;
+      title.focus();extraItems.dispatchEvent(new Event('input',{bubbles:true}));
     });
   }
   const templateForm=document.getElementById('templateEditor');
