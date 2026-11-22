@@ -534,7 +534,10 @@ try {
     }
 } catch (Throwable $ex) {
     error_log((string)$ex);
-    $error = $ex instanceof RuntimeException ? $ex->getMessage() : 'عملیات انجام نشد؛ اطلاعات یا تکراری‌بودن رکورد را بررسی کنید.';
+    // PDOException extends RuntimeException; never expose SQL details in the UI.
+    $error = ($ex instanceof RuntimeException && !($ex instanceof PDOException))
+        ? $ex->getMessage()
+        : 'عملیات به دلیل خطای داخلی انجام نشد. لطفاً بعداً دوباره تلاش کنید.';
 }
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
@@ -575,7 +578,14 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
                 export_excel_xlsx('sodoryar-activity',['تاریخ و ساعت','کاربر','عملیات','توضیحات'],array_map(static fn($r)=>[jalali_datetime($r['created_at']),$r['full_name'],$r['action'],$r['details']],$rows));
             }
         }
-    } catch (RuntimeException $ex) { $error=$ex->getMessage(); $reportFilter=report_filters_default(); }
+    } catch (PDOException $ex) {
+        error_log('Sodoryar report database failure: '.$ex->getCode());
+        $error='دریافت گزارش به دلیل خطای داخلی امکان‌پذیر نیست.';
+        $reportFilter=report_filters_default();
+    } catch (RuntimeException $ex) {
+        $error=$ex->getMessage();
+        $reportFilter=report_filters_default();
+    }
 }
 $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
