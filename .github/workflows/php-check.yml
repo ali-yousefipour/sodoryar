@@ -38,6 +38,8 @@ jobs:
         run: php tests/report-export-permissions.php
       - name: Verify operator permissions cannot include manager-only grants
         run: php tests/operator-permission-policy.php
+      - name: Verify tenant query index migration contracts
+        run: php tests/tenant-query-indexes.php
       - name: Verify financial deletion and tenant access contracts
         run: |
           php tests/bill-deletion-policy.php
