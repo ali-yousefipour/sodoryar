@@ -27,6 +27,14 @@ jobs:
           coverage: none
       - name: Validate source and regression tests without production access
         run: bash scripts/validate-release.sh
+      - name: Set up Python for Chromium UI and print checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify responsive financial UI and A4/A5/80mm printing in Chromium
+        run: |
+          python -m pip install --disable-pip-version-check playwright==1.56.0
+          python scripts/browser-ui-print-smoke.py
 
   database-integration:
     name: Validate isolated MySQL migrations and tenant boundaries
