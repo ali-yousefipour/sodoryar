@@ -456,7 +456,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/png" href="assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e((string)filemtime(__DIR__.'/assets/app.css'))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"></head><body>
+<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/png" href="assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e((string)filemtime(__DIR__.'/assets/app.css'))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap"><div class="login-layout">
 <section class="login-showcase" aria-labelledby="loginIntro"><div class="login-showcase-brand"><span class="login-showcase-symbol"><img src="assets/sodoryar-logo.png" width="78" height="78" alt=""></span><span><b>صدوریار</b><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></span></div><div class="login-showcase-content"><span class="login-eyebrow">پنل یکپارچه کارگزاری‌ها</span><h2 id="loginIntro">مدیریت خدمات، ساده و مطمئن</h2><p>صدور فاکتور، مدیریت کاربران و پیگیری گزارش‌های مالی هر شرکت در محیطی امن و منظم.</p><div class="login-features"><span>اطلاعات مستقل هر شرکت</span><span>مدیریت دسترسی کاربران</span><span>گزارش‌های مالی یکپارچه</span></div></div><p class="login-showcase-footer">سامانه اختصاصی خدمات کارگزاری‌های تاکسیرانی</p></section>
@@ -573,6 +573,8 @@ $navGroup=null;
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
 $selectedTemplate=query('SELECT id,title,paper_type,header_text,footer_text,logo_path,layout_json FROM print_templates WHERE company_id=? ORDER BY is_default DESC,id DESC LIMIT 1',[$tenant])->fetch();
 $templateStyle=$selectedTemplate?json_decode((string)$selectedTemplate['layout_json'],true):[];
+$rollWidth=(int)($templateStyle['roll_width_mm']??72);
+$rollWidth=max(56,min(76,$rollWidth));
 ?>
 <?php if(!$invoice): ?><div class="alert error">فاکتور پیدا نشد.</div><?php else: ?>
 <?php
@@ -581,7 +583,7 @@ $configuredOrder=$templateStyle['order']??null;
 if (is_array($configuredOrder) && count($configuredOrder)===count($receiptSections) && count(array_diff($receiptSections,$configuredOrder))===0 && count(array_unique($configuredOrder))===count($receiptSections)) $receiptSections=$configuredOrder;
 $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_at FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetch():false;
 ?>
-<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':'receipt-a5'?>" style="font-family:<?=($templateStyle['font']??'')==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif'?>">
+<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':'receipt-a5'?>" style="--thermal-content-width:<?=e((string)$rollWidth)?>mm;font-family:<?=($templateStyle['font']??'')==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif'?>">
 <div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ فاکتور</button></div>
 <?php if($voidRecord): ?><div class="alert error"><strong>فاکتور باطل شده است؛ برای ارائه به مشتری معتبر نیست.</strong><p>دلیل: <?=e($voidRecord['reason'])?></p></div><?php endif; ?>
 <?php foreach($receiptSections as $section): ?>
