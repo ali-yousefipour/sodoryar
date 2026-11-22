@@ -186,6 +186,10 @@ function handle_module_post(string $page, string $action): void {
     }
     if ($page === 'bills' && $action === 'add') {
         require_permission('bills.create');
+        $nonce=(string)($_POST['bill_create_nonce']??'');
+        if ($nonce==='' || !hash_equals((string)($_SESSION['bill_create_nonce']??''),$nonce)) {
+            throw new RuntimeException('فرم ثبت قبض منقضی شده یا درخواست قبلاً ثبت شده است؛ صفحه را تازه‌سازی کنید.');
+        }
         $type=(string)($_POST['bill_type']??'');
         $method=(string)($_POST['paid_method']??'');
         $amount=parse_money_input($_POST['amount']??null,1);
@@ -206,6 +210,7 @@ function handle_module_post(string $page, string $action): void {
             $recordId=(int)db()->lastInsertId();
             audit('bill.create',json_encode(['record_id'=>$recordId,'bill_id'=>$bill],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
             db()->commit();
+            unset($_SESSION['bill_create_nonce']);
         } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         redirect('bills','قبض به‌صورت دستی ثبت شد؛ تأیید بانکی انجام نشده است.');
     }
@@ -412,6 +417,10 @@ function handle_module_post(string $page, string $action): void {
     }
     if ($page === 'commissions' && $action === 'calculate') {
         require_admin();
+        $nonce=(string)($_POST['commission_calculate_nonce']??'');
+        if ($nonce==='' || !hash_equals((string)($_SESSION['commission_calculate_nonce']??''),$nonce)) {
+            throw new RuntimeException('درخواست محاسبه پورسانت قبلاً ثبت شده یا فرم منقضی شده است.');
+        }
         $userId=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
         $rate=filter_var($_POST['rate']??null,FILTER_VALIDATE_FLOAT);
         $date=ascii_digits(trim((string)($_POST['period_key']??'')));
@@ -435,7 +444,9 @@ function handle_module_post(string $page, string $action): void {
             ? (int)round(min($total,$limit)*(float)$rate/100 + max(0,$total-$limit)*$overRate/100)
             : (int)round($total*(float)$rate/100);
         query('INSERT INTO commissions(company_id,user_id,period_type,period_key,sales_total,rate,amount) VALUES(?,?,?,?,?,?,?)',[$tenant,$userId,$period,$date,$total,$rate,$amount]);
-        audit('commission.calculate',$date); redirect('commissions','پورسانت محاسبه و ثبت شد.');
+        audit('commission.calculate',$date);
+        unset($_SESSION['commission_calculate_nonce']);
+        redirect('commissions','پورسانت محاسبه و ثبت شد.');
     }
 }
 
@@ -478,7 +489,7 @@ function render_module(string $page, int $tenant): void {
     <?php return; }
     if ($page==='bills') { require_permission('bills.view'); ?>
       <h1>پرداخت قبوض</h1><p class="muted">ثبت اطلاعات قبض به‌صورت دستی؛ تراکنش بانکی از این صفحه انجام نمی‌شود.</p>
-      <?php if(can('bills.create')): ?><div class="card"><h2>ثبت قبض</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نوع قبض<select name="bill_type"><option value="abonman">آبونمان</option><option value="citizen">شهروندی</option><option value="other">سایر</option></select></label><label>شناسه قبض<input name="bill_id" required></label><label>شناسه پرداخت<input name="payment_id" required></label><label>مبلغ (تومان)<input type="text" inputmode="numeric" name="amount" data-money-input data-currency="تومان" maxlength="22" required></label><label>روش ثبت<select name="paid_method"><option value="manual">ثبت دستی</option><option value="pos">کارتخوان (شماره پیگیری دستی)</option></select></label><label>شماره پیگیری<input name="ref_code"></label><label>کد ملی<input name="national_code"></label><label>نام راننده<input name="driver_name"></label><button>ثبت قبض</button></form></div><?php endif; ?>
+      <?php if(can('bills.create')): ?><div class="card"><h2>ثبت قبض</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="bill_create_nonce" value="<?=e($_SESSION['bill_create_nonce']??=bin2hex(random_bytes(16)))?>"><input type="hidden" name="action" value="add"><label>نوع قبض<select name="bill_type"><option value="abonman">آبونمان</option><option value="citizen">شهروندی</option><option value="other">سایر</option></select></label><label>شناسه قبض<input name="bill_id" required></label><label>شناسه پرداخت<input name="payment_id" required></label><label>مبلغ (تومان)<input type="text" inputmode="numeric" name="amount" data-money-input data-currency="تومان" maxlength="22" required></label><label>روش ثبت<select name="paid_method"><option value="manual">ثبت دستی</option><option value="pos">کارتخوان (شماره پیگیری دستی)</option></select></label><label>شماره پیگیری<input name="ref_code"></label><label>کد ملی<input name="national_code"></label><label>نام راننده<input name="driver_name"></label><button>ثبت قبض</button></form></div><?php endif; ?>
       <?php $trashReady=bill_trash_ready(); $onlyOwn=document_scope()==='own'; $billParams=$onlyOwn?[$tenant,user()['id']]:[$tenant]; ?>
       <?php if (!$trashReady): ?><div class="alert">برای فعال‌سازی سطل زباله فیش‌ها، مهاجرت دیتابیس ۰۰۹ باید توسط مدیر پایگاه داده اجرا شود. تا آن زمان سوابق موجود بدون تغییر نمایش داده می‌شوند.</div><?php endif; ?>
       <div class="card"><h2>سوابق فیش‌ها</h2><div class="table-wrap"><table><thead><tr><th>تاریخ</th><th>نوع</th><th>شناسه قبض</th><th>مبلغ</th><th>روش</th><th>پیگیری</th><th>عملیات</th></tr></thead><tbody>
@@ -532,7 +543,7 @@ function render_module(string $page, int $tenant): void {
     if ($page==='commissions') { require_permission('commissions.view'); ?>
       <h1>پورسانت کاربران</h1><p class="muted">محاسبه براساس تاریخ فاکتور انتخابی (شمسی) و فاکتورهای باطل‌نشده هر کاربر؛ این گزارش تسویه بانکی نیست.</p>
       <?php $commissionSettings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR); if(($commissionSettings['commission_enabled']??'0')!=='1'): ?><div class="alert error">سیستم پورسانت غیرفعال است. مدیر شرکت می‌تواند آن را از بخش «تنظیمات شرکت» فعال کند.</div><?php endif; ?>
-      <?php if(in_array(user()['role'],['superadmin','company_admin'],true)): ?><div class="card"><h2>محاسبه پورسانت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="calculate"><label>کاربر<select name="user_id"><?php foreach(query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1',[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label><label>نوع دوره<select name="period_type"><option value="daily">روزانه</option><option value="monthly">ماهانه</option></select></label><label>دوره شمسی<span class="jalali-field"><input type="hidden" name="period_key" data-jalali-iso data-jalali-output="jalali" required><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear>×</button></span></label><label>درصد پورسانت<input name="rate" type="number" min="0" max="100" step="0.001" required></label><button>محاسبه و ثبت</button></form></div><?php endif; ?>
+      <?php if(in_array(user()['role'],['superadmin','company_admin'],true)): ?><div class="card"><h2>محاسبه پورسانت</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="commission_calculate_nonce" value="<?=e($_SESSION['commission_calculate_nonce']??=bin2hex(random_bytes(16)))?>"><input type="hidden" name="action" value="calculate"><label>کاربر<select name="user_id"><?php foreach(query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1',[$tenant])->fetchAll() as $u): ?><option value="<?=e($u['id'])?>"><?=e($u['full_name'])?></option><?php endforeach; ?></select></label><label>نوع دوره<select name="period_type"><option value="daily">روزانه</option><option value="monthly">ماهانه</option></select></label><label>دوره شمسی<span class="jalali-field"><input type="hidden" name="period_key" data-jalali-iso data-jalali-output="jalali" required><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear>×</button></span></label><label>درصد پورسانت<input name="rate" type="number" min="0" max="100" step="0.001" required></label><button>محاسبه و ثبت</button></form></div><?php endif; ?>
       <div class="card"><h2>سوابق پورسانت</h2><?php render_table(['کاربر','دوره','تاریخ','جمع فروش','نرخ','پورسانت'],query('SELECT u.full_name,c.period_type,c.period_key,c.sales_total,c.rate,c.amount FROM commissions c JOIN users u ON u.id=c.user_id AND u.company_id=c.company_id WHERE c.company_id=?'.(document_scope()==='own'?' AND c.user_id=?':'').' ORDER BY c.id DESC LIMIT 100',document_scope()==='own'?[$tenant,user()['id']]:[$tenant])->fetchAll(),['sales_total','amount']); ?></div>
     <?php return; }
     if ($page==='activity') { require_permission('activity.view'); ?>
