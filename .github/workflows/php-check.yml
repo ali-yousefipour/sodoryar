@@ -32,3 +32,5 @@ jobs:
         run: php tests/print-layout-contracts.php
       - name: Verify Persian invoice amount words
         run: php tests/invoice-amount-words.php
+      - name: Verify company-vs-own document-scope security contracts
+        run: php tests/security-document-scopes.php
