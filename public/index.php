@@ -200,8 +200,14 @@ try {
             query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$tenant,$username,password_hash($password,PASSWORD_DEFAULT),$fullName,$role]);
             $newUserId=(int)db()->lastInsertId();
             save_user_details($newUserId,(array)($_POST['details']??[]));
-            if ($role==='operator') foreach($newPermissions as $permission) {
-                query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$newUserId,$permission]);
+            if ($role==='operator') {
+                foreach($newPermissions as $permission) {
+                    query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$newUserId,$permission]);
+                }
+                if (company_roles_ready()) {
+                    $defaultRole=query('SELECT id FROM company_roles WHERE company_id=? AND is_default=1 AND is_active=1 ORDER BY id LIMIT 1',[$tenant])->fetchColumn();
+                    if ($defaultRole) query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,?)',[$newUserId,$tenant,$defaultRole]);
+                }
             }
             audit('user.create',$username); db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
@@ -283,7 +289,10 @@ try {
             db()->beginTransaction();
             try {
                 query('UPDATE users SET full_name=?,username=?,is_active=?,role=?'.($newPassword!==''?',password_hash=?':'').' WHERE id=? AND company_id=?',array_merge([$fullName,$username,$active,$role],$newPassword!==''?[password_hash($newPassword,PASSWORD_DEFAULT),$id,$tenant]:[$id,$tenant]));
-                if ($role==='company_admin') query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
+                if ($role==='company_admin') {
+                    query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
+                    if (company_roles_ready()) query('DELETE FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant]);
+                }
                 save_user_details((int)$id,(array)($_POST['details']??[]));
                 audit('user.update',(string)$id); db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
@@ -560,8 +569,8 @@ $navGroup=null;
 <?php elseif($page==='users'): ?>
 <h1>کاربران شرکت</h1><p class="muted">مدیر شرکت به همه بخش‌های شرکت خود دسترسی دارد؛ مجوزهای اپراتورها جداگانه تنظیم می‌شوند.</p>
 <?php if(company_roles_ready()): ?><div class="card"><h2>انتساب نقش سفارشی</h2><p class="muted">هر اپراتور می‌تواند یک نقش سفارشی فعال داشته باشد. مجوزهای نقش با مجوزهای مستقیم کاربر ترکیب می‌شوند.</p><div class="table-wrap"><table><thead><tr><th>اپراتور</th><th>نقش فعلی</th><th>نقش جدید</th><th>اعمال</th></tr></thead><tbody>
-<?php $assignments=query('SELECT u.id,u.full_name,a.role_id FROM users u LEFT JOIN user_role_assignments a ON a.user_id=u.id AND a.company_id=u.company_id WHERE u.company_id=? AND u.role=? AND u.is_active=1 ORDER BY u.full_name',[$tenant,'operator'])->fetchAll(); $availableRoles=query('SELECT id,name FROM company_roles WHERE company_id=? AND is_active=1 ORDER BY name',[$tenant])->fetchAll(); foreach($assignments as $assign): ?>
-<tr><td><?=e($assign['full_name'])?></td><td><?=e((string)($assign['role_id']??'—'))?></td><td colspan="2"><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="assign_role"><input type="hidden" name="user_id" value="<?=e($assign['id'])?>"><label>نقش<select name="company_role_id"><option value="">بدون نقش سفارشی</option><?php foreach($availableRoles as $role): ?><option value="<?=e($role['id'])?>" <?=(int)$assign['role_id']===(int)$role['id']?'selected':''?>><?=e($role['name'])?></option><?php endforeach; ?></select></label><button class="small">ذخیره نقش</button></form></td></tr><?php endforeach; ?>
+<?php $assignments=query('SELECT u.id,u.full_name,a.role_id,r.name role_name FROM users u LEFT JOIN user_role_assignments a ON a.user_id=u.id AND a.company_id=u.company_id LEFT JOIN company_roles r ON r.id=a.role_id AND r.company_id=u.company_id WHERE u.company_id=? AND u.role=? AND u.is_active=1 ORDER BY u.full_name',[$tenant,'operator'])->fetchAll(); $availableRoles=query('SELECT id,name FROM company_roles WHERE company_id=? AND is_active=1 ORDER BY name',[$tenant])->fetchAll(); foreach($assignments as $assign): ?>
+<tr><td><?=e($assign['full_name'])?></td><td><?=e((string)($assign['role_name']??'بدون نقش'))?></td><td colspan="2"><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="assign_role"><input type="hidden" name="user_id" value="<?=e($assign['id'])?>"><label>نقش<select name="company_role_id"><option value="">بدون نقش سفارشی</option><?php foreach($availableRoles as $role): ?><option value="<?=e($role['id'])?>" <?=(int)$assign['role_id']===(int)$role['id']?'selected':''?>><?=e($role['name'])?></option><?php endforeach; ?></select></label><button class="small">ذخیره نقش</button></form></td></tr><?php endforeach; ?>
 <?php if(!$assignments): ?><tr><td colspan="4">اپراتور فعالی برای انتساب نقش وجود ندارد.</td></tr><?php endif; ?></tbody></table></div></div><?php else: ?><div class="alert">برای فعال‌سازی نقش‌های سفارشی، مهاجرت دیتابیس ۰۱۰ را اجرا کنید.</div><?php endif; ?><div class="card"><h2>ایجاد کاربر</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام و نام خانوادگی<input name="full_name" required></label><label>نام کاربری<input name="username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه (حداقل ۱۲ کاراکتر)<input type="password" minlength="12" name="password" autocomplete="new-password" required></label><label>نقش<select name="role"><option value="operator">اپراتور</option><option value="company_admin">مدیر شرکت</option></select></label>
 <fieldset class="wide"><legend>اطلاعات تکمیلی کاربر</legend><div class="form-grid"><label>کد ملی<input name="details[national_code]" inputmode="numeric" maxlength="10" pattern="[0-9]{10}"></label><label>تلفن همراه<input name="details[mobile]" type="tel" maxlength="20"></label><label class="wide">آدرس<textarea name="details[address]" rows="2" maxlength="1000"></textarea></label></div></fieldset>
 <fieldset class="wide"><legend>دسترسی‌های اختیاری اپراتور</legend><div class="choices"><?php foreach(permission_catalog() as $key=>$title): ?><label class="choice"><input type="checkbox" name="permissions[]" value="<?=e($key)?>"><?=e($title)?></label><?php endforeach; ?></div></fieldset><button>ایجاد کاربر</button></form></div>
