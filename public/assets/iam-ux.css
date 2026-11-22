@@ -34,3 +34,12 @@
  .role-editor *, .app-dialog * { transition:none!important; scroll-behavior:auto!important; }
 }
 @media print { .role-editor,.app-dialog { display:none!important; } }
+
+/* Template designer live visual: representative width, not a substitute for printer driver calibration. */
+#templatePreview { box-sizing:border-box; width:min(100%,var(--template-roll-preview,72mm)); max-width:100%; margin-inline:auto; padding:11px; background:#fff; border:1px solid #cbd4e3; border-radius:8px; overflow-wrap:anywhere; }
+#templatePreview.a5 { width:min(100%,148mm); min-height:180mm; padding:18px; }
+#templatePreview::before { content:attr(data-paper-label); display:block; color:#56647d; font-size:11px; border-bottom:1px dashed #bec8d6; padding-bottom:8px; margin-bottom:10px; }
+.template-logo-preview { max-width:80px; max-height:80px; object-fit:contain; display:block; margin-top:8px; border:1px solid #dce3ef; border-radius:8px; padding:5px; }
+.template-logo-preview[hidden],#templatePreviewLogo[hidden] { display:none!important; }
+#templatePreviewLogo { display:block; width:auto; max-width:80px; max-height:70px; object-fit:contain; margin:2px auto 10px; }
+@media(max-width:600px) { #templatePreview.a5 { min-height:0; padding:12px; } }
