@@ -1,0 +1,36 @@
+/* Sodoryar responsive IAM and financial operations, scoped to new components. */
+.role-editor { border:1px solid #dde3ee; border-radius:12px; background:#fff; margin-block:10px; padding:12px 14px; }
+.role-editor summary { cursor:pointer; line-height:1.9; color:#30294c; }
+.role-editor[open] summary { margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid #e5e8f0; }
+.role-editor fieldset { min-width:0; border:1px solid #e5e8f0; border-radius:10px; padding:12px; }
+.role-editor .choices { display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:6px 12px; }
+.role-editor .choice { display:flex; align-items:center; gap:8px; min-height:38px; }
+.role-editor .management-actions { display:flex; flex-wrap:wrap; align-items:end; gap:10px; padding-top:12px; }
+.role-editor .role-copy-form { display:flex; align-items:end; gap:8px; flex-wrap:wrap; }
+.role-editor .role-copy-form input { min-width:185px; }
+.management-actions form { min-width:0; }
+.content .card > .table-wrap { max-width:100%; overflow-x:auto; }
+.content .table-wrap :is(button,a,input,select):focus-visible,
+.role-editor :is(summary,button,input,select):focus-visible,
+.app-dialog :is(button,input,select,textarea):focus-visible {
+ outline:3px solid #2b66c9; outline-offset:2px;
+}
+.content .table-wrap td { vertical-align:middle; }
+.content .table-wrap td .form-grid { display:flex; align-items:end; gap:8px; flex-wrap:wrap; margin:0; }
+.content .table-wrap td .form-grid label { min-width:180px; flex:1; }
+.content .table-wrap td form button { white-space:nowrap; }
+.app-dialog { box-sizing:border-box; max-width:min(94vw,600px); max-height:88dvh; overflow-y:auto; overscroll-behavior:contain; }
+.app-dialog p { line-height:1.9; overflow-wrap:anywhere; }
+.app-dialog .dialog-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+@media (max-width:640px) {
+ .role-editor { padding:10px; }
+ .role-editor .choices { grid-template-columns:1fr; }
+ .role-editor .role-copy-form { display:grid; width:100%; grid-template-columns:1fr; }
+ .content .table-wrap td .form-grid { min-width:230px; }
+ .app-dialog { width:calc(100vw - 20px); max-height:90dvh; padding:16px; }
+ .app-dialog .dialog-actions button { flex:1 1 120px; min-height:42px; }
+}
+@media (prefers-reduced-motion:reduce) {
+ .role-editor *, .app-dialog * { transition:none!important; scroll-behavior:auto!important; }
+}
+@media print { .role-editor,.app-dialog { display:none!important; } }
