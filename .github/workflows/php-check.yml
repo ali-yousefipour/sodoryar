@@ -44,6 +44,8 @@ jobs:
         run: php tests/driver-lookup-validation.php
       - name: Verify numeric login CAPTCHA
         run: php tests/login-captcha.php
+      - name: Verify environment configuration overrides including zero values
+        run: php tests/config-environment-precedence.php
       - name: Verify independent Excel export permissions
         run: php tests/report-export-permissions.php
       - name: Verify operator permissions cannot include manager-only grants

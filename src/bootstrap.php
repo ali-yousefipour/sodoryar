@@ -14,7 +14,9 @@ function config(string $key, string $default = ''): string {
             }
         }
     }
-    return (string) (getenv($key) ?: ($values[$key] ?? $default));
+    // An environment variable set to '0' or '' must not silently fall back to .env.
+    $environmentValue = getenv($key);
+    return $environmentValue !== false ? (string)$environmentValue : (string)($values[$key] ?? $default);
 }
 
 ini_set('display_errors', config('APP_ENV', 'production') === 'development' ? '1' : '0');
