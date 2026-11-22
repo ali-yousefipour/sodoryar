@@ -40,6 +40,8 @@ jobs:
         run: php tests/report-export-permissions.php
       - name: Verify operator permissions cannot include manager-only grants
         run: php tests/operator-permission-policy.php
+      - name: Verify company always retains at least one active administrator
+        run: php tests/admin-roster-serialization.php
       - name: Verify password and access changes revoke earlier sessions
         run: php tests/auth-session-revocation.php
       - name: Verify tenant query index migration contracts
