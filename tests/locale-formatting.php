@@ -11,6 +11,13 @@ check_locale(money_toman(80000)==='۸۰٬۰۰۰ تومان','toman unit');
 check_locale(parse_money_input('۱٬۲۳۴٬۵۶۷')===1234567,'Persian amount parse');
 check_locale(parse_money_input('1,234,567')===1234567,'Latin grouped amount parse');
 check_locale(parse_money_input('منفی')===false,'reject invalid amount');
+check_locale(parse_money_input('1 234 567')===1234567,'space grouped amount parse');
+check_locale(parse_money_input('1,5')===false,'never silently treat malformed 1,5 as 15');
+check_locale(parse_money_input('۱٬۲۳')===false,'reject malformed localized separators');
+check_locale(parse_money_input('12,34,567')===false,'reject inconsistent grouping');
+check_locale(parse_money_input('1.5')===false,'reject fractional money input');
+check_locale(parse_money_input('-100')===false,'reject negative money input');
+
 check_locale(parse_money_input('۱۰۰٬۰۰۰٬۰۰۰٬۰۰۱',0,100000000000)===false,'reject out of range');
 check_locale(jalali_datetime('2026-11-15',true)==='۱۴۰۵/۰۸/۲۴','Jalali date');
 check_locale(ui_value('2026-11-15','invoice_date')==='۱۴۰۵/۰۸/۲۴','invoice date conversion');
