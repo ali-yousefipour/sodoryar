@@ -497,7 +497,8 @@ if ($page === 'services') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
 if ($page === 'customers') require_permission('customers.view');
-if (in_array($page,['invoices','receipt'],true)) require_permission('invoices.view');
+if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
+if ($page==='receipt') require_permission('invoices.view');
 if ($page==='receipt') require_permission('invoices.print');
 if ($page === 'reports') require_permission('reports.view');
 $tenant = null;
@@ -553,7 +554,7 @@ if (is_super() && !$tenant) $navItems[]=['companies','مدیریت شرکت‌ه
 if ($tenant) {
     if (can('customers.view')) $navItems[]=['customers','تاکسیرانان','drivers','عملیات'];
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات'];
-    if (can('invoices.view')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات'];
+    if (can('invoices.view') || can('invoices.create')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات'];
     if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها'];
     if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات'];
     if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','مدیریت شرکت'];
@@ -646,7 +647,7 @@ $navGroup=null;
 <fieldset class="invoice-services invoice-panel" data-invoice-services><legend><span class="invoice-step">۲</span> انتخاب خدمات ارائه‌شده</legend><div class="invoice-service-toolbar"><label for="invoiceServiceSearch" class="invoice-search-label">جستجوی خدمت<input id="invoiceServiceSearch" type="search" placeholder="بخشی از عنوان خدمت را بنویسید…" autocomplete="off" aria-controls="invoiceServiceList" aria-describedby="invoiceServiceCount" data-service-search></label><button type="button" class="secondary invoice-clear-search" data-service-clear hidden>پاک کردن جستجو</button></div><div class="invoice-service-summary"><div class="invoice-service-meta"><span id="invoiceServiceCount" role="status" aria-live="polite" data-service-count></span><strong data-service-selected>۰ خدمت انتخاب شده</strong></div><div class="invoice-total-box" role="status" aria-live="polite" aria-atomic="true"><span>جمع مبلغ خدمات انتخاب‌شده</span><div class="invoice-total-amount"><strong data-service-total>۰</strong><span>تومان</span></div></div></div><div id="invoiceServiceList" class="invoice-service-list"><?php foreach(query('SELECT * FROM services WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll() as $r): ?><label class="invoice-service-option" data-service-option data-service-title="<?=e($r['title'])?>"><input type="checkbox" name="service_ids[]" value="<?=e($r['id'])?>" data-service-price="<?=e($r['price'])?>"><span class="invoice-service-title"><?=e($r['title'])?></span><strong class="invoice-service-price"><?=money($r['price'])?> <small>تومان</small></strong></label><?php endforeach; ?></div><p class="invoice-service-empty" data-service-empty hidden>خدمتی با این عبارت پیدا نشد. عبارت دیگری جستجو کنید.</p><p class="muted invoice-service-help">با Tab بین جستجو و خدمات جابه‌جا شوید و با Space خدمت را انتخاب کنید. انتخاب‌ها با جستجو حذف نمی‌شوند.</p></fieldset>
 <fieldset class="invoice-panel invoice-extras"><legend><span class="invoice-step">۳</span> خدمات موردی (اختیاری)</legend><p class="muted">برای خدمات موردی، عنوان و مبلغ را وارد کنید؛ این آیتم‌ها به تعرفه‌های ثابت شرکت افزوده نمی‌شوند.</p><div id="extraInvoiceItems" class="stack"></div><button class="secondary" type="button" data-add-invoice-item>+ افزودن آیتم دیگر</button></fieldset>
 <div class="invoice-form-footer"><p>قبل از ثبت، تاریخ و خدمات انتخابی را بررسی کنید.</p><button type="submit" class="invoice-submit">ثبت و صدور فاکتور</button></div></form></div>
-<?php endif; ?><div class="card invoice-history"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div>
+<?php endif; ?><?php if(can('invoices.view')): ?><div class="card invoice-history"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div><?php endif; ?>
 <?php elseif($page==='reports'): ?>
 <h1>گزارش‌گیری پیشرفته</h1><p class="muted">فیلتر براساس تاریخ، کاربر، نوع پرداخت، شماره فاکتور و کد ملی راننده</p>
 <?php render_report_filters('reports',$reportFilter); $reportData=invoice_report($tenant,$reportFilter); ?>
