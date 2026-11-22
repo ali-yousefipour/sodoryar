@@ -60,6 +60,8 @@ jobs:
         run: php tests/tenant-query-indexes.php
       - name: Verify manager list avoids per-company N+1 queries
         run: php tests/company-admin-prefetch.php
+      - name: Verify user permissions are loaded in a tenant batch
+        run: php tests/operator-permissions-prefetch.php
       - name: Verify SQL driver errors never leak to users
         run: php tests/error-disclosure-policy.php
       - name: Verify deployment marker, TLS and database integration gates
