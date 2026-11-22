@@ -1,0 +1,35 @@
+/* Sodoryar print isolation: A5 and nominal 80 mm receipt rolls only. */
+.receipt { box-sizing:border-box; direction:rtl; background:#fff; color:#111827; overflow-wrap:anywhere; margin-inline:auto; }
+.receipt table { width:100%; border-collapse:collapse; table-layout:fixed; }
+.receipt th,.receipt td { text-align:right; vertical-align:top; overflow-wrap:anywhere; }
+.receipt thead { display:table-header-group; }
+.receipt tr { break-inside:avoid; page-break-inside:avoid; }
+.receipt-logo { display:block; margin-inline:auto; max-width:36mm; max-height:24mm; object-fit:contain; }
+.receipt-a5 { max-width:148mm; padding:10mm; font-size:10.5pt; line-height:1.65; }
+.receipt-thermal { width:80mm; max-width:100%; padding:3mm; font-size:9.5pt; line-height:1.5; }
+.receipt-thermal table { font-size:9pt; }
+.receipt-thermal td,.receipt-thermal th { padding:1.5mm 1mm; }
+.receipt-thermal .receipt-logo { max-width:25mm; max-height:17mm; filter:grayscale(1); }
+.receipt-toolbar { display:flex; justify-content:center; gap:8px; padding:8px; }
+@page sodoryarA5 { size:A5 portrait; margin:8mm; }
+@page sodoryarThermal { margin:0; }
+@media print {
+  html,body { margin:0!important; padding:0!important; background:#fff!important; }
+  .app-shell,.main-wrap,.content { display:contents!important; }
+  .sidebar,.topbar,.receipt-toolbar,.content > :not(.receipt),.main-wrap > :not(.content) { display:none!important; }
+  .receipt { box-shadow:none!important; border:0!important; border-radius:0!important; overflow:visible!important; min-height:0!important; height:auto!important; break-inside:auto!important; page-break-inside:auto!important; color:#000!important; background:#fff!important; }
+  .receipt-a5 { page:sodoryarA5; width:100%!important; max-width:none!important; margin:0!important; padding:0!important; }
+  .receipt-thermal { page:sodoryarThermal; width:var(--thermal-content-width,72mm)!important; max-width:var(--thermal-content-width,72mm)!important; margin:0 auto!important; padding:2mm 0!important; font-size:9pt!important; }
+  .receipt-thermal h1 { font-size:12pt!important; }
+  .receipt-thermal h2 { font-size:10pt!important; padding:2mm 0!important; background:none!important; color:#000!important; }
+  .receipt th,.receipt td,.receipt h1,.receipt h2,.receipt p { color:#000!important; background:transparent!important; }
+  .receipt table { break-inside:auto!important; }
+  .receipt thead { display:table-header-group!important; }
+  .receipt tr { break-inside:avoid!important; page-break-inside:avoid!important; }
+  .receipt p,.receipt h1,.receipt h2 { orphans:2; widows:2; }
+  .receipt-logo { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+@media (max-width:600px) {
+  .receipt-a5 { width:100%; padding:14px; }
+  .receipt-thermal { width:min(80mm,100%); padding:10px; }
+}
