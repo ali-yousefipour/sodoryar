@@ -739,7 +739,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='customer'): ?><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e(fa_digits($invoice['national_code']))?></p>
 <?php elseif($section==='items'): ?><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money_toman($i['price'])?></td></tr><?php endforeach; ?></tbody></table>
 <?php elseif($section==='total'): ?><h2>جمع کل: <?=money_toman($invoice['total_amount'])?></h2><p class="receipt-amount-words">مبلغ به حروف: <?=e(toman_in_words($invoice['total_amount']))?></p>
-<?php elseif($section==='payment'): ?><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e(fa_digits($invoice['pos_ref']??''))?></p>
+<?php elseif($section==='payment'): ?><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e(display_financial_reference($invoice['pos_ref']??''))?></p>
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
 <?php endif; ?>
