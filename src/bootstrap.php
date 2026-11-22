@@ -24,12 +24,31 @@ date_default_timezone_set('Asia/Tehran');
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
 ini_set('session.use_trans_sid', '0');
+// Shared hosts sometimes configure an unavailable or non-persistent global
+// PHP session directory. Keep production sessions in the protected application
+// directory when it is writable, never inside the public document root.
+if (PHP_SAPI !== 'cli') {
+    $privateSessionDirectory = dirname(__DIR__) . '/sessions';
+    if ((is_dir($privateSessionDirectory)
+            || @mkdir($privateSessionDirectory, 0700, true))
+        && is_writable($privateSessionDirectory)) {
+        session_save_path($privateSessionDirectory);
+    } else {
+        error_log('Sodoryar: protected session directory unavailable; using PHP configured session storage.');
+    }
+}
+ini_set('session.use_cookies', '1');
 session_name('sodoryar_session');
 session_set_cookie_params([
     'httponly' => true, 'secure' => config('SESSION_SECURE', '1') === '1',
     'samesite' => 'Lax', 'path' => '/',
 ]);
-session_start();
+if (!@session_start() || session_status() !== PHP_SESSION_ACTIVE) {
+    error_log('Sodoryar: PHP session storage unavailable; login requests cannot be validated.');
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    exit('سرویس نشست موقتاً در دسترس نیست؛ لطفاً با پشتیبانی تماس بگیرید.');
+}
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Frame-Options: SAMEORIGIN');
@@ -261,8 +280,23 @@ function require_permission(string $permission): void {
 function csrf_token(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
 function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">'; }
 function verify_csrf(): void {
-    if (!hash_equals(csrf_token(), (string) ($_POST['csrf'] ?? ''))) {
-        http_response_code(419); exit('نشست یا توکن امنیتی نامعتبر است.');
+    $submitted=(string)($_POST['csrf']??'');
+    if (!hash_equals(csrf_token(), $submitted)) {
+        // Never log the token or the session ID. This identifies missing
+        // cookies and lost session state without exposing credentials.
+        error_log('Sodoryar CSRF mismatch: cookie='.(isset($_COOKIE[session_name()])?'present':'missing')
+            .' session_token='.(isset($_SESSION['csrf'])?'present':'missing')
+            .' submitted_token='.($submitted!==''?'present':'missing'));
+        http_response_code(419);
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
+            .'<meta name="viewport" content="width=device-width,initial-scale=1">'
+            .'<title>نشست منقضی شد | صدوریار</title></head><body>'
+            .'<main style="font-family:Tahoma,sans-serif;max-width:34rem;margin:12vh auto;padding:2rem;line-height:2">'
+            .'<h1>نشست شما منقضی شده است</h1>'
+            .'<p>برای حفاظت از حساب کاربری، لطفاً صفحه ورود را دوباره باز کنید و فرم جدید را ارسال کنید.</p>'
+            .'<a href="?page=login">بازگشت به صفحه ورود</a></main></body></html>';
+        exit;
     }
 }
 function redirect(string $page, string $message = ''): never {
