@@ -109,5 +109,9 @@ function render_report_filters(string $page, array $filter, bool $invoice=true):
         echo '<label>کد ملی راننده<input name="national_code" inputmode="numeric" maxlength="10" value="'.e($filter['national_code']).'"></label>';
         echo '<label>شماره فاکتور<input name="invoice_number" maxlength="60" value="'.e($filter['invoice_number']).'"></label>';
     }
-    echo '</div><div class="filter-actions"><button>نمایش نتایج</button><button type="submit" name="export" value="excel" class="secondary">خروجی اکسل</button><a class="button-link" href="?page='.e($page).'">پاک‌کردن فیلترها</a></div></form>';
+    echo '</div><div class="filter-actions"><button>نمایش نتایج</button>';
+    if (can($page === 'reports' ? 'reports.export' : 'activity.export')) {
+        echo '<button type="submit" name="export" value="excel" class="secondary">خروجی اکسل</button>';
+    }
+    echo '<a class="button-link" href="?page='.e($page).'">پاک‌کردن فیلترها</a></div></form>';
 }
