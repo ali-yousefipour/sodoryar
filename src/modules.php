@@ -111,6 +111,16 @@ function bill_can_permanently_delete(array $bill): bool {
         && trim((string)($bill['response_code'] ?? '')) === '';
 }
 
+/** One authoritative source for commission sales, excluding voided invoices. */
+function commission_sales_total(int $tenant,int $userId,string $from,string $to): int {
+    $voidFilter=database_table_exists('invoice_voids')
+        ?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':'';
+    $raw=(string)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND COALESCE(invoice_date,DATE(created_at))>=? AND COALESCE(invoice_date,DATE(created_at))<?'.$voidFilter,[$tenant,$userId,$from,$to])->fetchColumn();
+    $total=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+    if ($total===false) throw new RuntimeException('جمع فروش این دوره بیش از محدوده مجاز محاسبات است.');
+    return $total;
+}
+
 function handle_module_post(string $page, string $action): void {
     $tenant = $page==='profile' ? 0 : tenant_id();
     if ($page === 'roles' && in_array($action,['create','update','copy','toggle','default','remove'],true)) {
@@ -416,11 +426,7 @@ function handle_module_post(string $page, string $action): void {
             $jm++;if ($jm===13) { $jy++;$jm=1; }
             $to=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$jy,$jm));
         }
-        $voidFilter=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':'';
-        // Use the selected invoice service date, not the time the clerk entered it.
-        $totalRaw=(string)query('SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=? AND user_id=? AND COALESCE(invoice_date,DATE(created_at))>=? AND COALESCE(invoice_date,DATE(created_at))<?'.$voidFilter,[$tenant,$userId,$from,$to])->fetchColumn();
-        $total=filter_var($totalRaw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
-        if ($total===false) throw new RuntimeException('جمع فروش این دوره بیش از محدوده مجاز محاسبات است.');
+        $total=commission_sales_total($tenant,$userId,$from,$to);
         $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
         if (($settings['commission_enabled']??'0')!=='1') throw new RuntimeException('ابتدا سیستم پورسانت را از تنظیمات شرکت فعال کنید.');
         $limit=max(0,(float)($settings['commission_limit']??0));
