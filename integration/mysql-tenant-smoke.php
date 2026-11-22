@@ -45,7 +45,7 @@ function apply_sql_fixture(string $path): void {
 $root=dirname(__DIR__);
 apply_sql_fixture($root.'/database/install.sql');
 foreach(range(1,2) as $pass) {
-    for ($version=9;$version<=14;$version++) {
+    for ($version=9;$version<=15;$version++) {
         $files=glob($root.'/database/migrations/'.sprintf('%03d',$version).'_*.sql');
         integration_assert(count($files)===1,'Missing or duplicated migration '.$version);
         apply_sql_fixture($files[0]);
@@ -135,9 +135,30 @@ integration_assert(!query('SELECT id FROM bill_payments WHERE id=? AND company_i
 integration_assert((int)query('SELECT amount FROM bill_payments WHERE id=? AND company_id=?',[$billA,$companyA])->fetchColumn()===25000,
     'Tenant bill value incorrect');
 
+// Database integrity must reject a valid user ID paired with a foreign company,
+// even when application code or an administrative script supplies the wrong tenant.
+$foreignScopeRejected=false;
+try {
+    query('INSERT INTO user_document_scopes(user_id,company_id,scope) VALUES(?,?,?)',
+        [$userB,$companyA,'own']);
+} catch (PDOException $ex) {
+    if ($ex->getCode()!=='23000') throw $ex;
+    $foreignScopeRejected=true;
+}
+integration_assert($foreignScopeRejected,'Cross-company document scope was accepted at database level.');
+
 $roleA=insert_fixture('INSERT INTO company_roles(company_id,name) VALUES(?,?)',[$companyA,'CI limited role']);
 query('INSERT INTO company_role_permissions(role_id,company_id,permission_key) VALUES(?,?,?)',
     [$roleA,$companyA,'invoices.view']);
+$foreignRoleRejected=false;
+try {
+    query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,?)',
+        [$userB,$companyA,$roleA]);
+} catch (PDOException $ex) {
+    if ($ex->getCode()!=='23000') throw $ex;
+    $foreignRoleRejected=true;
+}
+integration_assert($foreignRoleRejected,'Cross-company user-role assignment was accepted at database level.');
 query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,?)',
     [$userA,$companyA,$roleA]);
 $effective=effective_operator_permissions($userA,$companyA);
@@ -152,4 +173,4 @@ $unconfirmed=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bi
     [$billB,$companyB])->fetch();
 integration_assert(!bill_can_permanently_delete($unconfirmed),'Bank/POS bill must not be permanently deleted');
 
-echo "PASS: clean schema and migrations 009-014 twice; tenant and own-only reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
+echo "PASS: clean schema and migrations 009-015 twice; tenant and own-only reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
