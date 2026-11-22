@@ -35,13 +35,14 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
 if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origin before upload')
-    || substr_count($workflow, "vars.SODORYAR_PUBLIC_BASE_URL || ''") !== 4
-    || substr_count($workflow, 'Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL.') !== 3
+    || substr_count($workflow, 'SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir') !== 4
+    || str_contains($workflow, 'vars.SODORYAR_PUBLIC_BASE_URL')
+    || substr_count($workflow, 'Expected the fixed Sodoryar HTTPS origin.') !== 3
     || str_contains($workflow, 'https://taxiranico.ir/assets/')
     || str_contains($workflow, 'https://taxiranico.ir/sodoryar-version.json')
     || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/sodoryar-version.json')
     || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/invoice-redesign.css')
     || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/$file')) {
-    throw new RuntimeException('Deployment validation must target only the separately configured Sodoryar public domain.');
+    throw new RuntimeException('Deployment verification must use the fixed Sodoryar public origin while preserving FTPS ownership checks.');
 }
 echo "Release ownership, TLS and migration gate contracts passed\n";
