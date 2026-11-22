@@ -13,6 +13,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  source-validation:
+    name: Validate PHP 8.4, JavaScript and security regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PHP 8.4 and required extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
+      - name: Validate source and regression tests without production access
+        run: bash scripts/validate-release.sh
+
   database-integration:
     name: Validate isolated MySQL migrations and tenant boundaries
     runs-on: ubuntu-latest
@@ -47,31 +62,13 @@ jobs:
         run: php integration/mysql-tenant-smoke.php
 
   deploy:
-    needs: database-integration
+    needs: [source-validation, database-integration]
+    if: ${{ needs.source-validation.result == 'success' && needs.database-integration.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-      - name: Set up PHP 8.4 and required extensions
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, pdo_mysql, zip, gd
-          coverage: none
-
-      - name: Gate deployment on PHP, JavaScript and security regression tests
-        run: |
-          set -euo pipefail
-          find public src scripts tests integration -name '*.php' -print0 | xargs -0 -n1 php -l
-          node --check public/assets/app.js
-          node --check public/assets/table-experience.js
-          node --check public/assets/report-progress.js
-          for test_file in tests/*.php; do
-            echo "Running $test_file"
-            php "$test_file"
-          done
-
       - name: Build isolated host payload
         run: |
           set -euo pipefail
