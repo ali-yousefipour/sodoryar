@@ -61,6 +61,28 @@ $invoiceA=insert_fixture('INSERT INTO invoices(company_id,invoice_number,custome
     [$companyA,'CI-A-0001',$customerA,$userA,123456,'cash','2026-11-22']);
 $invoiceB=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
     [$companyB,'CI-B-0001',$customerB,$userB,765432,'cash','2026-11-22']);
+query('INSERT INTO invoice_items(company_id,invoice_id,service_title,price) VALUES(?,?,?,?)',
+    [$companyA,$invoiceA,'Local A service',123456]);
+query('INSERT INTO invoice_items(company_id,invoice_id,service_title,price) VALUES(?,?,?,?)',
+    [$companyB,$invoiceB,'Local B service',765432]);
+$crossTenantItemBlocked=false;
+try {
+    query('INSERT INTO invoice_items(company_id,invoice_id,service_title,price) VALUES(?,?,?,?)',
+        [$companyA,$invoiceB,'FORBIDDEN cross-tenant invoice item',100]);
+} catch (PDOException $ex) {
+    if ($ex->getCode()!=='23000') throw $ex;
+    $crossTenantItemBlocked=true;
+}
+integration_assert($crossTenantItemBlocked,'Composite invoice-item foreign key did not reject a cross-company write.');
+$crossTenantCustomerBlocked=false;
+try {
+    query('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type) VALUES(?,?,?,?,?,?)',
+        [$companyA,'CI-FORBIDDEN',$customerB,$userA,999,'cash']);
+} catch (PDOException $ex) {
+    if ($ex->getCode()!=='23000') throw $ex;
+    $crossTenantCustomerBlocked=true;
+}
+integration_assert($crossTenantCustomerBlocked,'Invoice foreign key did not reject another company customer.');
 $billA=insert_fixture('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,paid_method) VALUES(?,?,?,?,?,?,?)',
     [$companyA,$userA,'other','TEST-A','TEST-PAY-A',25000,'manual']);
 $billB=insert_fixture('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,paid_method) VALUES(?,?,?,?,?,?,?)',
@@ -101,4 +123,4 @@ $unconfirmed=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bi
     [$billB,$companyB])->fetch();
 integration_assert(!bill_can_permanently_delete($unconfirmed),'Bank/POS bill must not be permanently deleted');
 
-echo "PASS: clean schema and migrations 009-014 twice; tenants; invoices; bill scope; role grants; safe bill deletion.\n";
+echo "PASS: clean schema and migrations 009-014 twice; tenant reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
