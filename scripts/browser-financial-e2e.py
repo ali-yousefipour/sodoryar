@@ -123,10 +123,28 @@ def main() -> None:
         expect(manager_b.get_by_text("فاکتور پیدا نشد.")).to_be_visible()
         assert manager_b.locator(".receipt").count() == 0, "Foreign invoice receipt accessible by ID"
 
+        # Authenticated navigation audit across all company-management modules.
+        # Every route must render without PHP errors or viewport-wide overflow.
+        for route in (
+            "dashboard", "users", "roles", "customers", "services", "invoices",
+            "reports", "bills", "pos", "commissions", "templates", "settings",
+            "activity", "profile",
+        ):
+            response = manager_a.goto(f"{ORIGIN}/?page={route}", wait_until="domcontentloaded")
+            status = response.status if response else 0
+            body = manager_a.locator("body").inner_text()
+            if status != 200 or "Fatal error:" in body or "Uncaught " in body:
+                manager_a.screenshot(path=str(OUTPUT / f"route-{route}-failure.png"), full_page=True)
+                raise AssertionError(f"{route} HTTP {status}, body={body[:1200]}")
+            width = manager_a.evaluate("document.documentElement.scrollWidth")
+            viewport = manager_a.evaluate("window.innerWidth")
+            if width > viewport + 2:
+                manager_a.screenshot(path=str(OUTPUT / f"route-{route}-overflow.png"), full_page=True)
+                raise AssertionError(f"{route} overflows 390px viewport ({width}px > {viewport}px)")
         context_b.close()
         context_a.close()
         browser.close()
-    print("PASS: isolated real-login, mobile invoice, receipt PDF, POS bill, reports and cross-tenant E2E")
+    print("PASS: isolated real-login, invoice, PDF, POS bill, tenant boundaries and 14 responsive authenticated routes")
 
 
 if __name__ == "__main__":
