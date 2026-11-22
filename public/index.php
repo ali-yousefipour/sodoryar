@@ -471,7 +471,7 @@ try {
                     $items = query("SELECT id,title,price FROM services WHERE company_id=? AND is_active=1 AND id IN ($marks)",array_merge([$tenant],$selected))->fetchAll();
                 }
                 if (count($items)!==count($selected)) throw new RuntimeException('یک یا چند خدمت معتبر نیست.');
-                $total = array_sum(array_map(static fn($i)=>(int)$i['price'],$items))+array_sum(array_column($extras,'price'));
+                $total = sum_invoice_line_amounts(array_merge($items,$extras));
                 $number = date('YmdHis') . '-' . bin2hex(random_bytes(4));
                 query('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,pos_ref,invoice_date) VALUES(?,?,?,?,?,?,?,?)',[$tenant,$number,$customer,user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate]);
                 $invoiceId = (int)db()->lastInsertId();
