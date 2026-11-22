@@ -9,6 +9,7 @@ CREATE TABLE users (
  password_hash VARCHAR(255) NOT NULL, full_name VARCHAR(180) NOT NULL,
  role ENUM('superadmin','company_admin','operator') NOT NULL DEFAULT 'operator',
  is_active TINYINT(1) NOT NULL DEFAULT 1, auth_version BIGINT UNSIGNED NOT NULL DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ UNIQUE KEY uq_users_id_company (id,company_id),
  CONSTRAINT fk_user_company FOREIGN KEY(company_id) REFERENCES companies(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE customers (
@@ -128,6 +129,7 @@ CREATE TABLE IF NOT EXISTS user_role_assignments (
  role_id BIGINT UNSIGNED NOT NULL,
  assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_assignment_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ CONSTRAINT fk_assignment_user_tenant FOREIGN KEY(user_id,company_id) REFERENCES users(id,company_id) ON DELETE CASCADE,
  CONSTRAINT fk_assignment_tenant FOREIGN KEY(role_id,company_id) REFERENCES company_roles(id,company_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -137,5 +139,6 @@ CREATE TABLE IF NOT EXISTS user_document_scopes (
  scope ENUM('own','company') NOT NULL DEFAULT 'company',
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
  CONSTRAINT fk_doc_scope_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+ CONSTRAINT fk_scope_user_tenant FOREIGN KEY(user_id,company_id) REFERENCES users(id,company_id) ON DELETE CASCADE,
  CONSTRAINT fk_doc_scope_company FOREIGN KEY(company_id) REFERENCES companies(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
