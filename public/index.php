@@ -235,6 +235,30 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('users','دسترسی‌های اپراتور ذخیره شد.');
         }
+        if ($page === 'users' && $action === 'assign_role') {
+            require_admin();
+            require_permission('roles.manage');
+            if (!company_roles_ready()) throw new RuntimeException('ابتدا مهاجرت دیتابیس ۰۱۰ را اجرا کنید.');
+            $tenant=tenant_id();
+            $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
+            $roleInput=trim((string)($_POST['company_role_id']??''));
+            $roleId=$roleInput===''?null:filter_var($roleInput,FILTER_VALIDATE_INT);
+            if (!$id || ($roleInput!=='' && !$roleId)) throw new RuntimeException('شناسه کاربر یا نقش معتبر نیست.');
+            db()->beginTransaction();
+            try {
+                $target=query('SELECT id FROM users WHERE id=? AND company_id=? AND role=? AND is_active=1 FOR UPDATE',[$id,$tenant,'operator'])->fetch();
+                if (!$target) throw new RuntimeException('انتساب نقش فقط برای اپراتور فعال همین شرکت مجاز است.');
+                if ($roleId && !query('SELECT id FROM company_roles WHERE id=? AND company_id=? AND is_active=1',[$roleId,$tenant])->fetch()) {
+                    throw new RuntimeException('نقش انتخاب‌شده متعلق به شرکت یا فعال نیست.');
+                }
+                $before=query('SELECT role_id FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant])->fetchColumn();
+                if ($roleId===null) query('DELETE FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant]);
+                else query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE company_id=VALUES(company_id),role_id=VALUES(role_id)',[$id,$tenant,$roleId]);
+                audit('user.role.assign',json_encode(['user_id'=>$id,'before'=>$before?:null,'after'=>$roleId],JSON_THROW_ON_ERROR));
+                db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('users','نقش سفارشی کاربر به‌روزرسانی شد.');
+        }
         if ($page === 'users' && $action === 'photo') {
             require_admin();
             $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
@@ -484,6 +508,7 @@ if ($tenant) {
     if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها'];
     if (user()['role']!=='operator') {
         $navItems[]=['users','کاربران شرکت','users','مدیریت شرکت'];
+        $navItems[]=['roles','نقش‌ها و مجوزها','users','مدیریت شرکت'];
         $navItems[]=['templates','قالب چاپ','templates','مدیریت شرکت'];
         $navItems[]=['settings','تنظیمات شرکت','settings','مدیریت شرکت'];
     }
