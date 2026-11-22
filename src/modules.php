@@ -213,9 +213,22 @@ function handle_module_post(string $page, string $action): void {
                 $confirm=ascii_digits(trim((string)($_POST['confirm_bill_id']??'')));
                 $expected=ascii_digits((string)$bill['bill_id']);
                 if (!hash_equals($expected,$confirm)) throw new RuntimeException('برای تأیید، شناسه قبض را دقیق وارد کنید.');
+                $now=time();
+                if ($now-(int)($_SESSION['bill_delete_auth_window']??0)>900) {
+                    $_SESSION['bill_delete_auth_window']=$now;
+                    $_SESSION['bill_delete_auth_failures']=0;
+                }
+                if ((int)($_SESSION['bill_delete_auth_failures']??0)>=5) {
+                    http_response_code(429);
+                    throw new RuntimeException('تعداد تلاش‌های احراز هویت زیاد است؛ پس از ۱۵ دقیقه دوباره تلاش کنید.');
+                }
                 $password=(string)($_POST['current_password']??'');
                 $hash=query('SELECT password_hash FROM users WHERE id=? AND is_active=1',[user()['id']])->fetchColumn();
-                if (!$hash || !password_verify($password,(string)$hash)) throw new RuntimeException('احراز هویت مجدد ناموفق بود.');
+                if (!$hash || !password_verify($password,(string)$hash)) {
+                    $_SESSION['bill_delete_auth_failures']=(int)($_SESSION['bill_delete_auth_failures']??0)+1;
+                    throw new RuntimeException('احراز هویت مجدد ناموفق بود.');
+                }
+                $_SESSION['bill_delete_auth_failures']=0;
                 // Keep the independent audit record without personal identifiers.
                 audit('bill.permanent_delete',json_encode(['record_id'=>$id,'amount'=>$bill['amount'],'reason'=>'manual_unconfirmed_record'],JSON_THROW_ON_ERROR));
                 query('DELETE FROM bill_payments WHERE id=? AND company_id=? AND deleted_at IS NOT NULL',[$id,$tenant]);
