@@ -330,6 +330,18 @@ jobs:
           curl --fail --silent --show-error --max-time 30 "$origin/favicon.svg" -o /dev/null
           echo 'Live login session, CSRF consistency and favicon passed.'
 
+      - name: Verify private application files cannot be served publicly
+        run: |
+          set -euo pipefail
+          origin="https://taxiranico.ir"
+          for private_path in "_private/.env.example" "_private/src/bootstrap.php" "_private/.sodoryar-instance"; do
+            status="$(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' "$origin/$private_path")"
+            case "$status" in
+              403|404|410) echo "Private-path access blocked: $private_path (HTTP $status)" ;;
+              *) echo "::error::Private application path unexpectedly responded with HTTP $status: $private_path"; exit 1 ;;
+            esac
+          done
+
       - name: Deployment notes
         run: |
           echo 'Contents of public/ uploaded directly to the FTP account root.'
