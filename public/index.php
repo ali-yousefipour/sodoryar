@@ -15,7 +15,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -414,7 +414,7 @@ try {
             }
             redirect('invoices','فاکتور با حفظ سوابق مالی باطل شد.');
         }
-        if (in_array($page,['templates','settings','commissions','profile'],true)) handle_module_post($page,$action);
+        if (in_array($page,['templates','settings','commissions','profile','roles'],true)) handle_module_post($page,$action);
     }
 } catch (Throwable $ex) {
     error_log((string)$ex);
@@ -424,6 +424,7 @@ try {
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page === 'companies' && is_super() && isset($_SESSION['selected_company'])) redirect('dashboard','برای مدیریت شرکت‌ها ابتدا به داشبورد مدیریت کل بازگردید.');
 if ($page === 'users') require_admin();
+if ($page === 'roles') { require_admin(); require_permission('roles.manage'); }
 if ($page === 'services') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
@@ -597,7 +598,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
 <?php endif; ?>
-<?php elseif(in_array($page,['commissions','templates','settings','activity','profile'],true)): ?>
+<?php elseif(in_array($page,['commissions','templates','settings','activity','profile','roles'],true)): ?>
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
