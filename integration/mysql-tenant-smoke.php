@@ -143,6 +143,17 @@ integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_num
 integration_assert((int)$report['summary']['total']===123456,'Own-only report total includes another employee or tenant');
 integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_number']==='CI-A-0001',
     'Own-only report exposed another employee invoice');
+// A back-dated invoice entered later must belong to its service-date period.
+query('UPDATE invoices SET created_at=? WHERE id=? AND company_id=?',
+    ['2025-01-02 10:00:00',$invoiceA,$companyA]);
+integration_assert(commission_sales_total($companyA,$userA,'2026-11-22','2026-11-23')===123456,
+    'Commission period ignored chosen invoice date.');
+integration_assert(commission_sales_total($companyA,$otherUserA,'2026-11-22','2026-11-23')===888,
+    'Commission included another employee or dropped a same-company invoice.');
+integration_assert(commission_sales_total($companyB,$userB,'2026-11-22','2026-11-23')===765432,
+    'Commission excluded a legitimate foreign tenant invoice.');
+integration_assert(commission_sales_total($companyA,$userA,'2025-01-02','2025-01-03')===0,
+    'Commission incorrectly used creation timestamp.');
 integration_assert(!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$invoiceB,$companyA])->fetch(),
     'Foreign invoice accepted by tenant lookup');
 integration_assert(!query('SELECT id FROM bill_payments WHERE id=? AND company_id=?',[$billB,$companyA])->fetch(),
@@ -188,4 +199,4 @@ $unconfirmed=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bi
     [$billB,$companyB])->fetch();
 integration_assert(!bill_can_permanently_delete($unconfirmed),'Bank/POS bill must not be permanently deleted');
 
-echo "PASS: clean schema and migrations 009-015 twice; tenant and own-only reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
+echo "PASS: clean schema and migrations 009-015 twice; tenant and own-only reports; invoice-date commission totals; forbidden cross-company inserts; bills; roles; deletion policy.\n";
