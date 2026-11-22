@@ -7,6 +7,12 @@ require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/default_services.php';
 
+/** Call inside an open transaction before disabling or demoting a company manager. */
+function lock_active_company_admins(int $tenant): int {
+    return count(query('SELECT id FROM users WHERE company_id=? AND role=? AND is_active=1 ORDER BY id FOR UPDATE',
+        [$tenant,'company_admin'])->fetchAll(PDO::FETCH_COLUMN));
+}
+
 function archive_ready(string $table): bool {
     if (!in_array($table,['users','companies'],true)) return false;
     static $ready=[];
