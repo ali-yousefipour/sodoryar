@@ -91,6 +91,14 @@ function ascii_digits(string $value): string {
 function money(int|string $amount): string { return fa_digits(number_format((int)$amount,0,'.','٬')); }
 function user(): ?array { return $_SESSION['user'] ?? null; }
 function is_super(): bool { return (user()['role'] ?? '') === 'superadmin'; }
+/** Optional session version for revoking old sessions on credential/role changes. */
+function auth_version_ready(): bool {
+    static $ready=null;
+    if ($ready===null) {
+        $ready=(bool)query("SHOW COLUMNS FROM users LIKE 'auth_version'")->fetch();
+    }
+    return $ready;
+}
 function require_login(): array {
     $u = user(); if (!$u) { header('Location: ?page=login'); exit; }
     if (time()-(int)($_SESSION['last_activity']??time())>1800) {
@@ -102,8 +110,10 @@ function require_login(): array {
     }
     static $checked = false;
     if (!$checked) {
-        $record = query('SELECT u.id,u.role,u.company_id,u.full_name,u.is_active,c.is_active company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?',[$u['id']])->fetch();
-        if (!$record || !(int)$record['is_active'] || ($record['role']!=='superadmin' && !(int)$record['company_active'])) {
+        $versioned=auth_version_ready();
+        $record = query('SELECT u.id,u.role,u.company_id,u.full_name,u.is_active'.($versioned?',u.auth_version':'').',c.is_active company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.id=?',[$u['id']])->fetch();
+        if (!$record || !(int)$record['is_active'] || ($record['role']!=='superadmin' && !(int)$record['company_active'])
+            || ($versioned && (!isset($_SESSION['auth_version']) || (int)$_SESSION['auth_version'] !== (int)$record['auth_version']))) {
             $_SESSION=[]; session_regenerate_id(true); header('Location: ?page=login'); exit;
         }
         $_SESSION['user']=['id'=>(int)$record['id'],'role'=>$record['role'],'company_id'=>$record['company_id'],'full_name'=>$record['full_name']];
