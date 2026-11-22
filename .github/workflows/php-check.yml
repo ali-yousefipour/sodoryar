@@ -36,3 +36,5 @@ jobs:
         run: php tests/security-document-scopes.php
       - name: Verify bill and POS modules are reachable and permission-gated
         run: php tests/financial-module-routes.php
+      - name: Verify payment edits and voids serialize correctly
+        run: php tests/invoice-edit-void-serialization.php
