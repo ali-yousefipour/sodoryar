@@ -436,7 +436,17 @@ function render_module(string $page, int $tenant): void {
       <div class="card"><h2>نقش‌های تعریف‌شده</h2>
       <?php $companyRoles=query('SELECT r.id,r.name,r.description,r.is_active,r.is_default,(SELECT COUNT(*) FROM user_role_assignments a WHERE a.role_id=r.id AND a.company_id=r.company_id) assigned_users FROM company_roles r WHERE r.company_id=? ORDER BY r.id DESC',[$tenant])->fetchAll(); ?>
       <?php if(!$companyRoles): ?><p class="muted">هنوز نقش سفارشی تعریف نشده است.</p><?php endif; ?>
-      <?php foreach($companyRoles as $role): $grants=query('SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?',[$role['id'],$tenant])->fetchAll(PDO::FETCH_COLUMN); ?>
+      <?php
+      // Load all role grants once, preserving tenant scope and avoiding an N+1 query per role.
+      $roleGrants=[];
+      if ($companyRoles) {
+          $permissionRows=query('SELECT role_id,permission_key FROM company_role_permissions WHERE company_id=? ORDER BY role_id,permission_key',[$tenant])->fetchAll(PDO::FETCH_ASSOC);
+          foreach ($permissionRows as $permissionRow) {
+              $roleGrants[(int)$permissionRow['role_id']][]=$permissionRow['permission_key'];
+          }
+      }
+      ?>
+      <?php foreach($companyRoles as $role): $grants=$roleGrants[(int)$role['id']]??[]; ?>
       <details class="role-editor"><summary><strong><?=e($role['name'])?></strong> — <?=$role['is_active']?'فعال':'غیرفعال'?> <?=$role['is_default']?'— پیش‌فرض':''?> — <?=money($role['assigned_users'])?> کاربر</summary>
       <form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="role_id" value="<?=e($role['id'])?>">
       <div class="form-grid"><label>عنوان نقش<input name="name" maxlength="120" value="<?=e($role['name'])?>" required></label><label>توضیحات<input name="description" maxlength="500" value="<?=e($role['description'])?>"></label></div>
