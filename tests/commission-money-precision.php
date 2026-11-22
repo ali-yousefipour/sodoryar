@@ -34,7 +34,7 @@ try {
 
 $module=(string)file_get_contents(dirname(__DIR__).'/src/modules.php');
 foreach (['commission_sales_total($tenant,$userId,$from,$to)','commission_amount_toman($total,$limit,$rateMilli,$overRateMilli,',
-          'db()->beginTransaction();','audit(\'commission.calculate\',$date);','db()->commit();'] as $contract) {
+          'db()->beginTransaction();','commission_period_already_recorded($tenant,$userId,$period,$date)','audit(\'commission.calculate\',json_encode([','db()->commit();'] as $contract) {
     if (!str_contains($module,$contract)) {
         throw new RuntimeException('Commission posting or audit contract missing: '.$contract);
     }
