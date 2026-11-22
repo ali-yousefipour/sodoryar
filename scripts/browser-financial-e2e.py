@@ -5,6 +5,8 @@ Only uses localhost disposable test data; never touches live company accounts.
 """
 from __future__ import annotations
 
+import io
+import zipfile
 import os
 import pathlib
 import re
@@ -114,6 +116,17 @@ def main() -> None:
         manager_a.goto(f"{ORIGIN}/?page=reports")
         expect(manager_a.locator(".content")).to_be_visible()
         assert manager_a.get_by_text("CI-B-0001").count() == 0, "Foreign company invoice leaked into reports"
+
+        # Exercise XLSX output using only the disposable database.
+        for route in ("reports", "activity"):
+            downloaded = manager_a.request.get(f"{ORIGIN}/?page={route}&export=excel")
+            assert downloaded.status == 200, f"{route} spreadsheet response failed"
+            with zipfile.ZipFile(io.BytesIO(downloaded.body())) as archive:
+                assert "xl/worksheets/sheet1.xml" in archive.namelist()
+                sheet = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+                if route == "reports":
+                    assert "CI-A-OTHER" in sheet
+                    assert "CI-B-0001" not in sheet
 
         context_b, manager_b = log_in(browser, "ci_manager_b")
         manager_b.goto(f"{ORIGIN}/?page=services")
