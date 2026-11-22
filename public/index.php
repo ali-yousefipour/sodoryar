@@ -534,10 +534,7 @@ try {
     }
 } catch (Throwable $ex) {
     error_log((string)$ex);
-    // PDOException extends RuntimeException; never expose SQL details in the UI.
-    $error = ($ex instanceof RuntimeException && !($ex instanceof PDOException))
-        ? $ex->getMessage()
-        : 'عملیات به دلیل خطای داخلی انجام نشد. لطفاً بعداً دوباره تلاش کنید.';
+    $error = public_operation_error($ex);
 }
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
