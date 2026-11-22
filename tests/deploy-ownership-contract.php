@@ -50,4 +50,11 @@ if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origi
     || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/$file')) {
     throw new RuntimeException('Deployment verification must use the fixed Sodoryar public origin while preserving FTP ownership checks.');
 }
+if (!str_contains($workflow, 'Verify private application files cannot be served publicly')
+    || !str_contains($workflow, '_private/.env.example')
+    || !str_contains($workflow, '_private/src/bootstrap.php')
+    || !str_contains($workflow, '_private/.sodoryar-instance')
+    || !str_contains($workflow, '403|404|410')) {
+    throw new RuntimeException('Deployed private source and environment templates must be probed for public exposure.');
+}
 echo "Release ownership, FTP transport and migration gate contracts passed\n";
