@@ -109,11 +109,25 @@ $_SESSION['last_activity']=time();
 $_SESSION['regenerated_at']=time();
 $_GET['company_id']=(string)$companyB;
 integration_assert(tenant_id()===$companyA,'Tenant can be overridden by URL');
+// The "own" document policy must exclude another employee of the same company,
+// not only completely separate companies. Use the real migrated schema.
+$otherUserA=insert_fixture('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',
+    [$companyA,'ci_operator_a2',$pass,'Operator A2','operator']);
+$otherInvoiceA=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
+    [$companyA,'CI-A-OTHER',$customerA,$otherUserA,888,'cash','2026-11-22']);
+query('INSERT INTO invoice_items(company_id,invoice_id,service_title,price) VALUES(?,?,?,?)',
+    [$companyA,$otherInvoiceA,'Other operator service',888]);
+query('INSERT INTO user_document_scopes(user_id,company_id,scope) VALUES(?,?,?)',
+    [$userA,$companyA,'own']);
+integration_assert(document_scope()==='own','Migrated document scope must be enforced for operators');
 $report=invoice_report(tenant_id(),report_filters_default(),20);
 integration_assert((int)$report['summary']['qty']===1,'A report included a different company');
 integration_assert((int)$report['summary']['total']===123456,'A report total includes other tenant');
 integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_number']==='CI-A-0001',
     'Cross-company invoice leaked into report');
+integration_assert((int)$report['summary']['total']===123456,'Own-only report total includes another employee or tenant');
+integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_number']==='CI-A-0001',
+    'Own-only report exposed another employee invoice');
 integration_assert(!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$invoiceB,$companyA])->fetch(),
     'Foreign invoice accepted by tenant lookup');
 integration_assert(!query('SELECT id FROM bill_payments WHERE id=? AND company_id=?',[$billB,$companyA])->fetch(),
@@ -138,4 +152,4 @@ $unconfirmed=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bi
     [$billB,$companyB])->fetch();
 integration_assert(!bill_can_permanently_delete($unconfirmed),'Bank/POS bill must not be permanently deleted');
 
-echo "PASS: clean schema and migrations 009-014 twice; tenant reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
+echo "PASS: clean schema and migrations 009-014 twice; tenant and own-only reports; forbidden cross-company inserts; bills; roles; deletion policy.\n";
