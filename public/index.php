@@ -311,10 +311,23 @@ try {
             if (!in_array($role,['operator','company_admin'],true) || ($newPassword!=='' && (strlen($newPassword)<12 || strlen($newPassword)>4096))) throw new RuntimeException('نقش یا رمز جدید معتبر نیست (حداقل ۱۲ کاراکتر).');
             if (archive_ready('users') && $target['archived_at']!==null) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
             if ((int)$id===(int)user()['id'] && (!$active || $role!=='company_admin')) throw new RuntimeException('نمی‌توانید حساب مدیریتی خود را غیرفعال کنید یا نقش آن را تغییر دهید.');
-            if ($target['role']==='company_admin' && (!$active || $role!=='company_admin') && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد یا نقش آن را تغییر داد.');
             db()->beginTransaction();
             try {
-                $revokeSessions=auth_version_ready() && ($newPassword!=='' || $role!==$target['role'] || $active!==(int)$target['is_active']);
+                // Serialize admin count checks and writes; otherwise two managers can
+                // concurrently demote one another and leave a company unmanaged.
+                $adminCount=lock_active_company_admins($tenant);
+                $locked=query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                if (!$locked || (archive_ready('users') && $locked['archived_at']!==null)) {
+                    throw new RuntimeException('حساب کاربر در حال حاضر قابل ویرایش نیست.');
+                }
+                if ((int)$id===(int)user()['id'] && (!$active || $role!=='company_admin')) {
+                    throw new RuntimeException('نمی‌توانید نقش حساب مدیریتی خود را حذف یا آن را غیرفعال کنید.');
+                }
+                if ($locked['role']==='company_admin' && (int)$locked['is_active']===1
+                    && (!$active || $role!=='company_admin') && $adminCount<=1) {
+                    throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد یا نقش آن را تغییر داد.');
+                }
+                $revokeSessions=auth_version_ready() && ($newPassword!=='' || $role!==$locked['role'] || $active!==(int)$locked['is_active']);
                 query('UPDATE users SET full_name=?,username=?,is_active=?,role=?'.($newPassword!==''?',password_hash=?':'').($revokeSessions?',auth_version=auth_version+1':'').' WHERE id=? AND company_id=?',array_merge([$fullName,$username,$active,$role],$newPassword!==''?[password_hash($newPassword,PASSWORD_DEFAULT),$id,$tenant]:[$id,$tenant]));
                 if ($revokeSessions && (int)$id===(int)user()['id']) {
                     $_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$id])->fetchColumn();
