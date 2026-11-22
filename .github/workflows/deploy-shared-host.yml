@@ -87,7 +87,7 @@ jobs:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
-          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '/taxiranico.ir' }}
+          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '' }}
           FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
@@ -95,6 +95,8 @@ jobs:
           if [[ ! "$FTP_REMOTE_DIR" =~ ^/[a-zA-Z0-9_-]+([./-][a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+([.-][a-zA-Z0-9_-]+)*)*$ ]] \
              || [[ "$FTP_REMOTE_DIR" == *"/.."* ]] \
              || [[ "$FTP_REMOTE_DIR" == "/khat-yar.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/taxiranico.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/service-yar.ir" ]] \
              || [[ "$FTP_REMOTE_DIR" == "/app" ]]; then
             echo "::error::Unsafe or unspecified Sodoryar deployment directory."
             exit 1
@@ -145,7 +147,7 @@ jobs:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
-          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '/taxiranico.ir' }}
+          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '' }}
           FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
@@ -153,6 +155,8 @@ jobs:
           if [[ ! "$FTP_REMOTE_DIR" =~ ^/[a-zA-Z0-9_-]+([./-][a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+([.-][a-zA-Z0-9_-]+)*)*$ ]] \
              || [[ "$FTP_REMOTE_DIR" == *"/.."* ]] \
              || [[ "$FTP_REMOTE_DIR" == "/khat-yar.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/taxiranico.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/service-yar.ir" ]] \
              || [[ "$FTP_REMOTE_DIR" == "/app" ]]; then
             echo "::error::Unsafe or unspecified Sodoryar deployment directory."
             exit 1
