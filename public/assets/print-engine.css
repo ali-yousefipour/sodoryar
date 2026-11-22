@@ -10,6 +10,9 @@
 .receipt-thermal table { font-size:9pt; }
 .receipt-thermal td,.receipt-thermal th { padding:1.5mm 1mm; }
 .receipt-thermal .receipt-logo { max-width:25mm; max-height:17mm; filter:grayscale(1); }
+.receipt-contact { text-align:center; font-size:.88em; line-height:1.5; margin-block:2mm; overflow-wrap:anywhere; }
+.receipt-amount-words { font-size:.85em; border-top:1px dashed #a0a0a0; padding-top:2mm; }
+.receipt-thermal .receipt-amount-words { font-size:8pt; }
 .receipt-toolbar { display:flex; justify-content:center; gap:8px; padding:8px; }
 @page sodoryarA5 { size:A5 portrait; margin:8mm; }
 @page sodoryarThermal { margin:0; }
