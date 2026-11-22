@@ -87,10 +87,18 @@ jobs:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
-          FTP_REMOTE_DIR: .
+          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '/taxiranico.ir' }}
           FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
+          # The shared FTP account also holds Khatyar. Never deploy to its parent/root.
+          if [[ ! "$FTP_REMOTE_DIR" =~ ^/[a-zA-Z0-9_-]+([./-][a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+([.-][a-zA-Z0-9_-]+)*)*$ ]] \
+             || [[ "$FTP_REMOTE_DIR" == *"/.."* ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/khat-yar.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/app" ]]; then
+            echo "::error::Unsafe or unspecified Sodoryar deployment directory."
+            exit 1
+          fi
           if [ -z "${FTP_USER}" ] || [ -z "${FTP_PASS}" ]; then
             echo "::error::Missing FTP secrets; target ownership cannot be verified."
             exit 1
@@ -113,7 +121,7 @@ jobs:
             }
             ca_setting="set ssl:ca-file $ca_file"
           fi
-          lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
           set ftp:ssl-allow true
           set ftp:ssl-force true
@@ -137,10 +145,18 @@ jobs:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
-          FTP_REMOTE_DIR: .
+          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '/taxiranico.ir' }}
           FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
+          # The shared FTP account also holds Khatyar. Never deploy to its parent/root.
+          if [[ ! "$FTP_REMOTE_DIR" =~ ^/[a-zA-Z0-9_-]+([./-][a-zA-Z0-9_-]+)*(/[a-zA-Z0-9_-]+([.-][a-zA-Z0-9_-]+)*)*$ ]] \
+             || [[ "$FTP_REMOTE_DIR" == *"/.."* ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/khat-yar.ir" ]] \
+             || [[ "$FTP_REMOTE_DIR" == "/app" ]]; then
+            echo "::error::Unsafe or unspecified Sodoryar deployment directory."
+            exit 1
+          fi
           if [ -z "$FTP_USER" ] || [ -z "$FTP_PASS" ]; then
             echo 'Required GitHub secrets ftp and pass are missing.' >&2
             exit 1
@@ -166,7 +182,7 @@ jobs:
             }
             ca_setting="set ssl:ca-file $ca_file"
           fi
-          lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
           set ftp:ssl-allow true
           set ftp:ssl-force true
