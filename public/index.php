@@ -388,8 +388,18 @@ try {
             $reason=trim((string)($_POST['reason']??''));
             if (!$id || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('دلیل ابطال را در ۵ تا ۵۰۰ کاراکتر وارد کنید.');
             if (!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
-            query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
-            audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
+            db()->beginTransaction();
+            try {
+                // Lock the tenant's invoice while recording its void and audit trail.
+                $locked=query('SELECT id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                if (!$locked) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+                query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
+                audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
+                db()->commit();
+            } catch (Throwable $ex) {
+                db()->rollBack();
+                throw $ex;
+            }
             redirect('invoices','فاکتور با حفظ سوابق مالی باطل شد.');
         }
         if (in_array($page,['templates','settings','commissions','profile'],true)) handle_module_post($page,$action);
