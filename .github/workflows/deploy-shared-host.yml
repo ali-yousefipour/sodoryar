@@ -328,6 +328,7 @@ jobs:
             exit 1
           fi
           curl --fail --silent --show-error --max-time 30 "$origin/favicon.svg" -o /dev/null
+          curl --fail --silent --show-error --max-time 30 "$origin/favicon.ico" -o /dev/null
           echo 'Live login session, CSRF consistency and favicon passed.'
 
       - name: Verify private application files cannot be served publicly
