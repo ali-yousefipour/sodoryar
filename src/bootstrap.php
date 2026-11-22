@@ -141,7 +141,7 @@ function permission_catalog(): array {
         'bills.view'=>'مشاهده قبوض', 'bills.create'=>'ثبت پرداخت قبض',
         'commissions.view'=>'مشاهده پورسانت', 'pos.view'=>'مشاهده کارتخوان‌ها',
         'activity.view'=>'مشاهده لاگ فعالیت',
-        'users.manage'=>'مدیریت کاربران شرکت',
+        'users.manage'=>'مدیریت کاربران شرکت', 'roles.manage'=>'مدیریت نقش‌های شرکت',
         'invoices.print'=>'چاپ فاکتور', 'invoices.payment_edit'=>'ویرایش روش پرداخت فاکتور',
         'invoices.void'=>'ابطال فاکتور',
         'bills.soft_delete'=>'انتقال فیش به سطل زباله',
@@ -149,12 +149,31 @@ function permission_catalog(): array {
         'bills.permanent_delete'=>'حذف دائمی فیش مجاز',
     ];
 }
+/** Optional IAM schema; retain the legacy permission system until migration 010. */
+function company_roles_ready(): bool {
+    static $ready=null;
+    if ($ready===null) {
+        try { $ready=(bool)query("SHOW TABLES LIKE 'user_role_assignments'")->fetchColumn(); }
+        catch (PDOException $ex) { $ready=false; }
+    }
+    return $ready;
+}
+function effective_operator_permissions(int $userId, int $companyId): array {
+    $direct=query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$userId])->fetchAll(PDO::FETCH_COLUMN);
+    if (!company_roles_ready()) return $direct;
+    $inherited=query('SELECT rp.permission_key
+        FROM user_role_assignments a
+        JOIN company_roles r ON r.id=a.role_id AND r.company_id=a.company_id AND r.is_active=1
+        JOIN company_role_permissions rp ON rp.role_id=r.id AND rp.company_id=r.company_id
+        WHERE a.user_id=? AND a.company_id=?',[$userId,$companyId])->fetchAll(PDO::FETCH_COLUMN);
+    return array_values(array_unique(array_merge($direct,$inherited)));
+}
 function can(string $permission): bool {
     $u = require_login();
     if (!array_key_exists($permission,permission_catalog())) return false;
     if (in_array($u['role'],['superadmin','company_admin'],true)) return true;
     static $allowed = null;
-    if ($allowed === null) $allowed = query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$u['id']])->fetchAll(PDO::FETCH_COLUMN);
+    if ($allowed === null) $allowed = effective_operator_permissions((int)$u['id'],(int)$u['company_id']);
     return in_array($permission,$allowed,true);
 }
 function require_permission(string $permission): void {
