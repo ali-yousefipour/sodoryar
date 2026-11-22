@@ -60,6 +60,8 @@ jobs:
         run: php tests/financial-module-routes.php
       - name: Verify payment edits and voids serialize correctly
         run: php tests/invoice-edit-void-serialization.php
+      - name: Verify invoice history authorization before data access
+        run: php tests/invoice-history-authorization.php
       - name: Verify Excel exports do not silently drop records
         run: php tests/report-export-completeness.php
       - name: Verify real-byte Excel download progress behavior
