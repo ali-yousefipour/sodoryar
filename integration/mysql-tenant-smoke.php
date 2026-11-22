@@ -98,6 +98,21 @@ try {
     $crossTenantCustomerBlocked=true;
 }
 integration_assert($crossTenantCustomerBlocked,'Invoice foreign key did not reject another company customer.');
+// Access changes must invalidate earlier authenticated sessions in the same tenant.
+$versionBefore=(int)query('SELECT auth_version FROM users WHERE id=? AND company_id=?',[$userB,$companyB])->fetchColumn();
+db()->beginTransaction();
+try {
+    revoke_access_sessions($userB,$companyB);
+    db()->commit();
+} catch (Throwable $ex) {
+    db()->rollBack();
+    throw $ex;
+}
+$versionAfter=(int)query('SELECT auth_version FROM users WHERE id=? AND company_id=?',[$userB,$companyB])->fetchColumn();
+integration_assert($versionAfter===$versionBefore+1,'Changing permissions did not revoke an existing user session.');
+integration_assert((int)query('SELECT auth_version FROM users WHERE id=? AND company_id=?',[$userA,$companyA])->fetchColumn()===1,
+    'Access-session revocation affected an unrelated company user.');
+
 $billA=insert_fixture('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,paid_method) VALUES(?,?,?,?,?,?,?)',
     [$companyA,$userA,'other','TEST-A','TEST-PAY-A',25000,'manual']);
 $billB=insert_fixture('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,paid_method) VALUES(?,?,?,?,?,?,?)',
