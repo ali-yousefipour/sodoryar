@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         const iso=gregorianOfPersian(jy,jm,jd||1);if(iso)source=new Date(iso+'T00:00:00Z');
       }else if(hidden.value&&/^\d{4}-\d{2}-\d{2}$/.test(hidden.value))source=new Date(hidden.value+'T00:00:00Z');
       let {y,m}=persianParts(source);
-      const dialog=document.createElement('dialog');dialog.className='app-dialog jalali-dialog';
+      const dialog=document.createElement('dialog');dialog.className='app-dialog jalali-dialog';dialog.setAttribute('aria-label','انتخاب تاریخ شمسی');
       const title=document.createElement('strong');title.className='calendar-title';
       const grid=document.createElement('div');grid.className='calendar-grid';
       const prev=document.createElement('button'),next=document.createElement('button'),close=document.createElement('button');
@@ -184,12 +184,24 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
   };
   localizeText(document.body);
+  // Dialogs created in PHP may have headings but no accessible name.
+  // Give each such dialog an aria-labelledby relationship to its visible title.
+  const labelDialog=(dialog)=>{
+    if(dialog.hasAttribute('aria-label')||dialog.hasAttribute('aria-labelledby'))return;
+    const heading=dialog.querySelector('h1,h2,h3');
+    if(!heading)return;
+    if(!heading.id)heading.id='sodoryar-dialog-title-'+Math.random().toString(36).slice(2,12);
+    dialog.setAttribute('aria-labelledby',heading.id);
+  };
   document.querySelectorAll('[data-dialog-open]').forEach(button=>button.addEventListener('click',()=>{
     const dialog=document.getElementById(button.dataset.dialogOpen);
-    if(dialog instanceof HTMLDialogElement){dialog.showModal();dialog.querySelector('input:not([type=hidden])')?.focus();}
+    if(dialog instanceof HTMLDialogElement){labelDialog(dialog);dialog.showModal();dialog.querySelector('input:not([type=hidden])')?.focus();}
   }));
   document.querySelectorAll('[data-dialog-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog')?.close()));
-  document.querySelectorAll('dialog.app-dialog').forEach(dialog=>dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();}));
+  document.querySelectorAll('dialog.app-dialog').forEach(dialog=>{
+    labelDialog(dialog);
+    dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+  });
   const editUser=document.getElementById('editUserSelect');
   if(editUser){
     const userSearch=document.getElementById('editUserSearch');
