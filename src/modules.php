@@ -86,6 +86,23 @@ function module_page_permission(string $page): ?string {
     ][$page] ?? null;
 }
 
+/** Trash is activated only after the explicit migration; no implicit schema changes. */
+function bill_trash_ready(): bool {
+    static $ready = null;
+    if ($ready === null) {
+        $ready = (bool) query("SHOW COLUMNS FROM bill_payments LIKE 'deleted_at'")->fetch();
+    }
+    return $ready;
+}
+
+/** Never physically delete confirmed/card-terminal or traceable financial records. */
+function bill_can_permanently_delete(array $bill): bool {
+    return $bill['deleted_at'] !== null
+        && $bill['paid_method'] === 'manual'
+        && trim((string)($bill['ref_code'] ?? '')) === ''
+        && trim((string)($bill['response_code'] ?? '')) === '';
+}
+
 function handle_module_post(string $page, string $action): void {
     $tenant = $page==='profile' ? 0 : tenant_id();
     if ($page === 'bills' && $action === 'add') {
@@ -99,6 +116,47 @@ function handle_module_post(string $page, string $action): void {
             $tenant,user()['id'],$type,$bill,$payment,$amount,trim((string)($_POST['ref_code']??'')),null,trim((string)($_POST['national_code']??'')),trim((string)($_POST['driver_name']??'')),$method
         ]);
         audit('bill.create',$bill); redirect('bills','قبض به‌صورت دستی ثبت شد؛ تأیید بانکی انجام نشده است.');
+    }
+    if ($page === 'bills' && in_array($action, ['trash','restore','permanent_delete'], true)) {
+        if (!bill_trash_ready()) throw new RuntimeException('ابتدا مهاجرت ۰۰۹ پایگاه داده را اجرا کنید.');
+        $required = [
+            'trash'=>'bills.soft_delete',
+            'restore'=>'bills.restore',
+            'permanent_delete'=>'bills.permanent_delete'
+        ][$action];
+        require_permission($required);
+        $id = filter_var($_POST['bill_record_id'] ?? null, FILTER_VALIDATE_INT);
+        if (!$id) throw new RuntimeException('شناسه فیش نامعتبر است.');
+        db()->beginTransaction();
+        try {
+            $bill=query('SELECT id,company_id,bill_id,payment_id,amount,paid_method,ref_code,response_code,deleted_at FROM bill_payments WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+            if (!$bill) throw new RuntimeException('فیش متعلق به این شرکت پیدا نشد.');
+            if ($action === 'trash') {
+                if ($bill['deleted_at'] !== null) throw new RuntimeException('فیش قبلاً حذف موقت شده است.');
+                query('UPDATE bill_payments SET deleted_at=CURRENT_TIMESTAMP,deleted_by=? WHERE id=? AND company_id=?', [user()['id'],$id,$tenant]);
+                audit('bill.trash',json_encode(['record_id'=>$id,'bill_id'=>$bill['bill_id']],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+            } elseif ($action === 'restore') {
+                if ($bill['deleted_at'] === null) throw new RuntimeException('فیش در سطل زباله نیست.');
+                query('UPDATE bill_payments SET deleted_at=NULL,deleted_by=NULL WHERE id=? AND company_id=?',[$id,$tenant]);
+                audit('bill.restore',json_encode(['record_id'=>$id],JSON_THROW_ON_ERROR));
+            } else {
+                if (!bill_can_permanently_delete($bill)) throw new RuntimeException('حذف دائمی فقط برای فیش دستی حذف‌شده و فاقد رد تراکنش بانکی مجاز است.');
+                $confirm=ascii_digits(trim((string)($_POST['confirm_bill_id']??'')));
+                $expected=ascii_digits((string)$bill['bill_id']);
+                if (!hash_equals($expected,$confirm)) throw new RuntimeException('برای تأیید، شناسه قبض را دقیق وارد کنید.');
+                $password=(string)($_POST['current_password']??'');
+                $hash=query('SELECT password_hash FROM users WHERE id=? AND is_active=1',[user()['id']])->fetchColumn();
+                if (!$hash || !password_verify($password,(string)$hash)) throw new RuntimeException('احراز هویت مجدد ناموفق بود.');
+                // Keep the independent audit record without personal identifiers.
+                audit('bill.permanent_delete',json_encode(['record_id'=>$id,'amount'=>$bill['amount'],'reason'=>'manual_unconfirmed_record'],JSON_THROW_ON_ERROR));
+                query('DELETE FROM bill_payments WHERE id=? AND company_id=? AND deleted_at IS NOT NULL',[$id,$tenant]);
+            }
+            db()->commit();
+        } catch (Throwable $ex) {
+            db()->rollBack();
+            throw $ex;
+        }
+        redirect('bills',$action==='trash'?'فیش به سطل زباله منتقل شد.':($action==='restore'?'فیش بازیابی شد.':'فیش واجد شرایط به‌صورت دائمی حذف شد.'));
     }
     if ($page === 'pos' && $action === 'add') {
         require_admin();
