@@ -217,9 +217,17 @@ try {
             foreach($permissions as $permission) if (!is_string($permission) || !array_key_exists($permission,permission_catalog())) throw new RuntimeException('مجوز نامعتبر است.');
             db()->beginTransaction();
             try {
+                $before=query('SELECT permission_key FROM user_permissions WHERE user_id=? ORDER BY permission_key FOR UPDATE',[$id])->fetchAll(PDO::FETCH_COLUMN);
+                $after=array_values($permissions);
+                sort($after, SORT_STRING);
                 query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
-                foreach($permissions as $permission) query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$id,$permission]);
-                audit('user.permissions.update',(string)$id); db()->commit();
+                foreach($after as $permission) query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$id,$permission]);
+                audit('user.permissions.update',json_encode([
+                    'user_id'=>$id,
+                    'granted'=>array_values(array_diff($after,$before)),
+                    'revoked'=>array_values(array_diff($before,$after))
+                ],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+                db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('users','دسترسی‌های اپراتور ذخیره شد.');
         }
