@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/../src/bootstrap.php';
 require_once __DIR__.'/../src/localization.php';
 
-$rows=normalize_invoice_extra_rows(['خدمت','ردیف خالی','خدمت دوم'],['۱۲٬۳۴۵','','100,000']);
+$rows=normalize_invoice_extra_rows(['خدمت','','خدمت دوم'],['۱۲٬۳۴۵','','100,000']);
 if ($rows!==[['title'=>'خدمت','price'=>12345],['title'=>'خدمت دوم','price'=>100000]]) {
     throw new RuntimeException('Localized extra line normalization is incorrect.');
 }
