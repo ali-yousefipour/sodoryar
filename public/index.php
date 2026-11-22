@@ -436,7 +436,7 @@ try {
             }
             $tenant = tenant_id();
             $national=ascii_digits(trim((string)($_POST['driver_national_code']??'')));
-            $selected = array_unique(array_filter(array_map('intval',(array)($_POST['service_ids'] ?? [])),static fn($v)=>$v>0));
+            $selected = normalize_invoice_service_ids($_POST['service_ids'] ?? []);
             $extraTitles=(array)($_POST['extra_title']??[]);
             $extraPrices=(array)($_POST['extra_price']??[]);
             if (count($extraTitles)>10 || count($extraPrices)>10) throw new RuntimeException('حداکثر ۱۰ ردیف اضافی مجاز است.');
