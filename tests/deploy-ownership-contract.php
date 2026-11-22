@@ -37,4 +37,14 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || ''") !== 2
     || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') !== 2) {
     throw new RuntimeException('Shared-host deployment must use a scoped directory and safely passed FTP credentials in both stages.');
 }
+if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origin before upload')
+    || substr_count($workflow, "vars.SODORYAR_PUBLIC_BASE_URL || ''") !== 4
+    || substr_count($workflow, 'Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL.') !== 3
+    || str_contains($workflow, 'https://taxiranico.ir/assets/')
+    || str_contains($workflow, 'https://taxiranico.ir/sodoryar-version.json')
+    || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/sodoryar-version.json')
+    || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/invoice-redesign.css')
+    || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/$file')) {
+    throw new RuntimeException('Deployment validation must target only the separately configured Sodoryar public domain.');
+}
 echo "Release ownership, TLS and migration gate contracts passed\n";
