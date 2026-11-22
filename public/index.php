@@ -150,7 +150,7 @@ try {
                 $name=trim((string)($_POST['name']??'')); $slug=strtolower(trim((string)($_POST['slug']??'')));
                 if (mb_strlen($name)<2 || mb_strlen($name)>180 || !preg_match('/^[a-z0-9-]{3,80}$/',$slug)) throw new RuntimeException('نام یا شناسه شرکت معتبر نیست.');
                 $managerId=filter_var($_POST['manager_id']??null,FILTER_VALIDATE_INT);
-                $manager=$managerId?query('SELECT id FROM users WHERE id=? AND company_id=? AND role=?',[$managerId,$id,'company_admin'])->fetch():false;
+                $manager=$managerId?query('SELECT id,username FROM users WHERE id=? AND company_id=? AND role=?',[$managerId,$id,'company_admin'])->fetch():false;
                 if ($managerId && !$manager) throw new RuntimeException('مدیر انتخاب‌شده متعلق به این شرکت نیست.');
                 $managerName=trim((string)($_POST['manager_name']??''));
                 $managerUsername=trim((string)($_POST['manager_username']??''));
@@ -161,7 +161,8 @@ try {
                 try {
                     query('UPDATE companies SET name=?,slug=? WHERE id=?',[$name,$slug,$id]);
                     if ($manager) {
-                        $sql='UPDATE users SET full_name=?,username=?'.($managerPassword!==''?',password_hash=?':'').' WHERE id=? AND company_id=? AND role=?';
+                        $revokeManagerSessions=$managerPassword!=='' || $managerUsername!==$manager['username'];
+                        $sql='UPDATE users SET full_name=?,username=?'.($managerPassword!==''?',password_hash=?':'').($revokeManagerSessions && auth_version_ready()?',auth_version=auth_version+1':'').' WHERE id=? AND company_id=? AND role=?';
                         $params=[$managerName,$managerUsername];
                         if ($managerPassword!=='') $params[]=password_hash($managerPassword,PASSWORD_DEFAULT);
                         query($sql,array_merge($params,[$managerId,$id,'company_admin']));
