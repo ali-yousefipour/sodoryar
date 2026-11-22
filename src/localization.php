@@ -52,6 +52,26 @@ function parse_money_input(mixed $value, int $minimum=0, int $maximum=1000000000
     return $number===false?false:(int)$number;
 }
 
+/** Sum integer monetary lines safely; never silently round an overflowing invoice. */
+function sum_invoice_line_amounts(array $lines): int {
+    $total=0;
+    foreach ($lines as $line) {
+        if (!is_array($line) || !array_key_exists('price',$line) || !is_scalar($line['price'])) {
+            throw new RuntimeException('مبلغ یکی از ردیف‌های فاکتور نامعتبر است.');
+        }
+        $raw=(string)$line['price'];
+        if (!preg_match('/^(?:0|[1-9][0-9]*)$/D',$raw)) {
+            throw new RuntimeException('مبلغ یکی از ردیف‌های فاکتور نامعتبر است.');
+        }
+        $amount=filter_var($raw,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+        if ($amount===false || $amount>PHP_INT_MAX-$total) {
+            throw new RuntimeException('مجموع مبالغ فاکتور بیش از محدوده مجاز است.');
+        }
+        $total+=$amount;
+    }
+    return $total;
+}
+
 /** Display monetary values in the existing stored unit (toman). */
 function money_toman(int|string $amount): string {
     return money($amount).' تومان';
