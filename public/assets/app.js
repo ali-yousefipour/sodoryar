@@ -171,6 +171,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     let current;
     while((current=walker.nextNode())){
       if(current.parentElement?.closest('script,style,code,pre,textarea,option'))continue;
+      // Never change IDs, model names or reference codes containing Latin letters.
+      // These identifiers must remain machine-readable and searchable.
+      if(/[A-Za-z]/.test(current.nodeValue))continue;
       if(/[0-9]/.test(current.nodeValue)){
         const localized=current.nodeValue.replace(/\b(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::\d{2})?)?\b/g,(full,iso,time)=>{
           const rendered=formatPersianDate(iso);
