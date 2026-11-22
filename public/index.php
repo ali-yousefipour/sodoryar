@@ -242,6 +242,7 @@ try {
                 sort($after, SORT_STRING);
                 query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
                 foreach($after as $permission) query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$id,$permission]);
+                revoke_access_sessions((int)$id,(int)$tenant);
                 audit('user.permissions.update',json_encode([
                     'user_id'=>$id,
                     'granted'=>array_values(array_diff($after,$before)),
@@ -265,6 +266,7 @@ try {
                 }
                 $before=query('SELECT scope FROM user_document_scopes WHERE user_id=? AND company_id=?',[$id,$tenant])->fetchColumn() ?: 'company';
                 query('INSERT INTO user_document_scopes(user_id,company_id,scope) VALUES(?,?,?) ON DUPLICATE KEY UPDATE company_id=VALUES(company_id),scope=VALUES(scope)',[$id,$tenant,$scope]);
+                revoke_access_sessions((int)$id,(int)$tenant);
                 audit('user.document_scope.update',json_encode(['user_id'=>$id,'before'=>$before,'after'=>$scope],JSON_THROW_ON_ERROR));
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
@@ -289,6 +291,7 @@ try {
                 $before=query('SELECT role_id FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant])->fetchColumn();
                 if ($roleId===null) query('DELETE FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant]);
                 else query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE company_id=VALUES(company_id),role_id=VALUES(role_id)',[$id,$tenant,$roleId]);
+                revoke_access_sessions((int)$id,(int)$tenant);
                 audit('user.role.assign',json_encode(['user_id'=>$id,'before'=>$before?:null,'after'=>$roleId],JSON_THROW_ON_ERROR));
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
