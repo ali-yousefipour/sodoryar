@@ -170,7 +170,7 @@ function handle_module_post(string $page, string $action): void {
                 query('INSERT INTO app_settings(company_id,setting_key,setting_value) VALUES(?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[$tenant,$key,$value]);
             }
             if (trim((string)($_POST['company_name']??''))!=='') query('UPDATE companies SET name=? WHERE id=?',[trim((string)$_POST['company_name']),$tenant]);
-    audit('settings.update');
+            audit('settings.update');
             db()->commit();
         } catch (Throwable $ex) {
             db()->rollBack();
