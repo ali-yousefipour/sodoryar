@@ -217,13 +217,14 @@ function company_roles_ready(): bool {
 }
 function effective_operator_permissions(int $userId, int $companyId): array {
     $direct=query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$userId])->fetchAll(PDO::FETCH_COLUMN);
+    $direct=array_values(array_filter($direct,'operator_permission_assignable'));
     if (!company_roles_ready()) return $direct;
     $inherited=query('SELECT rp.permission_key
         FROM user_role_assignments a
         JOIN company_roles r ON r.id=a.role_id AND r.company_id=a.company_id AND r.is_active=1
         JOIN company_role_permissions rp ON rp.role_id=r.id AND rp.company_id=r.company_id
         WHERE a.user_id=? AND a.company_id=?',[$userId,$companyId])->fetchAll(PDO::FETCH_COLUMN);
-    return array_values(array_unique(array_merge($direct,$inherited)));
+    return array_values(array_unique(array_filter(array_merge($direct,$inherited),'operator_permission_assignable')));
 }
 function can(string $permission): bool {
     $u = require_login();
