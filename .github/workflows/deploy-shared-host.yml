@@ -72,12 +72,12 @@ jobs:
       - name: Validate isolated Sodoryar target and public origin before upload
         env:
           FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '.' }}
-          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+          SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir
         run: |
           set -euo pipefail
           # Shared host also contains Khatyar and ServiceYar. Configuration is explicit.
           if [[ -z "$SODORYAR_PUBLIC_BASE_URL" ]]; then
-            echo "::error::Set SODORYAR_PUBLIC_BASE_URL to the independently verified Sodoryar HTTPS origin."
+            echo "::error::Sodoryar public HTTPS origin must not be empty."
             exit 1
           fi
           # This FTP account is jailed directly to the Sodoryar document root.
@@ -87,7 +87,6 @@ jobs:
             exit 1
           fi
           if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]*(:443)?$ ]] ||
-             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
             echo "::error::Refusing the shared ServiceYar/Khatyar public URL."
@@ -221,16 +220,15 @@ jobs:
 
       - name: Verify deployed application commit manifest
         env:
-          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+          SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir
 
         run: |
           set -euo pipefail
           # Verify only an explicitly assigned independent HTTPS origin.
           if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
-             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
-            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
           curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
@@ -248,16 +246,15 @@ jobs:
 
       - name: Verify public invoice stylesheet matches deployed commit
         env:
-          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+          SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir
 
         run: |
           set -euo pipefail
           # Verify only an explicitly assigned independent HTTPS origin.
           if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
-             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
-            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
           expected="$(sha256sum public/assets/invoice-redesign.css | cut -d' ' -f1)"
@@ -277,16 +274,15 @@ jobs:
 
       - name: Verify global UI stylesheet and script are served from the deployed commit
         env:
-          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+          SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir
 
         run: |
           set -euo pipefail
           # Verify only an explicitly assigned independent HTTPS origin.
           if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
-             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
              [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
-            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
           for file in ux-unified.css iam-ux.css print-engine.css app.js table-experience.js report-progress.js; do
