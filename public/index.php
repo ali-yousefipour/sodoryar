@@ -15,7 +15,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','reports','receipt','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -478,7 +478,7 @@ try {
             }
             redirect('invoices','فاکتور با حفظ سوابق مالی باطل شد.');
         }
-        if (in_array($page,['templates','settings','commissions','profile','roles'],true)) handle_module_post($page,$action);
+        if (in_array($page,['templates','settings','commissions','profile','roles','bills','pos'],true)) handle_module_post($page,$action);
     }
 } catch (Throwable $ex) {
     error_log((string)$ex);
@@ -544,6 +544,8 @@ if ($tenant) {
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات'];
     if (can('invoices.view')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات'];
     if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها'];
+    if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات'];
+    if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','مدیریت شرکت'];
     if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها'];
     if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها'];
     if (user()['role']!=='operator') {
@@ -670,7 +672,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
 <?php endif; ?>
-<?php elseif(in_array($page,['commissions','templates','settings','activity','profile','roles'],true)): ?>
+<?php elseif(in_array($page,['commissions','templates','settings','activity','profile','roles','bills','pos'],true)): ?>
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
