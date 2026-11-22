@@ -6,7 +6,7 @@ declare(strict_types=1);
  * This detects invalid PHP string quoting in reporting SQL as well as other ParseError cases.
  */
 $root=dirname(__DIR__);
-$folders=['public','src','scripts','tests'];
+$folders=['public','src','scripts','tests','integration'];
 $files=0;
 foreach ($folders as $folder) {
     $dir=$root.'/'.$folder;
