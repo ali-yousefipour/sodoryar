@@ -39,6 +39,32 @@ async function main() {
       await page.close();
     }
 
+    // Synthetic finance form: test localized grouping, rejection of decimal input,
+    // busy-state idempotence and recovery on browser-history restore.
+    const financialPage = await browser.newPage({ viewport: { width: 390, height: 800 }, locale: 'fa-IR' });
+    await financialPage.setContent('<html lang="fa" dir="rtl"><body><form data-once-submit id="moneyForm">' +
+      '<label>مبلغ<input data-money-input id="moneyField" required></label>' +
+      '<button type="submit">ثبت</button></form></body></html>');
+    await financialPage.addScriptTag({ path: 'public/assets/app.js' });
+    await financialPage.evaluate(() => document.dispatchEvent(new Event('DOMContentLoaded')));
+    const moneyField = financialPage.locator('#moneyField');
+    await moneyField.fill('۱.۵');
+    assert(await moneyField.evaluate(el => el.validity.customError),
+      'fractional finance input must be flagged, not silently changed into a larger integer');
+    await moneyField.fill('۱٬۲۳۴');
+    assert.equal(await moneyField.inputValue(), '۱٬۲۳۴');
+    assert(!(await moneyField.evaluate(el => el.validity.customError)));
+    await financialPage.evaluate(() => {
+      const form = document.querySelector('#moneyForm');
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+    assert(await financialPage.locator('#moneyForm button').isDisabled(),
+      'financial submit must disable repeated writes');
+    await financialPage.evaluate(() => window.dispatchEvent(new Event('pageshow')));
+    assert(await financialPage.locator('#moneyForm button').isEnabled(),
+      'back-navigation must restore finance submit button');
+    await financialPage.close();
+
     // Deterministic local print fixture; never pull real customer/financial data.
     const css = fs.readFileSync('public/assets/print-engine.css', 'utf8');
     const paper = [
@@ -70,7 +96,7 @@ async function main() {
       }
       await page.close();
     }
-    console.log('PASS: four live responsive login viewports and A4/A5/80mm headless print PDF smoke tests.');
+    console.log('PASS: four live responsive login viewports, finance form interaction, and A4/A5/80mm print PDF smoke tests.');
   } finally {
     await browser.close();
   }
