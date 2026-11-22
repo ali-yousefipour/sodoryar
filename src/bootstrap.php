@@ -118,7 +118,19 @@ function fa_digits(string|int|float $value): string {
 function ascii_digits(string $value): string {
     return strtr($value,['۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9','٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9']);
 }
-function money(int|string $amount): string { return fa_digits(number_format((int)$amount,0,'.','٬')); }
+/** Format integer totals without floating point or PHP_INT_MAX truncation. */
+function money(int|string $amount): string {
+    $digits=trim((string)$amount);
+    if (!preg_match('/^-?[0-9]+$/D',$digits)) {
+        throw new InvalidArgumentException('Monetary display value must be an integer.');
+    }
+    $negative=str_starts_with($digits,'-');
+    if ($negative) $digits=substr($digits,1);
+    $digits=ltrim($digits,'0');
+    if ($digits==='') return fa_digits('0');
+    $groups=preg_replace('/\\B(?=(?:[0-9]{3})+(?![0-9]))/','٬',$digits);
+    return fa_digits(($negative?'-':'').$groups);
+}
 function user(): ?array { return $_SESSION['user'] ?? null; }
 function is_super(): bool { return (user()['role'] ?? '') === 'superadmin'; }
 /** Optional session version for revoking old sessions on credential/role changes. */
