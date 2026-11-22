@@ -344,27 +344,50 @@ try {
         if ($page==='users' && in_array($action,['user_status','archive_user','restore_user'],true)) {
             require_admin(); $tenant=tenant_id();
             $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
-            $target=$id?query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'').' FROM users WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
-            if (!$target) throw new RuntimeException('کاربر متعلق به این شرکت نیست.');
-            if ((int)$id===(int)user()['id'] && $action!=='restore_user') throw new RuntimeException('حساب خودتان را نمی‌توانید غیرفعال یا بایگانی کنید.');
-            $archived=archive_ready('users') && $target['archived_at']!==null;
-            if ($action==='user_status') {
-                if ($archived) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
-                $active=(int)$target['is_active']===1?0:1;
-                if (!$active && $target['role']==='company_admin' && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد.');
-                query('UPDATE users SET is_active=?'.(auth_version_ready()?',auth_version=auth_version+1':'').' WHERE id=? AND company_id=?',[$active,$id,$tenant]);
-                audit($active?'user.activate':'user.deactivate',(string)$id); redirect('users',$active?'حساب کاربر فعال شد.':'حساب کاربر غیرفعال شد.');
+            if (!$id) throw new RuntimeException('شناسه کاربر معتبر نیست.');
+            if ((int)$id===(int)user()['id'] && $action!=='restore_user') {
+                throw new RuntimeException('حساب خودتان را نمی‌توانید غیرفعال یا بایگانی کنید.');
             }
-            if (!archive_ready('users')) throw new RuntimeException('برای حذف امن کاربر، ابتدا میگرشن ۰۰۷ را اجرا کنید.');
-            if ($action==='archive_user') {
-                if ($archived) throw new RuntimeException('کاربر قبلاً بایگانی شده است.');
-                if ($target['role']==='company_admin' && (int)$target['is_active']===1 && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان حذف کرد.');
-                query('UPDATE users SET is_active=0,archived_at=CURRENT_TIMESTAMP WHERE id=? AND company_id=?',[$id,$tenant]);
-                audit('user.archive',(string)$id); redirect('users','کاربر بایگانی شد؛ سوابق فاکتورهای او محفوظ است.');
+            if ($action!=='user_status' && !archive_ready('users')) {
+                throw new RuntimeException('برای مدیریت بایگانی کاربران ابتدا Migration شماره ۰۰۷ را اجرا کنید.');
             }
-            if (!$archived) throw new RuntimeException('کاربر بایگانی نشده است.');
-            query('UPDATE users SET archived_at=NULL,is_active=0 WHERE id=? AND company_id=?',[$id,$tenant]);
-            audit('user.restore',(string)$id); redirect('users','کاربر بازیابی شد؛ برای ورود، حساب را فعال کنید.');
+            db()->beginTransaction();
+            try {
+                $adminCount=lock_active_company_admins($tenant);
+                $target=query('SELECT id,role,is_active'.(archive_ready('users')?',archived_at':'')
+                    .' FROM users WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                if (!$target) throw new RuntimeException('کاربر متعلق به این شرکت نیست.');
+                $archived=archive_ready('users') && $target['archived_at']!==null;
+                $versionSql=auth_version_ready()?',auth_version=auth_version+1':'';
+                if ($action==='user_status') {
+                    if ($archived) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
+                    $active=(int)$target['is_active']===1?0:1;
+                    if (!$active && $target['role']==='company_admin' && $adminCount<=1) {
+                        throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد.');
+                    }
+                    query('UPDATE users SET is_active=?'.$versionSql.' WHERE id=? AND company_id=?',[$active,$id,$tenant]);
+                    audit($active?'user.activate':'user.deactivate',(string)$id);
+                    $message=$active?'حساب کاربر فعال شد.':'حساب کاربر غیرفعال شد.';
+                } elseif ($action==='archive_user') {
+                    if ($archived) throw new RuntimeException('کاربر قبلاً بایگانی شده است.');
+                    if ($target['role']==='company_admin' && (int)$target['is_active']===1 && $adminCount<=1) {
+                        throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان بایگانی کرد.');
+                    }
+                    query('UPDATE users SET is_active=0,archived_at=CURRENT_TIMESTAMP'.$versionSql.' WHERE id=? AND company_id=?',[$id,$tenant]);
+                    audit('user.archive',(string)$id);
+                    $message='کاربر بایگانی شد؛ سوابق فاکتورهای او محفوظ است.';
+                } else {
+                    if (!$archived) throw new RuntimeException('کاربر بایگانی نشده است.');
+                    query('UPDATE users SET archived_at=NULL,is_active=0'.$versionSql.' WHERE id=? AND company_id=?',[$id,$tenant]);
+                    audit('user.restore',(string)$id);
+                    $message='کاربر بازیابی شد؛ برای ورود، حساب را فعال کنید.';
+                }
+                db()->commit();
+            } catch(Throwable $ex) {
+                db()->rollBack();
+                throw $ex;
+            }
+            redirect('users',$message);
         }
         if ($page === 'customers' && $action === 'add') {
             require_permission('customers.create');
