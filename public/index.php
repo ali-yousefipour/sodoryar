@@ -392,7 +392,7 @@ try {
         }
         if ($page === 'customers' && $action === 'add') {
             require_permission('customers.create');
-            $tenant = tenant_id(); $code = trim((string)($_POST['national_code'] ?? ''));
+            $tenant = tenant_id(); $code = ascii_digits(trim((string)($_POST['national_code'] ?? '')));
             $first = trim((string)($_POST['first_name'] ?? '')); $last = trim((string)($_POST['last_name'] ?? ''));
             if (!preg_match('/^[0-9]{10}$/',$code) || $first==='' || $last==='' || mb_strlen($first)>100 || mb_strlen($last)>100) throw new RuntimeException('کد ملی ده‌رقمی و نام و نام خانوادگی معتبر الزامی هستند.');
             db()->beginTransaction();
@@ -405,7 +405,7 @@ try {
         }
         if ($page==='customers' && $action==='link_global') {
             require_permission('customers.create');
-            $national=trim((string)($_POST['national_code']??''));
+            $national=ascii_digits(trim((string)($_POST['national_code']??'')));
             attach_global_driver(tenant_id(),$national);
             audit('customer.link_global',$national); redirect('customers','تاکسیران به پرونده این شرکت اضافه شد.');
         }
@@ -435,7 +435,7 @@ try {
                 throw new RuntimeException('این درخواست صدور قبلاً ثبت شده یا فرم منقضی شده است؛ صفحه را تازه‌سازی کنید.');
             }
             $tenant = tenant_id();
-            $national=trim((string)($_POST['driver_national_code']??''));
+            $national=ascii_digits(trim((string)($_POST['driver_national_code']??'')));
             $selected = array_unique(array_filter(array_map('intval',(array)($_POST['service_ids'] ?? [])),static fn($v)=>$v>0));
             $extraTitles=(array)($_POST['extra_title']??[]);
             $extraPrices=(array)($_POST['extra_price']??[]);
