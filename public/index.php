@@ -217,6 +217,10 @@ try {
             foreach($permissions as $permission) if (!is_string($permission) || !array_key_exists($permission,permission_catalog())) throw new RuntimeException('مجوز نامعتبر است.');
             db()->beginTransaction();
             try {
+                // Serialize permission edits even when the user has no permission rows yet.
+                if (!query('SELECT id FROM users WHERE id=? AND company_id=? AND is_active=1 FOR UPDATE',[$id,$tenant])->fetch()) {
+                    throw new RuntimeException('کاربر مجاز برای تغییر دسترسی پیدا نشد.');
+                }
                 $before=query('SELECT permission_key FROM user_permissions WHERE user_id=? ORDER BY permission_key FOR UPDATE',[$id])->fetchAll(PDO::FETCH_COLUMN);
                 $after=array_values($permissions);
                 sort($after, SORT_STRING);
