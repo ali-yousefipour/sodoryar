@@ -22,3 +22,5 @@ jobs:
         run: php tests/driver-lookup-validation.php
       - name: Verify numeric login CAPTCHA
         run: php tests/login-captcha.php
+      - name: Verify independent Excel export permissions
+        run: php tests/report-export-permissions.php
