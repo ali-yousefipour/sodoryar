@@ -289,6 +289,45 @@ function handle_module_post(string $page, string $action): void {
         } catch(Throwable $ex) { if ($logo) @unlink(dirname(__DIR__).'/uploads/template-logos/'.$logo); throw $ex; }
         audit('template.create',$title); redirect('templates','قالب چاپ ثبت شد.');
     }
+    if ($page === 'templates' && $action === 'edit') {
+        require_admin();
+        $id=filter_var($_POST['template_id']??null,FILTER_VALIDATE_INT);
+        $title=trim((string)($_POST['title']??''));
+        $paper=(string)($_POST['paper_type']??'');
+        $font=(string)($_POST['font_family']??'Vazirmatn');
+        $rollWidth=filter_var($_POST['roll_width_mm']??72,FILTER_VALIDATE_INT);
+        $header=trim((string)($_POST['header_text']??''));
+        $footer=trim((string)($_POST['footer_text']??''));
+        if (!$id || $title==='' || mb_strlen($title)>160
+            || !in_array($paper,['thermal80','a5','a4'],true)
+            || !in_array($font,['Tahoma','Vazirmatn'],true)
+            || $rollWidth===false || $rollWidth<56 || $rollWidth>76
+            || mb_strlen($header)>1000 || mb_strlen($footer)>1000) {
+            throw new RuntimeException('مشخصات قالب چاپ نامعتبر است.');
+        }
+        if ($paper==='a4') {
+            $column=query("SHOW COLUMNS FROM print_templates LIKE 'paper_type'")->fetch();
+            if (!$column || !str_contains((string)$column['Type'],"'a4'")) {
+                throw new RuntimeException('برای استفاده از چاپ A4 ابتدا Migration شماره ۰۱۲ را اجرا کنید.');
+            }
+        }
+        db()->beginTransaction();
+        try {
+            $old=query('SELECT id,title,paper_type,header_text,footer_text,layout_json FROM print_templates WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+            if (!$old) throw new RuntimeException('قالب متعلق به این شرکت پیدا نشد.');
+            $layout=json_decode((string)$old['layout_json'],true);
+            if (!is_array($layout)) $layout=[];
+            // Preserve the original visual block order and logo when editing basic properties.
+            $layout['font']=$font;
+            $layout['roll_width_mm']=$rollWidth;
+            query('UPDATE print_templates SET title=?,paper_type=?,header_text=?,footer_text=?,layout_json=? WHERE id=? AND company_id=?',[
+                $title,$paper,$header,$footer,json_encode($layout,JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE),$id,$tenant
+            ]);
+            audit('template.edit',json_encode(['template_id'=>$id,'before'=>['title'=>$old['title'],'paper'=>$old['paper_type']],'after'=>['title'=>$title,'paper'=>$paper]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+            db()->commit();
+        } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        redirect('templates','قالب چاپ به‌روزرسانی شد.');
+    }
     if ($page === 'templates' && $action === 'default') {
         require_admin(); $id=filter_var($_POST['template_id']??null,FILTER_VALIDATE_INT);
         if (!$id || !query('SELECT id FROM print_templates WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('قالب انتخاب‌شده معتبر نیست.');
