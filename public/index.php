@@ -440,14 +440,17 @@ try {
             $payment=(string)($_POST['payment_type']??'');
             $ref=trim((string)($_POST['pos_ref']??''));
             if (!$id || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && ($ref==='' || mb_strlen($ref)>120))) throw new RuntimeException('اطلاعات پرداخت نامعتبر است.');
-            $invoice=query('SELECT id,payment_type,pos_ref,user_id FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch();
-            if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
-            require_document_owner((int)$invoice['user_id']);
-            if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
             db()->beginTransaction();
             try {
+                // Payment edits and invoice voids serialize on the same invoice row.
+                $invoice=query('SELECT id,payment_type,pos_ref,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+                require_document_owner((int)$invoice['user_id']);
+                if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
+                    throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
+                }
                 query('UPDATE invoices SET payment_type=?,pos_ref=? WHERE id=? AND company_id=?',[$payment,$payment==='pos'?$ref:null,$id,$tenant]);
-                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_UNESCAPED_UNICODE));
+                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('invoices','شیوه پرداخت فاکتور به‌روزرسانی شد.');
