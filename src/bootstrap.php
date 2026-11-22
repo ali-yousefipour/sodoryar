@@ -81,6 +81,15 @@ function login_captcha_verify(string $submitted): bool {
         && time()-(int)$challenge['issued_at']<=300 && time()>=(int)$challenge['issued_at']
         && preg_match('/^[0-9]{1,2}$/D',$value)===1 && hash_equals((string)$challenge['answer'],$value);
 }
+/** Keep database/driver errors out of the HTML response. */
+function public_operation_error(Throwable $ex): string {
+    if ($ex instanceof PDOException) {
+        return 'عملیات به دلیل خطای داخلی انجام نشد. لطفاً بعداً دوباره تلاش کنید.';
+    }
+    if ($ex instanceof RuntimeException) return $ex->getMessage();
+    return 'عملیات به دلیل خطای داخلی انجام نشد. لطفاً بعداً دوباره تلاش کنید.';
+}
+
 function e(mixed $value): string { return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function fa_digits(string|int|float $value): string {
     return strtr((string)$value,['0'=>'۰','1'=>'۱','2'=>'۲','3'=>'۳','4'=>'۴','5'=>'۵','6'=>'۶','7'=>'۷','8'=>'۸','9'=>'۹']);
