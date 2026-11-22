@@ -46,6 +46,8 @@ jobs:
         run: php tests/admin-roster-serialization.php
       - name: Verify password and access changes revoke earlier sessions
         run: php tests/auth-session-revocation.php
+      - name: Verify auth session version belongs to users on clean install
+        run: php tests/session-version-schema.php
       - name: Verify superadmin credential changes revoke manager sessions
         run: php tests/admin-manager-session-revocation.php
       - name: Verify tenant query index migration contracts
