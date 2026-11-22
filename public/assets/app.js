@@ -634,6 +634,17 @@ document.addEventListener('DOMContentLoaded',()=>{
     const submit=invoiceForm.querySelector('button[type="submit"]');
     if(submit){submit.disabled=true;submit.setAttribute('aria-busy','true');submit.textContent='در حال ثبت فاکتور…';}
   });
+  document.querySelectorAll('[data-bill-payment-method]').forEach(method=>{
+    const form=method.closest('form');
+    const reference=form?.querySelector('[data-bill-payment-ref]');
+    if(!reference)return;
+    const update=()=>{
+      reference.required=method.value==='pos';
+      reference.setAttribute('aria-required',String(reference.required));
+    };
+    method.addEventListener('change',update);
+    update();
+  });
   document.querySelectorAll('form[data-once-submit]').forEach(form=>{
     form.addEventListener('submit',event=>{
       if(event.defaultPrevented)return;
