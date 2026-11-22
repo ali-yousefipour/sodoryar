@@ -61,8 +61,13 @@ def fixture() -> str:
           <div id="extraInvoiceItems"></div>
           <button type="button" data-add-invoice-item>افزودن آیتم دیگر</button>
         </fieldset>
+        <span class="jalali-field"><input type="hidden" name="invoice_date" value="2026-11-22" data-jalali-iso>
+          <button type="button" data-jalali-open>انتخاب تاریخ</button></span>
         <button class="invoice-submit" type="submit">ثبت فاکتور</button>
       </form>
+      <button type="button" data-dialog-open="smokeDialog">نمایش مودال</button>
+      <dialog class="app-dialog" id="smokeDialog"><h2>تست مودال</h2>
+        <button type="button" data-dialog-close>بستن</button></dialog>
       <div class="receipt card receipt-thermal receipt-roll-72">
         <div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ</button></div>
         <h1>فاکتور نمونه صدوریار</h1>
@@ -113,6 +118,17 @@ def main() -> None:
         )
         assert len(columns.split()) == 3, f"Desktop financial row is not three-column: {columns}"
 
+        page.locator('[data-dialog-open="smokeDialog"]').click()
+        assert page.locator("#smokeDialog").evaluate("(element) => element.open"), "Modal failed to open"
+        page.locator("#smokeDialog [data-dialog-close]").click()
+        assert not page.locator("#smokeDialog").evaluate("(element) => element.open"), "Modal failed to close"
+        page.locator("[data-jalali-open]").click()
+        assert page.locator(".jalali-dialog").evaluate("(element) => element.open"), "Jalali calendar did not open"
+        page.locator(".jalali-dialog .calendar-day").first.click()
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", page.locator('[name="invoice_date"]').input_value()), (
+            "Calendar did not update ISO form value"
+        )
+
         page.emulate_media(media="print")
         toolbar = page.locator(".receipt-toolbar").evaluate(
             "(element) => getComputedStyle(element).display"
@@ -131,10 +147,14 @@ def main() -> None:
             pdf = page.pdf(print_background=True, prefer_css_page_size=True)
             width = media_width(pdf)
             assert lower <= width <= upper, f"{paper_class} printed at unexpected width {width:.1f}pt"
-            print(f"Chrome {paper_class}: PDF page width {width:.1f}pt")
+            pages = len(re.findall(rb"/Type\s*/Page\b", pdf))
+            assert pages >= 1, f"{paper_class} produced no printable pages"
+            if paper_class == "receipt-thermal":
+                assert pages >= 2, "Long thermal receipt did not paginate"
+            print(f"Chrome {paper_class}: PDF page width {width:.1f}pt; {pages} page(s)")
         assert not errors, "Browser JavaScript errors: " + "; ".join(errors)
         browser.close()
-    print("PASS: real Chromium invoice totals, responsive financial forms and A4/A5/80mm print widths")
+    print("PASS: real Chromium invoice totals, responsive forms, modal, Jalali calendar, print widths and pagination")
 
 
 if __name__ == "__main__":
