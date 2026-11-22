@@ -6,7 +6,12 @@ function database_table_exists(string $table): bool {
     if (!in_array($table,['user_profiles','invoice_voids'],true)) return false;
     if (!array_key_exists($table,$cache)) {
         try { query('SELECT 1 FROM '.$table.' LIMIT 0'); $cache[$table]=true; }
-        catch (PDOException $ex) { $cache[$table]=false; }
+        catch (PDOException $ex) {
+            // A temporarily unavailable database must never make voided invoices
+            // appear valid by silently disabling the accounting exclusion.
+            if ((string)$ex->getCode()==='42S02') $cache[$table]=false;
+            else throw $ex;
+        }
     }
     return $cache[$table];
 }
