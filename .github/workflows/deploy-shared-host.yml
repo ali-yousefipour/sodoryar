@@ -212,11 +212,22 @@ jobs:
           EOF
 
       - name: Verify deployed application commit manifest
+        env:
+          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+
         run: |
           set -euo pipefail
+          # Verify only an explicitly assigned independent HTTPS origin.
+          if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
+            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            exit 1
+          fi
           curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
             -H 'Cache-Control: no-cache' \
-            "https://taxiranico.ir/sodoryar-version.json?deploy=${GITHUB_SHA}" \
+            "${SODORYAR_PUBLIC_BASE_URL}/sodoryar-version.json?deploy=${GITHUB_SHA}" \
             -o /tmp/sodoryar-deployed-version.json
           php -r '
             $info=json_decode((string)file_get_contents("/tmp/sodoryar-deployed-version.json"),true);
@@ -228,13 +239,24 @@ jobs:
           '
 
       - name: Verify public invoice stylesheet matches deployed commit
+        env:
+          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+
         run: |
           set -euo pipefail
+          # Verify only an explicitly assigned independent HTTPS origin.
+          if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
+            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            exit 1
+          fi
           expected="$(sha256sum public/assets/invoice-redesign.css | cut -d' ' -f1)"
           # A unique URL and no-cache headers bypass stale browser/CDN copies.
           curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
             -H 'Cache-Control: no-cache' \
-            "https://taxiranico.ir/assets/invoice-redesign.css?deploy=${GITHUB_SHA}" \
+            "${SODORYAR_PUBLIC_BASE_URL}/assets/invoice-redesign.css?deploy=${GITHUB_SHA}" \
             -o /tmp/sodoryar-invoice-live.css
           actual="$(sha256sum /tmp/sodoryar-invoice-live.css | cut -d' ' -f1)"
           if [ "$expected" != "$actual" ]; then
@@ -246,14 +268,25 @@ jobs:
           echo "Hosted CSS matches this exact commit ($expected)."
 
       - name: Verify global UI stylesheet and script are served from the deployed commit
+        env:
+          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+
         run: |
           set -euo pipefail
+          # Verify only an explicitly assigned independent HTTPS origin.
+          if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(:443)?$ ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
+            echo "::error::Specify an independent HTTPS Sodoryar domain in SODORYAR_PUBLIC_BASE_URL."
+            exit 1
+          fi
           for file in ux-unified.css iam-ux.css print-engine.css app.js table-experience.js report-progress.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
               -H 'Cache-Control: no-cache' \
-              "https://taxiranico.ir/assets/$file?deploy=${GITHUB_SHA}" \
+              "${SODORYAR_PUBLIC_BASE_URL}/assets/$file?deploy=${GITHUB_SHA}" \
               -o "/tmp/sodoryar-live-$file"
             actual="$(sha256sum "/tmp/sodoryar-live-$file" | cut -d' ' -f1)"
             if [ "$expected" != "$actual" ]; then
