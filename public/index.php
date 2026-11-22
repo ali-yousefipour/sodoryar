@@ -241,6 +241,25 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('users','دسترسی‌های اپراتور ذخیره شد.');
         }
+        if ($page === 'users' && $action === 'document_scope') {
+            require_admin();
+            if (!document_scopes_ready()) throw new RuntimeException('ابتدا مهاجرت دیتابیس ۰۱۱ را اجرا کنید.');
+            $tenant=tenant_id();
+            $id=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
+            $scope=(string)($_POST['document_scope']??'');
+            if (!$id || !in_array($scope,['own','company'],true)) throw new RuntimeException('محدوده دسترسی معتبر نیست.');
+            db()->beginTransaction();
+            try {
+                if (!query('SELECT id FROM users WHERE id=? AND company_id=? AND role=? FOR UPDATE',[$id,$tenant,'operator'])->fetch()) {
+                    throw new RuntimeException('محدوده اسناد فقط برای اپراتور همین شرکت قابل تنظیم است.');
+                }
+                $before=query('SELECT scope FROM user_document_scopes WHERE user_id=? AND company_id=?',[$id,$tenant])->fetchColumn() ?: 'company';
+                query('INSERT INTO user_document_scopes(user_id,company_id,scope) VALUES(?,?,?) ON DUPLICATE KEY UPDATE company_id=VALUES(company_id),scope=VALUES(scope)',[$id,$tenant,$scope]);
+                audit('user.document_scope.update',json_encode(['user_id'=>$id,'before'=>$before,'after'=>$scope],JSON_THROW_ON_ERROR));
+                db()->commit();
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('users','محدوده دسترسی اسناد مالی ذخیره شد.');
+        }
         if ($page === 'users' && $action === 'assign_role') {
             require_admin();
             require_permission('roles.manage');
