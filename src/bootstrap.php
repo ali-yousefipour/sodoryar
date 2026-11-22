@@ -151,6 +151,30 @@ function permission_catalog(): array {
 }
 /** Optional IAM schema; retain the legacy permission system until migration 010. */
 /** Consistent, localized permission groups used by company IAM screens. */
+/** Financial document scope. No new restrictions until migration 011 is installed. */
+function document_scope(): string {
+    $u=require_login();
+    if ($u['role']!=='operator') return 'company';
+    static $scope=null;
+    if ($scope!==null) return $scope;
+    try {
+        $ready=(bool)query("SHOW TABLES LIKE 'user_document_scopes'")->fetchColumn();
+        if (!$ready) return $scope='company';
+        $value=query('SELECT s.scope FROM user_document_scopes s JOIN users u ON u.id=s.user_id AND u.company_id=s.company_id WHERE s.user_id=? AND s.company_id=?',[$u['id'],$u['company_id']])->fetchColumn();
+        return $scope=$value==='own'?'own':'company';
+    } catch(PDOException $ex) {
+        error_log('Sodoryar document scope read error: '.$ex->getCode());
+        // When the migrated scope table exists but reading fails, fail closed.
+        http_response_code(503);
+        throw new RuntimeException('امکان بررسی محدوده دسترسی اسناد وجود ندارد.');
+    }
+}
+function require_document_owner(int $ownerId): void {
+    if (document_scope()==='own' && $ownerId!==(int)user()['id']) {
+        http_response_code(403);
+        throw new RuntimeException('این سند خارج از محدوده دسترسی شماست.');
+    }
+}
 function permission_groups(): array {
     $names=[
         'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
