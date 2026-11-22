@@ -62,6 +62,8 @@ jobs:
         run: php tests/company-admin-prefetch.php
       - name: Verify user permissions are loaded in a tenant batch
         run: php tests/operator-permissions-prefetch.php
+      - name: Verify company role editor loads permission grants in one tenant-scoped query
+        run: php tests/role-editor-batch.php
       - name: Verify SQL driver errors never leak to users
         run: php tests/error-disclosure-policy.php
       - name: Verify deployment marker, TLS and database integration gates
