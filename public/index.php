@@ -618,6 +618,7 @@ $navGroup=null;
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
 $selectedTemplate=query('SELECT id,title,paper_type,header_text,footer_text,logo_path,layout_json FROM print_templates WHERE company_id=? ORDER BY is_default DESC,id DESC LIMIT 1',[$tenant])->fetch();
 $templateStyle=$selectedTemplate?json_decode((string)$selectedTemplate['layout_json'],true):[];
+$companyPrintDetails=query("SELECT setting_key,setting_value FROM app_settings WHERE company_id=? AND setting_key IN ('company_phone','company_address')",[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
 $rollWidth=(int)($templateStyle['roll_width_mm']??72);
 $rollWidth=max(56,min(76,$rollWidth));
 ?>
@@ -632,12 +633,12 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ فاکتور</button></div>
 <?php if($voidRecord): ?><div class="alert error"><strong>فاکتور باطل شده است؛ برای ارائه به مشتری معتبر نیست.</strong><p>دلیل: <?=e($voidRecord['reason'])?></p></div><?php endif; ?>
 <?php foreach($receiptSections as $section): ?>
-<?php if($section==='header'): ?><?php if($selectedTemplate && $selectedTemplate['logo_path']): ?><img class="receipt-logo" src="?page=template_logo&amp;id=<?=e($selectedTemplate['id'])?>" alt="لوگوی شرکت"><?php endif; ?><h1><?=e($selectedTemplate['header_text']??'فاکتور خدمات')?></h1><p><?=e($companyName)?></p>
+<?php if($section==='header'): ?><?php if($selectedTemplate && $selectedTemplate['logo_path']): ?><img class="receipt-logo" src="?page=template_logo&amp;id=<?=e($selectedTemplate['id'])?>" alt="لوگوی شرکت"><?php endif; ?><h1><?=e($selectedTemplate['header_text']??'فاکتور خدمات')?></h1><p><?=e($companyName)?></p><?php if(!empty($companyPrintDetails['company_phone'])): ?><p class="receipt-contact">تلفن: <?=e(fa_digits($companyPrintDetails['company_phone']))?></p><?php endif; ?><?php if(!empty($companyPrintDetails['company_address'])): ?><p class="receipt-contact">نشانی: <?=e($companyPrintDetails['company_address'])?></p><?php endif; ?>
 <?php elseif($section==='invoice_number'): ?><p>شماره فاکتور: <?=e(fa_digits($invoice['invoice_number']))?></p>
 <?php elseif($section==='date'): ?><p>تاریخ فاکتور: <?=e(jalali_datetime(($invoice['invoice_date']??null) ?: $invoice['created_at'],true))?></p>
 <?php elseif($section==='customer'): ?><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e(fa_digits($invoice['national_code']))?></p>
 <?php elseif($section==='items'): ?><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money_toman($i['price'])?></td></tr><?php endforeach; ?></tbody></table>
-<?php elseif($section==='total'): ?><h2>جمع کل: <?=money_toman($invoice['total_amount'])?></h2>
+<?php elseif($section==='total'): ?><h2>جمع کل: <?=money_toman($invoice['total_amount'])?></h2><p class="receipt-amount-words">مبلغ به حروف: <?=e(toman_in_words($invoice['total_amount']))?></p>
 <?php elseif($section==='payment'): ?><p>روش پرداخت: <?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?> <?=e(fa_digits($invoice['pos_ref']??''))?></p>
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
