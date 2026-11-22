@@ -34,3 +34,5 @@ jobs:
         run: php tests/invoice-amount-words.php
       - name: Verify company-vs-own document-scope security contracts
         run: php tests/security-document-scopes.php
+      - name: Verify bill and POS modules are reachable and permission-gated
+        run: php tests/financial-module-routes.php
