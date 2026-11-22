@@ -45,9 +45,14 @@ function jalali_to_gregorian_date(string $jalali): string {
 /** Parse localized integer money inputs without changing the stored numeric unit. */
 function parse_money_input(mixed $value, int $minimum=0, int $maximum=100000000000): int|false {
     if (!is_scalar($value)) return false;
-    $digits=ascii_digits(trim((string)$value));
-    $digits=str_replace([',','٬','،',' '], '', $digits);
-    if ($digits==='' || !ctype_digit($digits) || strlen($digits)>15) return false;
+    $raw=ascii_digits(trim((string)$value));
+    // Never turn malformed grouping or decimal input (for example "1,5")
+    // into a different amount ("15"). Allow only integer digits or complete
+    // 3-digit thousands groups with localized separators.
+    if (!preg_match('/^[0-9]+$/D',$raw)
+        && !preg_match('/^[0-9]{1,3}(?:[,٬، ][0-9]{3})+$/uD',$raw)) return false;
+    $digits=str_replace([',','٬','،',' '], '', $raw);
+    if ($digits==='' || strlen($digits)>15) return false;
     $number=filter_var($digits,FILTER_VALIDATE_INT,['options'=>['min_range'=>$minimum,'max_range'=>$maximum]]);
     return $number===false?false:(int)$number;
 }
