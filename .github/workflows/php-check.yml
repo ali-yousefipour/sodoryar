@@ -58,6 +58,8 @@ jobs:
         run: php tests/admin-manager-session-revocation.php
       - name: Verify tenant query index migration contracts
         run: php tests/tenant-query-indexes.php
+      - name: Verify SQL driver errors never leak to users
+        run: php tests/error-disclosure-policy.php
       - name: Verify financial deletion and tenant access contracts
         run: |
           php tests/bill-deletion-policy.php
