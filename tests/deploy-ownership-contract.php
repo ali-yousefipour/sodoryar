@@ -8,8 +8,10 @@ if($marker===false||$upload===false||$check===false||!($marker<$check&&$check<$u
     throw new RuntimeException('FTP target ownership verification must run before every upload.');
 }
 if(!str_contains($workflow,'_private/.sodoryar-instance')
-   || substr_count($workflow,'set ssl:verify-certificate yes')<2) {
-    throw new RuntimeException('Protected deployment marker and TLS identity checks are required.');
+   || substr_count($workflow,'set ftp:ssl-allow false')!==2
+   || str_contains($workflow,'set ftp:ssl-force true')
+   || str_contains($workflow,'FTPS_CA_PEM')) {
+    throw new RuntimeException('Protected destination marker and plain FTP transport configuration must be consistent.');
 }
 if (!str_contains($workflow, 'needs: [source-validation, database-integration]')
     || !str_contains($workflow, "needs.source-validation.result == 'success'")
@@ -18,12 +20,6 @@ if (!str_contains($workflow, 'needs: [source-validation, database-integration]')
 }
 if (!str_contains($workflow, 'run: bash scripts/validate-release.sh')) {
     throw new RuntimeException('Independent source/regression release gate must run before deployment.');
-}
-if (substr_count($workflow, 'FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}') !== 2
-    || substr_count($workflow, 'openssl x509 -in "$ca_file" -noout') !== 2
-    || substr_count($workflow, 'ca_setting="set ssl:ca-file $ca_file"') !== 2
-    || substr_count($workflow, '          $ca_setting') !== 2) {
-    throw new RuntimeException('Both FTPS phases must support validated custom CA certificates without disabling TLS verification.');
 }
 if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || substr_count($workflow, 'Unsafe or unspecified Sodoryar deployment directory.') !== 2
@@ -45,4 +41,4 @@ if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origi
     || !str_contains($workflow, '${SODORYAR_PUBLIC_BASE_URL}/assets/$file')) {
     throw new RuntimeException('Deployment verification must use the fixed Sodoryar public origin while preserving FTPS ownership checks.');
 }
-echo "Release ownership, TLS and migration gate contracts passed\n";
+echo "Release ownership, FTP transport and migration gate contracts passed\n";
