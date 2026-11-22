@@ -137,6 +137,7 @@ function permission_catalog(): array {
         'customers.view'=>'مشاهده تاکسیرانان', 'customers.create'=>'ثبت تاکسیران',
         'services.view'=>'مشاهده خدمات', 'invoices.view'=>'مشاهده فاکتورها',
         'invoices.create'=>'صدور فاکتور', 'reports.view'=>'گزارش‌های مالی',
+        'reports.export'=>'دریافت اکسل گزارش‌های مالی', 'activity.export'=>'دریافت اکسل فعالیت کاربران',
         'bills.view'=>'مشاهده قبوض', 'bills.create'=>'ثبت پرداخت قبض',
         'commissions.view'=>'مشاهده پورسانت', 'pos.view'=>'مشاهده کارتخوان‌ها',
         'activity.view'=>'مشاهده لاگ فعالیت',
