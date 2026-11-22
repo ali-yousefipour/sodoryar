@@ -141,6 +141,14 @@ function auth_version_ready(): bool {
     }
     return $ready;
 }
+/** Revoke stale access-bearing sessions after role, scope or permission changes.
+ * Must be called inside the same transaction as the access change.
+ */
+function revoke_access_sessions(int $userId,int $companyId): void {
+    if (!auth_version_ready()) return;
+    query('UPDATE users SET auth_version=auth_version+1 WHERE id=? AND company_id=?',[$userId,$companyId]);
+}
+
 function require_login(): array {
     $u = user(); if (!$u) { header('Location: ?page=login'); exit; }
     if (time()-(int)($_SESSION['last_activity']??time())>1800) {
