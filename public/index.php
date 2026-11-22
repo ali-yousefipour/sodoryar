@@ -91,6 +91,8 @@ try {
             if ($captchaValid && $u && (int) $u['is_active'] === 1 && ($u['role'] === 'superadmin' || (int) $u['company_active'] === 1) && password_verify($password, $u['password_hash'])) {
                 login_succeeded($attemptKey);
                 session_regenerate_id(true);
+                rotate_csrf_token();
+                unset($_SESSION['login_captcha'], $_SESSION['invoice_create_nonce']);
                 $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
                 if (auth_version_ready()) $_SESSION['auth_version']=(int)$u['auth_version'];
                 $_SESSION['last_activity']=time(); $_SESSION['regenerated_at']=time();
@@ -107,10 +109,10 @@ try {
         if ($action === 'select_company' && is_super()) {
             $id = filter_var($_POST['company_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$id || !query('SELECT id FROM companies WHERE id=? AND is_active=1',[$id])->fetch()) throw new RuntimeException('شرکت معتبر نیست.');
-            $_SESSION['selected_company'] = (int)$id; redirect('dashboard');
+            $_SESSION['selected_company'] = (int)$id; rotate_csrf_token(); redirect('dashboard');
         }
         if ($action === 'leave_company' && is_super()) {
-            unset($_SESSION['selected_company']); redirect('dashboard','به داشبورد مدیریت کل بازگشتید.');
+            unset($_SESSION['selected_company']); rotate_csrf_token(); redirect('dashboard','به داشبورد مدیریت کل بازگشتید.');
         }
         if ($page === 'companies' && is_super() && $action === 'add') {
             $name = trim((string)($_POST['name'] ?? ''));
