@@ -105,6 +105,55 @@ function bill_can_permanently_delete(array $bill): bool {
 
 function handle_module_post(string $page, string $action): void {
     $tenant = $page==='profile' ? 0 : tenant_id();
+    if ($page === 'roles' && in_array($action,['create','update','copy','toggle','remove'],true)) {
+        require_admin();
+        require_permission('roles.manage');
+        if (!company_roles_ready()) throw new RuntimeException('ابتدا مهاجرت ۰۱۰ مدیریت نقش‌ها را اجرا کنید.');
+        $id=filter_var($_POST['role_id']??null,FILTER_VALIDATE_INT);
+        $existing=$id?query('SELECT id,name,is_active FROM company_roles WHERE id=? AND company_id=?',[$id,$tenant])->fetch():false;
+        if ($action!=='create' && !$existing) throw new RuntimeException('نقش متعلق به این شرکت نیست.');
+        $permissions=array_unique((array)($_POST['permissions']??[]));
+        foreach($permissions as $permission) {
+            if (!is_string($permission) || !array_key_exists($permission,permission_catalog()) || in_array($permission,['roles.manage','users.manage'],true)) {
+                throw new RuntimeException('مجوز انتخاب‌شده قابل واگذاری به نقش اپراتور نیست.');
+            }
+        }
+        $name=trim((string)($_POST['name']??''));
+        $description=trim((string)($_POST['description']??''));
+        if (in_array($action,['create','update','copy'],true) && ($name==='' || mb_strlen($name)>120 || mb_strlen($description)>500)) {
+            throw new RuntimeException('نام یا توضیحات نقش نامعتبر است.');
+        }
+        db()->beginTransaction();
+        try {
+            if ($action==='create' || $action==='copy') {
+                query('INSERT INTO company_roles(company_id,name,description) VALUES(?,?,?)',[$tenant,$name,$description]);
+                $newId=(int)db()->lastInsertId();
+                if ($action==='copy') {
+                    $copied=query('SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant])->fetchAll(PDO::FETCH_COLUMN);
+                    $permissions=array_values(array_filter($copied,static fn($key)=>array_key_exists($key,permission_catalog()) && !in_array($key,['roles.manage','users.manage'],true)));
+                }
+                foreach($permissions as $permission) query('INSERT INTO company_role_permissions(role_id,company_id,permission_key) VALUES(?,?,?)',[$newId,$tenant,$permission]);
+                audit('role.create',json_encode(['role_id'=>$newId,'source_id'=>$action==='copy'?$id:null,'permissions'=>$permissions],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+            } elseif ($action==='update') {
+                query('UPDATE company_roles SET name=?,description=? WHERE id=? AND company_id=?',[$name,$description,$id,$tenant]);
+                $previous=query('SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant])->fetchAll(PDO::FETCH_COLUMN);
+                query('DELETE FROM company_role_permissions WHERE role_id=? AND company_id=?',[$id,$tenant]);
+                foreach($permissions as $permission) query('INSERT INTO company_role_permissions(role_id,company_id,permission_key) VALUES(?,?,?)',[$id,$tenant,$permission]);
+                audit('role.update',json_encode(['role_id'=>$id,'granted'=>array_values(array_diff($permissions,$previous)),'revoked'=>array_values(array_diff($previous,$permissions))],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+            } elseif ($action==='toggle') {
+                $active=(int)$existing['is_active']===1?0:1;
+                query('UPDATE company_roles SET is_active=? WHERE id=? AND company_id=?',[$active,$id,$tenant]);
+                audit('role.status',json_encode(['role_id'=>$id,'active'=>$active],JSON_THROW_ON_ERROR));
+            } else {
+                $count=(int)query('SELECT COUNT(*) FROM user_role_assignments WHERE role_id=? AND company_id=?',[$id,$tenant])->fetchColumn();
+                if ($count>0) throw new RuntimeException('این نقش به کاربر اختصاص داده شده و قابل حذف نیست.');
+                query('DELETE FROM company_roles WHERE id=? AND company_id=?',[$id,$tenant]);
+                audit('role.remove',json_encode(['role_id'=>$id],JSON_THROW_ON_ERROR));
+            }
+            db()->commit();
+        } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        redirect('roles','تغییرات نقش ذخیره شد.');
+    }
     if ($page === 'bills' && $action === 'add') {
         require_permission('bills.create');
         $type=(string)($_POST['bill_type']??'');
