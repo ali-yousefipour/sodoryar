@@ -32,6 +32,8 @@ jobs:
         run: php tests/locale-formatting.php
       - name: Verify required driver mobile normalization
         run: php tests/invoice-driver-mobile.php
+      - name: Verify Persian national-ID inputs for invoices and central drivers
+        run: php tests/driver-national-input-digits.php
       - name: Verify safe national-code prefix rules
         run: php tests/driver-lookup-validation.php
       - name: Verify numeric login CAPTCHA
