@@ -113,7 +113,6 @@ jobs:
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
           FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '.' }}
-          FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
           # Dedicated account is jailed at Sodoryar root. Refuse non-root paths.
@@ -130,26 +129,10 @@ jobs:
             timeout 90s sudo apt-get install -y -qq lftp
           fi
           # Existing protected marker must be placed by an authorized host admin.
-          # A shared FTP account can otherwise overwrite an unrelated website.
-          # Optional host CA trust anchor (PEM). Never disable certificate verification.
-          ca_setting=""
-          if [ -n "${FTPS_CA_PEM:-}" ]; then
-            ca_file="$RUNNER_TEMP/sodoryar-ftps-ca.pem"
-            printf '%s\n' "$FTPS_CA_PEM" > "$ca_file"
-            chmod 600 "$ca_file"
-            openssl x509 -in "$ca_file" -noout >/dev/null || {
-              echo "::error::FTPS_CA_PEM is not a valid PEM certificate."
-              exit 1
-            }
-            ca_setting="set ssl:ca-file $ca_file"
-          fi
+          # Never upload to an account without verifying its jailed destination.
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
-          set ftp:ssl-allow true
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate yes
-          $ca_setting
+          set ftp:ssl-allow false
           set ftp:passive-mode true
           set ftp:prefer-epsv false
           set net:max-retries 3
@@ -162,13 +145,12 @@ jobs:
             exit 1
           fi
 
-      - name: Upload through FTP with host-compatible TLS
+      - name: Upload through dedicated FTP account
         env:
           FTP_USER: ${{ secrets.ftp }}
           FTP_PASS: ${{ secrets.pass }}
           FTP_HOST: 2870352177.cloudylink.com
           FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '.' }}
-          FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}
         run: |
           set -euo pipefail
           # Dedicated account is jailed at Sodoryar root. Refuse non-root paths.
@@ -186,28 +168,11 @@ jobs:
               timeout 90s sudo apt-get install -y -qq lftp
             fi
           fi
-          # Require verified FTPS server identity. Fix the host certificate/CA chain
-          # before deployment rather than bypassing TLS identity verification.
-          # Never delete files from the remote host: the database and .env are managed separately.
-          # Optional host CA trust anchor (PEM). Never disable certificate verification.
-          ca_setting=""
-          if [ -n "${FTPS_CA_PEM:-}" ]; then
-            ca_file="$RUNNER_TEMP/sodoryar-ftps-ca.pem"
-            printf '%s\n' "$FTPS_CA_PEM" > "$ca_file"
-            chmod 600 "$ca_file"
-            openssl x509 -in "$ca_file" -noout >/dev/null || {
-              echo "::error::FTPS_CA_PEM is not a valid PEM certificate."
-              exit 1
-            }
-            ca_setting="set ssl:ca-file $ca_file"
-          fi
+          # Do not delete remote files. Database and .env remain managed separately.
+          # FTP without TLS transmits credentials and data without transport encryption.
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
-          set ftp:ssl-allow true
-          set ftp:ssl-force true
-          set ftp:ssl-protect-data true
-          set ssl:verify-certificate yes
-          $ca_setting
+          set ftp:ssl-allow false
           set ftp:passive-mode true
           set ftp:prefer-epsv false
           set net:max-retries 5
