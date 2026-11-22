@@ -90,7 +90,9 @@ function module_page_permission(string $page): ?string {
 function bill_trash_ready(): bool {
     static $ready = null;
     if ($ready === null) {
-        $ready = (bool) query("SHOW COLUMNS FROM bill_payments LIKE 'deleted_at'")->fetch();
+        // A partially applied migration must not expose actions that need both fields.
+        $ready = (bool) query("SHOW COLUMNS FROM bill_payments LIKE 'deleted_at'")->fetch()
+            && (bool) query("SHOW COLUMNS FROM bill_payments LIKE 'deleted_by'")->fetch();
     }
     return $ready;
 }
