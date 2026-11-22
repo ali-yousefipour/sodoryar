@@ -140,10 +140,16 @@ def main() -> None:
 
         page.locator('[data-dialog-open="smokeDialog"]').click()
         assert page.locator("#smokeDialog").evaluate("(element) => element.open"), "Modal failed to open"
+        assert page.locator("#smokeDialog").get_attribute("aria-labelledby"), (
+            "Modal lacks a programmatically associated accessible title"
+        )
         page.locator("#smokeDialog [data-dialog-close]").click()
         assert not page.locator("#smokeDialog").evaluate("(element) => element.open"), "Modal failed to close"
         page.locator("[data-jalali-open]").click()
         assert page.locator(".jalali-dialog").evaluate("(element) => element.open"), "Jalali calendar did not open"
+        assert page.locator(".jalali-dialog").get_attribute("aria-label") == "انتخاب تاریخ شمسی", (
+            "Dynamic Jalali dialog lacks an accessible name"
+        )
         page.locator(".jalali-dialog .calendar-day").first.click()
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", page.locator('[name="invoice_date"]').input_value()), (
             "Calendar did not update ISO form value"
