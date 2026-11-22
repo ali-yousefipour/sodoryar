@@ -176,6 +176,7 @@ function document_scope(): string {
 function require_document_owner(int $ownerId): void {
     if (document_scope()==='own' && $ownerId!==(int)user()['id']) {
         http_response_code(403);
+        if (($_SERVER['REQUEST_METHOD']??'GET')==='GET') exit('این سند خارج از محدوده دسترسی شماست.');
         throw new RuntimeException('این سند خارج از محدوده دسترسی شماست.');
     }
 }
