@@ -9,6 +9,11 @@ foreach (['bill_create_nonce','commission_calculate_nonce'] as $key) {
         throw new RuntimeException('Financial write-once form protection missing: '.$key);
     }
 }
+if (!str_contains($module, "($method==='pos' && $reference==='')")
+    || !str_contains($module,'data-bill-payment-method')
+    || !str_contains($module,'data-bill-payment-ref')) {
+    throw new RuntimeException('Manual POS bill entry requires a tracking reference.');
+}
 if (!str_contains($invoice,'invoice_create_nonce')) {
     throw new RuntimeException('Invoice create nonce must remain active.');
 }
