@@ -113,7 +113,7 @@ jobs:
       - name: Verify global UI stylesheet and script are served from the deployed commit
         run: |
           set -euo pipefail
-          for file in ux-unified.css app.js table-experience.js; do
+          for file in ux-unified.css iam-ux.css print-engine.css app.js table-experience.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
