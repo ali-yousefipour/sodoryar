@@ -85,6 +85,42 @@ jobs:
           printf '{"commit":"%s"}\n' "$GITHUB_SHA" > deploy-payload/public/sodoryar-version.json
           echo 'Deploying public/ to the Sodoryar root and protected application code to _private/.'
 
+      - name: Verify FTP destination belongs to Sodoryar before changing files
+        env:
+          FTP_USER: ${{ secrets.ftp }}
+          FTP_PASS: ${{ secrets.pass }}
+          FTP_HOST: 2870352177.cloudylink.com
+          FTP_REMOTE_DIR: .
+        run: |
+          set -euo pipefail
+          if [ -z "${FTP_USER}" ] || [ -z "${FTP_PASS}" ]; then
+            echo "::error::Missing FTP secrets; target ownership cannot be verified."
+            exit 1
+          fi
+          if ! command -v lftp >/dev/null 2>&1; then
+            timeout 90s sudo apt-get update -qq
+            timeout 90s sudo apt-get install -y -qq lftp
+          fi
+          # Existing protected marker must be placed by an authorized host admin.
+          # A shared FTP account can otherwise overwrite an unrelated website.
+          lftp -u "$FTP_USER,$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          set cmd:fail-exit yes
+          set ftp:ssl-allow true
+          set ftp:ssl-force true
+          set ftp:ssl-protect-data true
+          set ssl:verify-certificate yes
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          set net:max-retries 3
+          set net:timeout 30
+          get "$FTP_REMOTE_DIR/_private/.sodoryar-instance" -o /tmp/sodoryar-ftp-target-marker
+          bye
+          EOF
+          if ! grep -Fxq 'SODORYAR_DEPLOY_ROOT' /tmp/sodoryar-ftp-target-marker; then
+            echo "::error::Refusing deploy: target marker is missing or does not match Sodoryar."
+            exit 1
+          fi
+
       - name: Upload through FTP with host-compatible TLS
         env:
           FTP_USER: ${{ secrets.ftp }}
