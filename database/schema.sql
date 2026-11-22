@@ -63,7 +63,7 @@ CREATE TABLE pos_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE print_templates (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, company_id BIGINT UNSIGNED NOT NULL,
- title VARCHAR(160) NOT NULL, paper_type ENUM('thermal80','a5') NOT NULL,
+ title VARCHAR(160) NOT NULL, paper_type ENUM('thermal80','a5','a4') NOT NULL,
  header_text TEXT, footer_text TEXT, logo_path VARCHAR(255), layout_json JSON,
  is_default TINYINT(1) NOT NULL DEFAULT 0,
  CONSTRAINT fk_template_company FOREIGN KEY(company_id) REFERENCES companies(id)
