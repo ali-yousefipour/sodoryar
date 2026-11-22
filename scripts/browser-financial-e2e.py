@@ -32,7 +32,32 @@ def ascii_number(value: str) -> int:
 def log_in(browser, name: str):
     context = browser.new_context(viewport={"width": 390, "height": 844})
     page = context.new_page()
-    page.goto(f"{ORIGIN}/?page=login", wait_until="domcontentloaded")
+    response = page.goto(f"{ORIGIN}/?page=login", wait_until="networkidle")
+    assert response is not None and response.status == 200, "Login page failed to load"
+    expect(page.locator(".login-card")).to_be_visible()
+    expect(page.locator("#loginUsername")).to_have_attribute("autocomplete", "username")
+    expect(page.locator("#loginPassword")).to_have_attribute("autocomplete", "current-password")
+    assert page.locator('input[name="csrf"]').count() == 1, "Login CSRF field missing"
+    stylesheet = page.locator('link[href*="login-experience.css"]')
+    assert stylesheet.count() == 1, "Login redesign CSS was not loaded"
+    assert page.locator(".login-card").evaluate(
+        "(el) => getComputedStyle(el).backgroundColor"
+    ) != "rgba(0, 0, 0, 0)", "Login card styling is missing"
+    # Responsive checks run against real rendered PHP login markup in Chromium.
+    for width in (320, 390, 768, 1440):
+        page.set_viewport_size({"width": width, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth + 2"), (
+            f"Login page overflows horizontally at {width}px"
+        )
+        assert page.locator("#loginUsername").is_visible(), (
+            f"Login username is hidden at {width}px"
+        )
+        assert page.locator("#loginCaptcha").is_visible(), (
+            f"Login CAPTCHA is hidden at {width}px"
+        )
+    page.set_viewport_size({"width": 390, "height": 844})
+    if name == "ci_manager_a":
+        page.screenshot(path=str(OUTPUT / "login-mobile.png"), full_page=True)
     figures = page.locator("#captchaQuestion span").all_text_contents()
     if len(figures) < 3:
         raise AssertionError("PHP login CAPTCHA did not render")
