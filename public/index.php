@@ -377,7 +377,7 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         }
         if ($page==='invoices' && $action==='edit') {
-            require_admin(); $tenant=tenant_id();
+            require_permission('invoices.payment_edit'); $tenant=tenant_id();
             $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
             $payment=(string)($_POST['payment_type']??'');
             $ref=trim((string)($_POST['pos_ref']??''));
@@ -394,7 +394,7 @@ try {
             redirect('invoices','شیوه پرداخت فاکتور به‌روزرسانی شد.');
         }
         if ($page==='invoices' && $action==='void') {
-            require_admin(); $tenant=tenant_id();
+            require_permission('invoices.void'); $tenant=tenant_id();
             if (!database_table_exists('invoice_voids')) throw new RuntimeException('برای ابطال فاکتور ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
             $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
             $reason=trim((string)($_POST['reason']??''));
@@ -429,6 +429,7 @@ if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
 if ($page === 'customers') require_permission('customers.view');
 if (in_array($page,['invoices','receipt'],true)) require_permission('invoices.view');
+if ($page==='receipt') require_permission('invoices.print');
 if ($page === 'reports') require_permission('reports.view');
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
@@ -607,12 +608,12 @@ function render_invoices(int $tenant, int $limit): void {
     echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
     foreach($rows as $r) {
         $voided=$r['voided_at']!==null;
-        echo '<tr><td>'.e(fa_digits($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td><a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>';
-        if (user()['role']!=='operator' && !$voided) {
+        echo '<tr><td>'.e(fa_digits($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
-            echo ' <button type="button" class="small secondary" data-dialog-open="'.$editId.'">ویرایش پرداخت</button>';
+            if (can('invoices.payment_edit')) echo ' <button type="button" class="small secondary" data-dialog-open="'.$editId.'">ویرایش پرداخت</button>';
             echo '<dialog class="app-dialog" id="'.$editId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ویرایش شیوه پرداخت</h2><label>نوع پرداخت<select name="payment_type"><option value="cash"'.($r['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($r['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label><label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e($r['pos_ref']).'"></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div></form></dialog>';
-            if (database_table_exists('invoice_voids')) {
+            if (can('invoices.void') && database_table_exists('invoice_voids')) {
                 echo ' <button type="button" class="small danger" data-dialog-open="'.$voidId.'">ابطال</button>';
                 echo '<dialog class="app-dialog" id="'.$voidId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="void"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ابطال فاکتور</h2><p>این عملیات برگشت‌ناپذیر است، اما سابقه فاکتور برای پیگیری باقی می‌ماند.</p><label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button class="danger">تأیید ابطال</button></div></form></dialog>';
             }
