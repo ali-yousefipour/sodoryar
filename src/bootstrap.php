@@ -116,6 +116,13 @@ function tenant_id(): int {
     if (is_super()) {
         $id = (int) ($_SESSION['selected_company'] ?? 0);
         if ($id < 1) throw new RuntimeException('ابتدا یک شرکت انتخاب کنید.');
+        // A tenant selected earlier must not remain accessible after deactivation.
+        // Never accept the selected tenant from request parameters.
+        if (!query('SELECT 1 FROM companies WHERE id=? AND is_active=1 LIMIT 1', [$id])->fetchColumn()) {
+            unset($_SESSION['selected_company']);
+            http_response_code(403);
+            throw new RuntimeException('شرکت انتخاب‌شده غیرفعال یا نامعتبر است. دوباره شرکت را انتخاب کنید.');
+        }
         return $id;
     }
     return (int) $u['company_id'];
