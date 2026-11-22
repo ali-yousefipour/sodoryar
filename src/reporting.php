@@ -25,7 +25,7 @@ function report_filters(): array {
 }
 
 function invoice_report(int $tenant, array $filter, int $limit=200): array {
-    $sql='FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role='superadmin') WHERE i.company_id=?';
+    $sql='FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role=\'superadmin\') WHERE i.company_id=?';
     if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
     $params=[$tenant];
     if (document_scope()==='own') { $sql.=' AND i.user_id=?'; $params[]=(int)user()['id']; }
@@ -41,7 +41,7 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
 }
 
 function activity_report(int $tenant, array $filter, int $limit=200): array {
-    $sql='FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id AND (u.company_id=l.company_id OR u.role='superadmin') WHERE l.company_id=?';
+    $sql='FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id AND (u.company_id=l.company_id OR u.role=\'superadmin\') WHERE l.company_id=?';
     $params=[$tenant];
     if (document_scope()==='own') { $sql.=' AND l.user_id=?'; $params[]=(int)user()['id']; }
     if ($filter['date_from']!=='') { $sql.=' AND l.created_at>=?'; $params[]=$filter['date_from'].' 00:00:00'; }
