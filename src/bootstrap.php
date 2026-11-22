@@ -281,11 +281,12 @@ function csrf_token(): string { return $_SESSION['csrf'] ??= bin2hex(random_byte
 function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">'; }
 function verify_csrf(): void {
     $submitted=(string)($_POST['csrf']??'');
+    $previousTokenPresent=isset($_SESSION['csrf']);
     if (!hash_equals(csrf_token(), $submitted)) {
         // Never log the token or the session ID. This identifies missing
         // cookies and lost session state without exposing credentials.
         error_log('Sodoryar CSRF mismatch: cookie='.(isset($_COOKIE[session_name()])?'present':'missing')
-            .' session_token='.(isset($_SESSION['csrf'])?'present':'missing')
+            .' session_token='.($previousTokenPresent?'present':'missing')
             .' submitted_token='.($submitted!==''?'present':'missing'));
         http_response_code(419);
         header('Content-Type: text/html; charset=utf-8');
