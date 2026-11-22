@@ -145,6 +145,12 @@ function commission_amount_toman(int $sales,int $limit,int $baseRate,int $extraR
     return $quotient + intdiv($remainder+50000,100000);
 }
 
+/** Preserve searchable Latin payment references; localize only numeric references. */
+function display_financial_reference(mixed $reference): string {
+    $value=(string)($reference??'');
+    return preg_match('/[A-Za-z]/',$value) ? $value : fa_digits($value);
+}
+
 /** Display monetary values in the existing stored unit (toman). */
 function money_toman(int|string $amount): string {
     return money($amount).' تومان';
