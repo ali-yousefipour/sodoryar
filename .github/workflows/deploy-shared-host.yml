@@ -92,7 +92,7 @@ jobs:
             echo "::error::Refusing the shared ServiceYar/Khatyar public URL."
             exit 1
           fi
-          echo "Sodoryar deployment target and public URL have independent shapes; ownership marker verification follows."
+          echo "Sodoryar deployment target and public URL have independent shapes; ownership challenge or marker verification follows."
 
       - name: Build isolated host payload
         run: |
@@ -128,37 +128,26 @@ jobs:
             timeout 90s sudo apt-get update -qq
             timeout 90s sudo apt-get install -y -qq lftp
           fi
-          # A pre-existing marker is mandatory for a populated target. For first
-          # installation, only an entirely empty jailed FTP root can be bootstrapped.
-          # Do not interpret a missing marker as permission to overwrite an app.
-          listing="$RUNNER_TEMP/sodoryar-ftp-root-list.txt"
+          # FTP account owner has confirmed that its jailed root is Sodoryar.
+          # Check any existing marker, but never trust confirmation alone: for
+          # marker-free installs, prove FTP root serves the declared HTTPS origin.
+          marker_file="$RUNNER_TEMP/sodoryar-ftp-target-marker"
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
-          set cmd:fail-exit yes
+          set cmd:fail-exit no
           set ftp:ssl-allow false
           set ftp:passive-mode true
           set ftp:prefer-epsv false
           set net:max-retries 3
           set net:timeout 30
-          cls -1 -a > "$listing"
+          get "_private/.sodoryar-instance" -o "$marker_file"
           bye
           EOF
-          # FTP servers can include current/parent pseudo entries in listings.
-          sed -i '/^\.$/d; /^\.\.$/d; /^$/d' "$listing"
-          if grep -Fxq '_private' "$listing"; then
-            lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
-          set cmd:fail-exit yes
-          set ftp:ssl-allow false
-          set ftp:passive-mode true
-          set ftp:prefer-epsv false
-          set net:max-retries 3
-          set net:timeout 30
-          get "_private/.sodoryar-instance" -o /tmp/sodoryar-ftp-target-marker
-          bye
-          EOF
-          elif [[ ! -s "$listing" ]]; then
-            # The empty-root first-install path cannot replace existing host content.
-            # Bind the configured FTP root to the intended HTTPS origin by an
-            # unguessable, temporary HTTP challenge before creating any marker.
+          if [[ -f "$marker_file" ]]; then
+            if ! grep -Fxq 'SODORYAR_DEPLOY_ROOT' "$marker_file"; then
+              echo "::error::Existing FTP destination marker does not identify Sodoryar."
+              exit 1
+            fi
+          else
             challenge="sodoryar-ownership-$(openssl rand -hex 16).txt"
             challenge_value="$(openssl rand -hex 32)"
             printf '%s\n' "$challenge_value" > "$RUNNER_TEMP/$challenge"
@@ -175,7 +164,7 @@ jobs:
             trap 'lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" -e "set ftp:ssl-allow false; rm $challenge; bye" >/dev/null 2>&1 || true' EXIT
             observed="$(curl --fail --silent --show-error --max-time 30 --retry 2 --retry-delay 2 "https://taxiranico.ir/$challenge" || true)"
             if [[ "$observed" != "$challenge_value" ]]; then
-              echo "::error::Empty FTP root does not serve the configured HTTPS domain. Refusing bootstrap."
+              echo "::error::FTP root does not serve the declared Sodoryar HTTPS domain. No application files were uploaded."
               exit 1
             fi
             printf '%s\n' 'SODORYAR_DEPLOY_ROOT' > "$RUNNER_TEMP/sodoryar-marker"
@@ -188,19 +177,15 @@ jobs:
           set net:timeout 30
           mkdir -p _private
           put "$RUNNER_TEMP/sodoryar-marker" -o "_private/.sodoryar-instance"
-          get "_private/.sodoryar-instance" -o /tmp/sodoryar-ftp-target-marker
+          get "_private/.sodoryar-instance" -o "$marker_file"
           rm "$challenge"
           bye
           EOF
             trap - EXIT
-          else
-            echo "::error::FTP root has existing content but no protected _private marker; refusing any upload. Create _private/.sodoryar-instance only after confirming ownership."
-            printf 'Remote top-level entry count: %s\n' "$(wc -l < "$listing")"
-            exit 1
-          fi
-          if ! grep -Fxq 'SODORYAR_DEPLOY_ROOT' /tmp/sodoryar-ftp-target-marker; then
-            echo "::error::Refusing deploy: target marker is missing or does not match Sodoryar."
-            exit 1
+            if ! grep -Fxq 'SODORYAR_DEPLOY_ROOT' "$marker_file"; then
+              echo "::error::New destination marker failed verification."
+              exit 1
+            fi
           fi
 
       - name: Upload through dedicated FTP account
