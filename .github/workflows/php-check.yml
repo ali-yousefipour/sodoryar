@@ -58,5 +58,7 @@ jobs:
         run: php tests/invoice-edit-void-serialization.php
       - name: Verify Excel exports do not silently drop records
         run: php tests/report-export-completeness.php
+      - name: Verify real-byte Excel download progress behavior
+        run: php tests/report-download-progress.php
       - name: Verify cross-company user names are not joined into financial reports
         run: php tests/report-tenant-joins.php
