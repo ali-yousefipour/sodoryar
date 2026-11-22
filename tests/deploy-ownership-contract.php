@@ -30,7 +30,7 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
     throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
-if (!str_contains($workflow, "elif [[ ! -s \"$listing\" ]]; then")
+if (!str_contains($workflow, 'elif [[ ! -s "$listing" ]]; then')
     || !str_contains($workflow, 'sodoryar-ownership-$(openssl rand -hex 16).txt')
     || !str_contains($workflow, 'https://taxiranico.ir/$challenge')
     || !str_contains($workflow, 'Empty FTP root does not serve the configured HTTPS domain.')
