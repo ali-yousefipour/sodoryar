@@ -18,6 +18,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Set up PHP 8.4 and required extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
       - name: Check PHP syntax
         run: |
           set -euo pipefail
@@ -27,7 +33,7 @@ jobs:
       - name: Check required files
         run: test -s database/install.sql && test -s database/migrations/001_initial.sql && test -s database/migrations/002_login_rate_limit.sql && test -s database/migrations/003_user_permissions.sql && test -s database/migrations/004_global_drivers.sql && test -s database/migrations/005_user_photos.sql && test -s public/assets/app.css && test -s public/assets/refinements.css && test -s .env.example
       - name: Check browser scripts
-        run: node --check public/assets/app.js && node --check public/assets/table-experience.js
+        run: node --check public/assets/app.js && node --check public/assets/table-experience.js && node --check public/assets/report-progress.js
       - name: Verify Persian number, money and Jalali date formatting
         run: php tests/locale-formatting.php
       - name: Verify required driver mobile normalization
