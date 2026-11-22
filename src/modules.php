@@ -42,7 +42,7 @@ function valid_driver_lookup_prefix(string $prefix): bool {
 }
 
 function attach_global_driver(int $tenant, string $nationalCode): int {
-    $nationalCode=trim($nationalCode);
+    $nationalCode=ascii_digits(trim($nationalCode));
     if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی باید ده رقم باشد.');
     $driver=query('SELECT national_code,first_name,last_name,mobile,line_area,line_code FROM global_drivers WHERE national_code=?',[$nationalCode])->fetch();
     if (!$driver) throw new RuntimeException('کد ملی در بانک مرکزی تاکسیرانان یافت نشد.');
@@ -64,6 +64,7 @@ function normalize_invoice_driver_mobile(string $value): string {
 }
 
 function register_missing_driver(int $tenant, string $nationalCode, array $fields, bool $invoiceRegistration=false): int {
+    $nationalCode=ascii_digits(trim($nationalCode));
     if (!preg_match('/^[0-9]{10}$/',$nationalCode)) throw new RuntimeException('کد ملی راننده باید ده‌رقمی باشد.');
     $existing=query('SELECT id FROM global_drivers WHERE national_code=?',[$nationalCode])->fetchColumn();
     if (!$existing) {
