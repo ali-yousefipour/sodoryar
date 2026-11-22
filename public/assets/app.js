@@ -345,8 +345,28 @@ document.addEventListener('DOMContentLoaded',()=>{
       templatePreview.querySelector('[data-preview-header]').textContent=templateForm.elements.header_text.value.trim()||'فاکتور خدمات';
       templatePreview.querySelector('[data-preview-footer]').textContent=templateForm.elements.footer_text.value.trim()||'با تشکر از مراجعه شما';
       templatePreview.style.fontFamily=templateForm.elements.font_family.value==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif';
-      templatePreview.classList.toggle('a5',templateForm.elements.paper_type.value==='a5');
+      const a5=templateForm.elements.paper_type.value==='a5';
+      templatePreview.classList.toggle('a5',a5);
+      const roll=Number(templateForm.elements.roll_width_mm?.value||72);
+      templatePreview.style.setProperty('--template-roll-preview',Math.max(56,Math.min(76,roll))+'mm');
+      templatePreview.dataset.paperLabel=a5?'A5':'رول حرارتی ۸۰ میلی‌متری';
     };
+    const fileControl=templateForm.elements.logo;
+    const logoPreview=document.getElementById('templateLogoPreview');
+    const printLogo=document.getElementById('templatePreviewLogo');
+    let previewUrl=null;
+    fileControl?.addEventListener('change',()=>{
+      if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null;}
+      const file=fileControl.files?.[0];
+      const supported=file && ['image/png','image/jpeg'].includes(file.type) && file.size<=1024*1024;
+      if(supported) previewUrl=URL.createObjectURL(file);
+      for(const target of [logoPreview,printLogo]){
+        if(!target)continue;
+        target.hidden=!supported;
+        if(supported)target.src=previewUrl;
+        else target.removeAttribute('src');
+      }
+    });
     templateForm.addEventListener('input',refreshPreview);templateForm.addEventListener('change',refreshPreview);refreshPreview();
   }
   const type=document.getElementById('paymentType');
