@@ -159,13 +159,24 @@ function handle_module_post(string $page, string $action): void {
             $value=(string)($_POST[$key]??'0');
             if (!is_numeric($value) || (float)$value<0 || (float)$value>($key==='commission_limit'?1000000000000:100)) throw new RuntimeException('درصد یا سقف پورسانت نامعتبر است.');
         }
-        foreach (['company_name','company_phone','company_website','company_address','invoice_footer','currency','commission_enabled','commission_type','commission_period','commission_rate','commission_limit','commission_over_limit_rate'] as $key) {
-            $value=trim((string)($post[$key]??''));
-            if (mb_strlen($value)>1000) throw new RuntimeException('متن تنظیمات بیش از حد طولانی است.');
-            query('INSERT INTO app_settings(company_id,setting_key,setting_value) VALUES(?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[$tenant,$key,$value]);
+        if (!in_array((string)($_POST['currency']??''), ['rial','toman'], true)) {
+            throw new RuntimeException('واحد پول انتخاب‌شده معتبر نیست.');
         }
-        if (trim((string)($_POST['company_name']??''))!=='') query('UPDATE companies SET name=? WHERE id=?',[trim((string)$_POST['company_name']),$tenant]);
-        audit('settings.update'); redirect('settings','تنظیمات ذخیره شد.');
+        db()->beginTransaction();
+        try {
+            foreach (['company_name','company_phone','company_website','company_address','invoice_footer','currency','commission_enabled','commission_type','commission_period','commission_rate','commission_limit','commission_over_limit_rate'] as $key) {
+                $value=trim((string)($post[$key]??''));
+                if (mb_strlen($value)>1000) throw new RuntimeException('متن تنظیمات بیش از حد طولانی است.');
+                query('INSERT INTO app_settings(company_id,setting_key,setting_value) VALUES(?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)',[$tenant,$key,$value]);
+            }
+            if (trim((string)($_POST['company_name']??''))!=='') query('UPDATE companies SET name=? WHERE id=?',[trim((string)$_POST['company_name']),$tenant]);
+    audit('settings.update');
+            db()->commit();
+        } catch (Throwable $ex) {
+            db()->rollBack();
+            throw $ex;
+        }
+        redirect('settings','تنظیمات ذخیره شد.');
     }
     if ($page === 'profile' && $action === 'password') {
         $old=(string)($_POST['current_password']??''); $new=(string)($_POST['new_password']??'');
