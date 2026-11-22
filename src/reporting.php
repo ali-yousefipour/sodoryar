@@ -28,6 +28,7 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id JOIN users u ON u.id=i.user_id WHERE i.company_id=?';
     if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
     $params=[$tenant];
+    if (document_scope()==='own') { $sql.=' AND i.user_id=?'; $params[]=(int)user()['id']; }
     if ($filter['date_from']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))>=?'; $params[]=$filter['date_from']; }
     if ($filter['date_to']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))<=?'; $params[]=$filter['date_to']; }
     if ($filter['national_code']!=='') { $sql.=' AND c.national_code LIKE ?'; $params[]=$filter['national_code'].'%'; }
@@ -42,6 +43,7 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
 function activity_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id WHERE l.company_id=?';
     $params=[$tenant];
+    if (document_scope()==='own') { $sql.=' AND l.user_id=?'; $params[]=(int)user()['id']; }
     if ($filter['date_from']!=='') { $sql.=' AND l.created_at>=?'; $params[]=$filter['date_from'].' 00:00:00'; }
     if ($filter['date_to']!=='') { $sql.=' AND l.created_at<?'; $params[]=(new DateTimeImmutable($filter['date_to']))->modify('+1 day')->format('Y-m-d').' 00:00:00'; }
     if ($filter['user_id']!=='') { $sql.=' AND l.user_id=?'; $params[]=(int)$filter['user_id']; }
@@ -98,7 +100,8 @@ function export_excel_xlsx(string $name, array $headers, array $rows): never {
 }
 
 function render_report_filters(string $page, array $filter, bool $invoice=true): void {
-    $users=query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1 ORDER BY full_name',[tenant_id()])->fetchAll();
+    $scope=document_scope();
+    $users=query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1'.($scope==='own'?' AND id=?':'').' ORDER BY full_name',$scope==='own'?[tenant_id(),user()['id']]:[tenant_id()])->fetchAll();
     echo '<form method="get" class="card report-filter"><input type="hidden" name="page" value="'.e($page).'"><div class="form-grid">';
     echo '<label>از تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_from" value="'.e($filter['date_from']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ شروع">×</button></span></label><label>تا تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_to" value="'.e($filter['date_to']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ پایان">×</button></span></label>';
     echo '<label>کاربر<select name="user_id"><option value="">همه کاربران</option>';
