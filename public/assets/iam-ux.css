@@ -61,3 +61,16 @@
 @media(max-width:600px) {
  .role-editor .permission-groups,.permission-matrix .permission-groups { grid-template-columns:minmax(0,1fr); }
 }
+
+/* Accessible report loading state: percentage appears only for a known byte count. */
+.report-filter .filter-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.report-progress { display:inline-flex; align-items:center; gap:8px; max-width:100%; color:#26476b; font-size:.88rem; font-weight:650; }
+.report-progress[hidden] { display:none!important; }
+.report-filter[aria-busy="true"] .report-progress::before {
+ content:""; display:inline-block; width:14px; height:14px; border-radius:50%;
+ border:2px solid #bad1ef; border-top-color:#245bb0; animation:sodoryar-report-spin .8s linear infinite;
+}
+@keyframes sodoryar-report-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) {
+ .report-filter[aria-busy="true"] .report-progress::before { animation:none; border-style:dotted; }
+}
