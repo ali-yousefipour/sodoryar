@@ -345,11 +345,12 @@ document.addEventListener('DOMContentLoaded',()=>{
       templatePreview.querySelector('[data-preview-header]').textContent=templateForm.elements.header_text.value.trim()||'فاکتور خدمات';
       templatePreview.querySelector('[data-preview-footer]').textContent=templateForm.elements.footer_text.value.trim()||'با تشکر از مراجعه شما';
       templatePreview.style.fontFamily=templateForm.elements.font_family.value==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif';
-      const a5=templateForm.elements.paper_type.value==='a5';
-      templatePreview.classList.toggle('a5',a5);
+      const paper=templateForm.elements.paper_type.value;
+      templatePreview.classList.toggle('a5',paper==='a5');
+      templatePreview.classList.toggle('a4',paper==='a4');
       const roll=Number(templateForm.elements.roll_width_mm?.value||72);
       templatePreview.style.setProperty('--template-roll-preview',Math.max(56,Math.min(76,roll))+'mm');
-      templatePreview.dataset.paperLabel=a5?'A5':'رول حرارتی ۸۰ میلی‌متری';
+      templatePreview.dataset.paperLabel=paper==='a4'?'A4':(paper==='a5'?'A5':'رول حرارتی ۸۰ میلی‌متری');
     };
     const fileControl=templateForm.elements.logo;
     const logoPreview=document.getElementById('templateLogoPreview');
