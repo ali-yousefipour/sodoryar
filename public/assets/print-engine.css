@@ -23,6 +23,8 @@
 .receipt-roll-74 { --thermal-content-width:74mm; }
 .receipt-roll-75 { --thermal-content-width:75mm; }
 .receipt-roll-76 { --thermal-content-width:76mm; }
+.receipt-void-label { border:2px solid #8e1b23; color:#8e1b23; background:#fff4f4; text-align:center; font-size:13pt; font-weight:800; padding:3mm; margin-block:3mm; }
+.receipt-voided { border-color:#c77777; }
 .receipt table { width:100%; border-collapse:collapse; table-layout:fixed; }
 .receipt th,.receipt td { text-align:right; vertical-align:top; overflow-wrap:anywhere; }
 .receipt thead { display:table-header-group; }
