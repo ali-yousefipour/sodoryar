@@ -197,8 +197,15 @@ function permission_groups(): array {
 function company_roles_ready(): bool {
     static $ready=null;
     if ($ready===null) {
-        try { $ready=(bool)query("SHOW TABLES LIKE 'user_role_assignments'")->fetchColumn(); }
-        catch (PDOException $ex) { $ready=false; }
+        try {
+            $ready=(bool)query("SHOW TABLES LIKE 'company_roles'")->fetchColumn()
+                && (bool)query("SHOW TABLES LIKE 'company_role_permissions'")->fetchColumn()
+                && (bool)query("SHOW TABLES LIKE 'user_role_assignments'")->fetchColumn()
+                && (bool)query("SHOW COLUMNS FROM company_roles LIKE 'is_default'")->fetch();
+        } catch (PDOException $ex) {
+            error_log('Sodoryar IAM migration readiness: '.$ex->getCode());
+            $ready=false;
+        }
     }
     return $ready;
 }
