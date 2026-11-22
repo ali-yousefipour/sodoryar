@@ -45,6 +45,7 @@ def fixture() -> str:
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>{style}</style></head><body>
     <main class="main-wrap"><div class="content">
+      <p data-test-latin-id>CI E2E Service A</p>
       <form class="invoice-form" id="invoiceCreateForm">
         <fieldset class="invoice-services invoice-panel" data-invoice-services>
           <input type="search" data-service-search aria-label="جستجوی خدمت">
@@ -98,6 +99,9 @@ def main() -> None:
         page.set_content(fixture(), wait_until="load")
         page.add_script_tag(content=(ROOT / "public/assets/app.js").read_text(encoding="utf-8"))
         page.evaluate("document.dispatchEvent(new Event('DOMContentLoaded'))")
+        assert page.locator("[data-test-latin-id]").inner_text() == "CI E2E Service A", (
+            "Visible digit localization corrupted Latin-alphanumeric identifiers"
+        )
         page.locator("[data-service-option] input").check()
         total = page.locator("[data-service-total]")
         assert number(total.inner_text()) == 12345, "Fixed service amount missing from UI total"
