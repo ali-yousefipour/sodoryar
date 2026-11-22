@@ -308,7 +308,11 @@ try {
             if ($target['role']==='company_admin' && (!$active || $role!=='company_admin') && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد یا نقش آن را تغییر داد.');
             db()->beginTransaction();
             try {
-                query('UPDATE users SET full_name=?,username=?,is_active=?,role=?'.($newPassword!==''?',password_hash=?':'').' WHERE id=? AND company_id=?',array_merge([$fullName,$username,$active,$role],$newPassword!==''?[password_hash($newPassword,PASSWORD_DEFAULT),$id,$tenant]:[$id,$tenant]));
+                $revokeSessions=auth_version_ready() && ($newPassword!=='' || $role!==$target['role'] || $active!==(int)$target['is_active']);
+                query('UPDATE users SET full_name=?,username=?,is_active=?,role=?'.($newPassword!==''?',password_hash=?':'').($revokeSessions?',auth_version=auth_version+1':'').' WHERE id=? AND company_id=?',array_merge([$fullName,$username,$active,$role],$newPassword!==''?[password_hash($newPassword,PASSWORD_DEFAULT),$id,$tenant]:[$id,$tenant]));
+                if ($revokeSessions && (int)$id===(int)user()['id']) {
+                    $_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$id])->fetchColumn();
+                }
                 if ($role==='company_admin') {
                     query('DELETE FROM user_permissions WHERE user_id=?',[$id]);
                     if (company_roles_ready()) query('DELETE FROM user_role_assignments WHERE user_id=? AND company_id=?',[$id,$tenant]);
@@ -329,7 +333,7 @@ try {
                 if ($archived) throw new RuntimeException('ابتدا کاربر را از بایگانی بازیابی کنید.');
                 $active=(int)$target['is_active']===1?0:1;
                 if (!$active && $target['role']==='company_admin' && (int)query('SELECT COUNT(*) FROM users WHERE company_id=? AND role=? AND is_active=1',[$tenant,'company_admin'])->fetchColumn()<=1) throw new RuntimeException('آخرین مدیر فعال شرکت را نمی‌توان غیرفعال کرد.');
-                query('UPDATE users SET is_active=? WHERE id=? AND company_id=?',[$active,$id,$tenant]);
+                query('UPDATE users SET is_active=?'.(auth_version_ready()?',auth_version=auth_version+1':'').' WHERE id=? AND company_id=?',[$active,$id,$tenant]);
                 audit($active?'user.activate':'user.deactivate',(string)$id); redirect('users',$active?'حساب کاربر فعال شد.':'حساب کاربر غیرفعال شد.');
             }
             if (!archive_ready('users')) throw new RuntimeException('برای حذف امن کاربر، ابتدا میگرشن ۰۰۷ را اجرا کنید.');
