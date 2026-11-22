@@ -43,3 +43,20 @@
 .template-logo-preview[hidden],#templatePreviewLogo[hidden] { display:none!important; }
 #templatePreviewLogo { display:block; width:auto; max-width:80px; max-height:70px; object-fit:contain; margin:2px auto 10px; }
 @media(max-width:600px) { #templatePreview.a5 { min-height:0; padding:12px; } }
+
+/* Grouped role permission matrix: readable across desktop and handheld screens. */
+.role-editor .permission-groups,.permission-matrix .permission-groups {
+ display:grid; grid-template-columns:repeat(auto-fit,minmax(235px,1fr)); gap:12px;
+}
+.role-editor .permission-group,.permission-matrix .permission-group {
+ min-width:0; border:1px solid #e3e7f0; background:#fafbff; border-radius:10px; padding:10px 12px;
+}
+.role-editor .permission-group legend,.permission-matrix .permission-group legend {
+ color:#303c6a; font-weight:750; font-size:13px; padding:0 6px;
+}
+.role-editor .permission-group .choices,.permission-matrix .permission-group .choices {
+ display:grid; grid-template-columns:1fr; gap:3px;
+}
+@media(max-width:600px) {
+ .role-editor .permission-groups,.permission-matrix .permission-groups { grid-template-columns:minmax(0,1fr); }
+}
