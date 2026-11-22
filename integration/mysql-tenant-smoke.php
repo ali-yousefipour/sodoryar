@@ -163,6 +163,21 @@ if (database_table_exists('invoice_voids')) {
         'Voiding one operator invoice must not alter other employee sales.');
 }
 
+// A commission period is unique per company, operator and period. A duplicated
+// browser submit or concurrent clerk must not create a second financial record.
+integration_assert(!commission_period_already_recorded($companyA,$otherUserA,'daily','1405-09-01'),
+    'A fresh commission period is incorrectly marked as calculated.');
+$commissionA=insert_fixture('INSERT INTO commissions(company_id,user_id,period_type,period_key,sales_total,rate,amount) VALUES(?,?,?,?,?,?,?)',
+    [$companyA,$otherUserA,'daily','1405-09-01',888,'5.000',44]);
+integration_assert($commissionA>0 && commission_period_already_recorded($companyA,$otherUserA,'daily','1405-09-01'),
+    'Already saved commission period was not detected.');
+integration_assert(!commission_period_already_recorded($companyA,$userA,'daily','1405-09-01'),
+    'Another employee commission period must remain available.');
+integration_assert(!commission_period_already_recorded($companyB,$userB,'daily','1405-09-01'),
+    'Another company commission period must remain available.');
+integration_assert(!commission_period_already_recorded($companyA,$otherUserA,'monthly','1405-09-01'),
+    'Daily and monthly periods must be independent.');
+
 integration_assert(!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$invoiceB,$companyA])->fetch(),
     'Foreign invoice accepted by tenant lookup');
 integration_assert(!query('SELECT id FROM bill_payments WHERE id=? AND company_id=?',[$billB,$companyA])->fetch(),
