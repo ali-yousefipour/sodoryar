@@ -631,11 +631,27 @@ document.addEventListener('DOMContentLoaded',()=>{
       openRegistration();
     });
   }
+  // A browser back/forward cache may restore a page with disabled submit buttons.
+  // Reset UI-only busy state on pageshow; server-side nonces remain authoritative.
+  const markFinancialSubmitting=(form,submit,label,event)=>{
+    if(form.dataset.submitting==='1'){
+      event.preventDefault();
+      return;
+    }
+    form.dataset.submitting='1';
+    form.setAttribute('aria-busy','true');
+    if(submit){
+      if(!submit.dataset.submitOriginalText)submit.dataset.submitOriginalText=submit.textContent;
+      submit.disabled=true;
+      submit.setAttribute('aria-busy','true');
+      submit.textContent=label;
+    }
+  };
   const invoiceForm=document.getElementById('invoiceCreateForm');
   invoiceForm?.addEventListener('submit',event=>{
     if(event.defaultPrevented)return;
     const submit=invoiceForm.querySelector('button[type="submit"]');
-    if(submit){submit.disabled=true;submit.setAttribute('aria-busy','true');submit.textContent='در حال ثبت فاکتور…';}
+    markFinancialSubmitting(invoiceForm,submit,'در حال ثبت فاکتور…',event);
   });
   document.querySelectorAll('[data-bill-payment-method]').forEach(method=>{
     const form=method.closest('form');
@@ -652,11 +668,19 @@ document.addEventListener('DOMContentLoaded',()=>{
     form.addEventListener('submit',event=>{
       if(event.defaultPrevented)return;
       const submit=form.querySelector('button[type="submit"],button:not([type])');
-      if(submit){
-        submit.disabled=true;
-        submit.setAttribute('aria-busy','true');
-        submit.textContent='در حال ثبت…';
-      }
+      markFinancialSubmitting(form,submit,'در حال ثبت…',event);
+    });
+  });
+  window.addEventListener('pageshow',()=>{
+    document.querySelectorAll('form[data-submitting="1"]').forEach(form=>{
+      delete form.dataset.submitting;
+      form.removeAttribute('aria-busy');
+      form.querySelectorAll('button[data-submit-original-text]').forEach(button=>{
+        button.disabled=false;
+        button.removeAttribute('aria-busy');
+        button.textContent=button.dataset.submitOriginalText;
+        delete button.dataset.submitOriginalText;
+      });
     });
   });
   // Render-only Persian numerals for labels, counters and table content.
