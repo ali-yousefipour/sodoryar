@@ -112,9 +112,15 @@ def main() -> None:
         assert price_field.evaluate("(el) => el.validity.customError"), (
             "A decimal money value was silently converted instead of rejected"
         )
+        assert "نامعتبر" in total.inner_text(), (
+            "Invoice preview silently treated an invalid decimal as a monetary amount"
+        )
         price_field.fill("۱,۵")
         assert price_field.evaluate("(el) => el.validity.customError"), (
             "Malformed comma grouping was silently converted into a different amount"
+        )
+        assert "نامعتبر" in total.inner_text(), (
+            "Malformed grouping was reflected as a different valid total"
         )
         price_field.fill("۲۵۰۰۰")
         assert not price_field.evaluate("(el) => el.validity.customError")
