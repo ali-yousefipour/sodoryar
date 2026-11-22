@@ -558,7 +558,7 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
                 if ((int)$reportData['summary']['qty']>10000) {
                     throw new RuntimeException('تعداد فاکتورهای این خروجی بیش از ۱۰٬۰۰۰ مورد است؛ برای دریافت فایل کامل، بازه تاریخ یا فیلترها را محدود کنید.');
                 }
-                $rows=array_map(static fn($r)=>[fa_digits($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',fa_digits((string)$r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
+                $rows=array_map(static fn($r)=>[display_financial_reference($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',display_financial_reference($r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
                 export_excel_xlsx('sodoryar-invoices',['شماره فاکتور','تاریخ','کد ملی','نام راننده','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],$rows);
             } else {
                 // Fetch one extra record to detect and refuse a silently truncated export.
@@ -734,7 +734,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php if($voidRecord): ?><div class="receipt-void-label" role="status">نسخه باطل‌شده — فاقد اعتبار مالی</div><div class="alert error"><strong>فاکتور باطل شده است؛ برای ارائه به مشتری معتبر نیست.</strong><p>دلیل: <?=e($voidRecord['reason'])?></p></div><?php endif; ?>
 <?php foreach($receiptSections as $section): ?>
 <?php if($section==='header'): ?><?php if($selectedTemplate && $selectedTemplate['logo_path']): ?><img class="receipt-logo" src="?page=template_logo&amp;id=<?=e($selectedTemplate['id'])?>" alt="لوگوی شرکت"><?php endif; ?><h1><?=e($selectedTemplate['header_text']??'فاکتور خدمات')?></h1><p><?=e($companyName)?></p><?php if(!empty($companyPrintDetails['company_phone'])): ?><p class="receipt-contact">تلفن: <?=e(fa_digits($companyPrintDetails['company_phone']))?></p><?php endif; ?><?php if(!empty($companyPrintDetails['company_address'])): ?><p class="receipt-contact">نشانی: <?=e($companyPrintDetails['company_address'])?></p><?php endif; ?>
-<?php elseif($section==='invoice_number'): ?><p>شماره فاکتور: <?=e(fa_digits($invoice['invoice_number']))?></p>
+<?php elseif($section==='invoice_number'): ?><p>شماره فاکتور: <?=e(display_financial_reference($invoice['invoice_number']))?></p>
 <?php elseif($section==='date'): ?><p>تاریخ فاکتور: <?=e(jalali_datetime(($invoice['invoice_date']??null) ?: $invoice['created_at'],true))?></p>
 <?php elseif($section==='customer'): ?><p>تاکسیران: <?=e($invoice['first_name'].' '.$invoice['last_name'])?> | کد ملی: <?=e(fa_digits($invoice['national_code']))?></p>
 <?php elseif($section==='items'): ?><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody><?php foreach(query('SELECT service_title,price FROM invoice_items WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetchAll() as $i): ?><tr><td><?=e($i['service_title'])?></td><td><?=money_toman($i['price'])?></td></tr><?php endforeach; ?></tbody></table>
@@ -758,7 +758,7 @@ function render_invoices(int $tenant, int $limit): void {
     echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
     foreach($rows as $r) {
         $voided=$r['voided_at']!==null;
-        echo '<tr><td>'.e(fa_digits($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
         if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
             if (can('invoices.payment_edit')) {
