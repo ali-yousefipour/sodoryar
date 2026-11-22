@@ -57,4 +57,9 @@ if (!str_contains($workflow, 'Verify private application files cannot be served 
     || !str_contains($workflow, '403|404|410')) {
     throw new RuntimeException('Deployed private source and environment templates must be probed for public exposure.');
 }
+if (!str_contains($workflow, 'login-experience.css app.js')
+    || !str_contains($workflow, "grep -Fq 'assets/login-experience.css?v='")
+    || !str_contains($workflow, "grep -Fq 'class=\"login-layout\"'")) {
+    throw new RuntimeException('Release must verify both published login CSS bytes and login HTML references.');
+}
 echo "Release ownership, FTP transport and migration gate contracts passed\n";
