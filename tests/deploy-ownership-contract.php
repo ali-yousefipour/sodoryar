@@ -11,7 +11,12 @@ if(!str_contains($workflow,'_private/.sodoryar-instance')
    || substr_count($workflow,'set ssl:verify-certificate yes')<2) {
     throw new RuntimeException('Protected deployment marker and TLS identity checks are required.');
 }
-if(!str_contains($workflow,'needs: database-integration')) {
-    throw new RuntimeException('FTPS upload must be gated on isolated MySQL integration.');
+if (!str_contains($workflow, 'needs: [source-validation, database-integration]')
+    || !str_contains($workflow, "needs.source-validation.result == 'success'")
+    || !str_contains($workflow, "needs.database-integration.result == 'success'")) {
+    throw new RuntimeException('FTPS upload must require both successful source/regression and isolated database integration jobs.');
+}
+if (!str_contains($workflow, 'run: bash scripts/validate-release.sh')) {
+    throw new RuntimeException('Independent source/regression release gate must run before deployment.');
 }
 echo "Release ownership, TLS and migration gate contracts passed\n";
