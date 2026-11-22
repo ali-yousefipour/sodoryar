@@ -392,6 +392,32 @@ jobs:
             esac
           done
 
+      - name: Browser QA for responsive login and receipt print layouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/sodoryar-browser-qa" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund playwright@1.55.1
+          export NODE_PATH="$RUNNER_TEMP/sodoryar-browser-qa/node_modules"
+          browser="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [ -z "$browser" ]; then
+            echo "::error::Chromium/Chrome is unavailable on the GitHub runner."
+            exit 1
+          fi
+          export BROWSER_BIN="$browser"
+          node --check tests/browser-ui-print-smoke.cjs
+          node tests/browser-ui-print-smoke.cjs
+
+      - name: Archive anonymous UI and sample print QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sodoryar-public-ui-print-smoke
+          path: |
+            ${{ runner.temp }}/login-*.png
+            ${{ runner.temp }}/print-*.pdf
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Deployment notes
         run: |
           echo 'Contents of public/ uploaded directly to the FTP account root.'
