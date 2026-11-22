@@ -353,6 +353,11 @@ try {
         }
         if ($page === 'invoices' && $action === 'add') {
             require_permission('invoices.create');
+            $expectedNonce=(string)($_SESSION['invoice_create_nonce']??'');
+            $submittedNonce=(string)($_POST['invoice_create_nonce']??'');
+            if ($expectedNonce==='' || !hash_equals($expectedNonce,$submittedNonce)) {
+                throw new RuntimeException('این درخواست صدور قبلاً ثبت شده یا فرم منقضی شده است؛ صفحه را تازه‌سازی کنید.');
+            }
             $tenant = tenant_id();
             $national=trim((string)($_POST['driver_national_code']??''));
             $selected = array_unique(array_filter(array_map('intval',(array)($_POST['service_ids'] ?? [])),static fn($v)=>$v>0));
@@ -397,6 +402,7 @@ try {
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
                 audit('invoice.create',$number); db()->commit();
+                unset($_SESSION['invoice_create_nonce']);
                 header('Location: ?page=receipt&id='.$invoiceId); exit;
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         }
@@ -580,7 +586,7 @@ $navGroup=null;
 <?php $invoiceDriverLines=query("SELECT DISTINCT TRIM(line_area) AS line_name FROM global_drivers WHERE line_area IS NOT NULL AND TRIM(line_area) <> '' ORDER BY line_name")->fetchAll(PDO::FETCH_COLUMN); ?>
 <div class="invoice-page-heading"><div><span class="invoice-eyebrow">عملیات مالی / صدور سند</span><h1>صدور فاکتور</h1><p>مشخصات تاکسیران، تاریخ، خدمات و روش پرداخت را به ترتیب تکمیل کنید.</p></div></div>
 <div class="card invoice-workspace">
-<form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-layout-v4"><?=csrf_field()?><input type="hidden" name="action" value="add">
+<form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-layout-v4"><?=csrf_field()?><input type="hidden" name="action" value="add"><input type="hidden" name="invoice_create_nonce" value="<?=e($_SESSION['invoice_create_nonce'] ??= bin2hex(random_bytes(16)))?>">
 <section class="invoice-panel invoice-panel-details" aria-labelledby="invoiceDetailsTitle">
 <div class="invoice-panel-heading"><span class="invoice-step">۱</span><div><h2 id="invoiceDetailsTitle">اطلاعات فاکتور</h2><p>شناسه تاکسیران و تاریخ انجام خدمت</p></div></div>
 <div class="invoice-details-grid">
