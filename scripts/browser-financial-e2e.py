@@ -59,7 +59,13 @@ def main() -> None:
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
         context_a, manager_a = log_in(browser, "ci_manager_a")
-        manager_a.goto(f"{ORIGIN}/?page=services")
+        service_response=manager_a.goto(f"{ORIGIN}/?page=services")
+        if manager_a.get_by_text("CI E2E Service A").count() == 0:
+            manager_a.screenshot(path=str(OUTPUT / "service-error.png"), full_page=True)
+            raise AssertionError(
+                f"Company A service missing: HTTP {service_response.status if service_response else 'none'}; "
+                f"URL={manager_a.url}; page={manager_a.locator('body').inner_text()[:1800]}"
+            )
         expect(manager_a.get_by_text("CI E2E Service A")).to_be_visible()
         assert manager_a.get_by_text("CI E2E Service B").count() == 0, "Foreign company service leaked"
 
