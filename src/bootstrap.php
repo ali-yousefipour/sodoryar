@@ -151,6 +151,11 @@ function permission_catalog(): array {
 }
 /** Optional IAM schema; retain the legacy permission system until migration 010. */
 /** Consistent, localized permission groups used by company IAM screens. */
+function document_scopes_ready(): bool {
+    static $ready=null;
+    if ($ready===null) $ready=(bool)query("SHOW TABLES LIKE 'user_document_scopes'")->fetchColumn();
+    return $ready;
+}
 /** Financial document scope. No new restrictions until migration 011 is installed. */
 function document_scope(): string {
     $u=require_login();
@@ -158,8 +163,7 @@ function document_scope(): string {
     static $scope=null;
     if ($scope!==null) return $scope;
     try {
-        $ready=(bool)query("SHOW TABLES LIKE 'user_document_scopes'")->fetchColumn();
-        if (!$ready) return $scope='company';
+        if (!document_scopes_ready()) return $scope='company';
         $value=query('SELECT s.scope FROM user_document_scopes s JOIN users u ON u.id=s.user_id AND u.company_id=s.company_id WHERE s.user_id=? AND s.company_id=?',[$u['id'],$u['company_id']])->fetchColumn();
         return $scope=$value==='own'?'own':'company';
     } catch(PDOException $ex) {
