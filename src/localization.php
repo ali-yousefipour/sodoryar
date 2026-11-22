@@ -69,3 +69,39 @@ function ui_value(mixed $value, string $key=''): string {
     }
     return fa_digits($value);
 }
+
+/** Convert an integer amount stored in toman to Persian words without floating point. */
+function toman_in_words(int|string $amount): string {
+    $number=(int)$amount;
+    if ($number<0) throw new InvalidArgumentException('Negative invoice amounts are not supported.');
+    if ($number===0) return 'صفر تومان';
+    $ones=['','یک','دو','سه','چهار','پنج','شش','هفت','هشت','نه'];
+    $teens=['ده','یازده','دوازده','سیزده','چهارده','پانزده','شانزده','هفده','هجده','نوزده'];
+    $tens=['','','بیست','سی','چهل','پنجاه','شصت','هفتاد','هشتاد','نود'];
+    $hundreds=['','صد','دویست','سیصد','چهارصد','پانصد','ششصد','هفتصد','هشتصد','نهصد'];
+    $scales=['','هزار','میلیون','میلیارد','هزار میلیارد','کوادریلیون'];
+    $groups=[];
+    $scale=0;
+    while ($number>0) {
+        $triplet=$number%1000;
+        if ($triplet!==0) {
+            $parts=[];
+            $h=intdiv($triplet,100);
+            $rem=$triplet%100;
+            if ($h) $parts[]=$hundreds[$h];
+            if ($rem>=10 && $rem<20) $parts[]=$teens[$rem-10];
+            else {
+                $t=intdiv($rem,10);
+                $u=$rem%10;
+                if ($t) $parts[]=$tens[$t];
+                if ($u) $parts[]=$ones[$u];
+            }
+            $part=implode(' و ',$parts);
+            if ($scale && isset($scales[$scale])) $part.=' '.$scales[$scale];
+            array_unshift($groups,$part);
+        }
+        $number=intdiv($number,1000);
+        $scale++;
+    }
+    return implode(' و ',$groups).' تومان';
+}
