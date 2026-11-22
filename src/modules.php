@@ -121,6 +121,12 @@ function commission_sales_total(int $tenant,int $userId,string $from,string $to)
     return $total;
 }
 
+/** Check an immutable commission period inside a transaction holding the user's row lock. */
+function commission_period_already_recorded(int $tenant,int $userId,string $period,string $key): bool {
+    return (bool)query('SELECT id FROM commissions WHERE company_id=? AND user_id=? AND period_type=? AND period_key=? LIMIT 1',
+        [$tenant,$userId,$period,$key])->fetchColumn();
+}
+
 function handle_module_post(string $page, string $action): void {
     $tenant = $page==='profile' ? 0 : tenant_id();
     if ($page === 'roles' && in_array($action,['create','update','copy','toggle','default','remove'],true)) {
@@ -446,8 +452,7 @@ function handle_module_post(string $page, string $action): void {
             if (!query('SELECT id FROM users WHERE id=? AND company_id=? AND is_active=1 FOR UPDATE',[$userId,$tenant])->fetch()) {
                 throw new RuntimeException('کاربر برای محاسبه پورسانت معتبر نیست.');
             }
-            if (query('SELECT id FROM commissions WHERE company_id=? AND user_id=? AND period_type=? AND period_key=? LIMIT 1',
-                [$tenant,$userId,$period,$date])->fetch()) {
+            if (commission_period_already_recorded($tenant,$userId,$period,$date)) {
                 throw new RuntimeException('پورسانت این کاربر برای دوره انتخاب‌شده قبلاً ثبت شده است؛ از گزارش سوابق بررسی کنید.');
             }
             $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
