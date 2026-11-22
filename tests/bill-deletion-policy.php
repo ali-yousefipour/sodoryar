@@ -4,7 +4,7 @@ require __DIR__.'/../src/bootstrap.php';
 require __DIR__.'/../src/modules.php';
 
 $base=['deleted_at'=>'2026-11-22 12:00:00','paid_method'=>'manual','ref_code'=>null,'response_code'=>null];
-assert(bill_can_permanently_delete($base) === true);
+if (!bill_can_permanently_delete($base)) throw new RuntimeException('Eligible manual record rejected.');
 $cases=[
  ['deleted_at'=>null],
  ['paid_method'=>'pos'],
