@@ -46,6 +46,8 @@ jobs:
           php tests/tenant-security-contracts.php
       - name: Verify A5 and thermal print layout contracts
         run: php tests/print-layout-contracts.php
+      - name: Verify company scoped print template editing
+        run: php tests/print-template-edit.php
       - name: Verify Persian invoice amount words
         run: php tests/invoice-amount-words.php
       - name: Verify company-vs-own document-scope security contracts
