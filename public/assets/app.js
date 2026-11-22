@@ -254,13 +254,20 @@ document.addEventListener('DOMContentLoaded',()=>{
       });
       count.textContent=`${moneyFormat.format(visible)} خدمت از ${moneyFormat.format(options.length)} خدمت`;
       selected.textContent=`${moneyFormat.format(chosen)} خدمت انتخاب شده`;
-      // Preview includes ad-hoc rows and uses exact integer arithmetic.
+      // The preview must not interpret invalid "1.5" or "1,5" as 15 toman.
+      // Invalid amounts stay visible as an error until the user corrects them.
+      let hasInvalidAmount=false;
       extraItems?.querySelectorAll('input[name="extra_price[]"]').forEach(field=>{
-        const digits=String(field.value).replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776))
-          .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632)).replace(/[^0-9]/g,'');
+        const raw=String(field.value).trim().replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776))
+          .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632));
+        const valid=raw==='' || /^[0-9]+$/.test(raw)
+          || /^[0-9]{1,3}(?:[,٬، ][0-9]{3})+$/.test(raw);
+        const digits=raw.replace(/[,٬، ]/g,'');
+        if(!valid || digits.length>15){hasInvalidAmount=true;return;}
         if(digits)sum+=BigInt(digits);
       });
-      total.textContent=moneyFormat.format(sum);
+      total.textContent=hasInvalidAmount?'مبلغ موردی نامعتبر':moneyFormat.format(sum);
+      total.setAttribute('aria-invalid',String(hasInvalidAmount));
       empty.hidden=visible!==0;
       clear.hidden=!search.value;
     };
