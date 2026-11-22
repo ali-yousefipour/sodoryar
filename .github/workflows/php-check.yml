@@ -52,6 +52,8 @@ jobs:
           php tests/tenant-security-contracts.php
       - name: Verify A5 and thermal print layout contracts
         run: php tests/print-layout-contracts.php
+      - name: Verify dashboard ranking is accessible under strict CSP
+        run: php tests/dashboard-csp-progress.php
       - name: Verify company scoped print template editing
         run: php tests/print-template-edit.php
       - name: Verify Persian invoice amount words
