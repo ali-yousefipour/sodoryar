@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS invoices (
  invoice_date DATE NULL DEFAULT NULL,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  UNIQUE KEY uq_invoice_number(company_id,invoice_number),
- UNIQUE KEY uq_invoice_id_company(id,company_id), INDEX idx_invoice_date(company_id,created_at), INDEX idx_invoice_service_date(company_id,invoice_date),
+ UNIQUE KEY uq_invoice_id_company(id,company_id), INDEX idx_invoices_tenant_user_date(company_id,user_id,invoice_date,id), INDEX idx_invoice_date(company_id,created_at), INDEX idx_invoice_service_date(company_id,invoice_date),
  CONSTRAINT fk_invoice_company FOREIGN KEY(company_id) REFERENCES companies(id),
  CONSTRAINT fk_invoice_customer FOREIGN KEY(customer_id,company_id) REFERENCES customers(id,company_id),
  CONSTRAINT fk_invoice_user FOREIGN KEY(user_id) REFERENCES users(id)
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
  user_id BIGINT UNSIGNED NULL, action VARCHAR(100) NOT NULL,
  details TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  INDEX idx_log_tenant(company_id,created_at),
+ INDEX idx_activity_tenant_user_date(company_id,user_id,created_at,id),
  CONSTRAINT fk_log_company FOREIGN KEY(company_id) REFERENCES companies(id),
  CONSTRAINT fk_log_user FOREIGN KEY(user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -83,10 +84,13 @@ CREATE TABLE IF NOT EXISTS bill_payments (
  bill_id VARCHAR(100) NOT NULL, payment_id VARCHAR(100) NOT NULL,
  amount BIGINT UNSIGNED NOT NULL, ref_code VARCHAR(120), response_code VARCHAR(30),
  national_code VARCHAR(12), driver_name VARCHAR(200),
- paid_method ENUM('manual','pos') NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ paid_method ENUM('manual','pos') NOT NULL, deleted_at TIMESTAMP NULL DEFAULT NULL, deleted_by BIGINT UNSIGNED NULL DEFAULT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  INDEX idx_bill_date(company_id,created_at),
+ INDEX idx_bill_trash(company_id,deleted_at,id),
+ INDEX idx_bills_tenant_user_date(company_id,user_id,created_at,id),
  CONSTRAINT fk_bill_company FOREIGN KEY(company_id) REFERENCES companies(id),
- CONSTRAINT fk_bill_user FOREIGN KEY(user_id) REFERENCES users(id)
+ CONSTRAINT fk_bill_user FOREIGN KEY(user_id) REFERENCES users(id),
+ CONSTRAINT fk_bill_deleted_by FOREIGN KEY(deleted_by) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE IF NOT EXISTS app_settings (
  company_id BIGINT UNSIGNED NOT NULL, setting_key VARCHAR(120) NOT NULL,
@@ -98,6 +102,7 @@ CREATE TABLE IF NOT EXISTS commissions (
  user_id BIGINT UNSIGNED NOT NULL, period_type ENUM('daily','monthly') NOT NULL,
  period_key VARCHAR(10) NOT NULL, sales_total BIGINT UNSIGNED NOT NULL,
  rate DECIMAL(6,3) NOT NULL, amount BIGINT UNSIGNED NOT NULL,
+ INDEX idx_comm_tenant_user_period(company_id,user_id,period_type,period_key),
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT fk_comm_company FOREIGN KEY(company_id) REFERENCES companies(id),
  CONSTRAINT fk_comm_user FOREIGN KEY(user_id) REFERENCES users(id)
