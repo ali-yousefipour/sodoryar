@@ -84,10 +84,19 @@ def main() -> None:
         manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
         selected_total = manager_a.locator("[data-service-total]").inner_text()
         assert ascii_number(selected_total) == 45000, "Selected service price did not update"
+        manager_a.locator("[data-add-invoice-item]").click()
+        manager_a.locator('input[name="extra_title[]"]').fill("CI E2E Custom Service")
+        manager_a.locator('input[name="extra_price[]"]').fill("۲۵۰۰۰")
+        assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
+            "Custom invoice item was not included in the browser total"
+        )
+        manager_a.locator('[data-payment="pos"]').click()
+        manager_a.locator("#posRef").fill("CI-INVOICE-POS-2026")
         manager_a.locator(".invoice-submit").click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         expect(manager_a.locator(".receipt")).to_be_visible()
-        expect(manager_a.locator(".receipt")).to_contain_text("۴۵٬۰۰۰")
+        expect(manager_a.locator(".receipt")).to_contain_text("۷۰٬۰۰۰")
+        expect(manager_a.locator(".receipt")).to_contain_text("CI-INVOICE-POS-2026")
         invoice_id = re.search(r"[?&]id=(\d+)", manager_a.url)
         assert invoice_id, "New invoice did not redirect to its receipt"
         receipt_pdf = manager_a.pdf(prefer_css_page_size=True, print_background=True)
