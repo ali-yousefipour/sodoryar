@@ -120,6 +120,31 @@ function sum_invoice_line_amounts(array $lines): int {
     return $total;
 }
 
+/** Integer milli-percent units: 1.500% => 1500, with no binary float. */
+function commission_rate_milli_percent(mixed $raw): int {
+    if (!is_scalar($raw)) throw new RuntimeException('نرخ پورسانت نامعتبر است.');
+    $text=str_replace('٫','.',ascii_digits(trim((string)$raw)));
+    if (!preg_match('/^(?:0|[1-9][0-9]{0,2})(?:\\.[0-9]{1,3})?$/D',$text)) {
+        throw new RuntimeException('نرخ پورسانت باید بین صفر تا صد و حداکثر سه رقم اعشار باشد.');
+    }
+    $parts=explode('.',$text,2);
+    $milli=(int)$parts[0]*1000+(int)str_pad($parts[1]??'',3,'0',STR_PAD_RIGHT);
+    if ($milli>100000) throw new RuntimeException('نرخ پورسانت نباید بیشتر از صد درصد باشد.');
+    return $milli;
+}
+
+/** Apply percentage(s) precisely to whole toman, rounding only once at the end. */
+function commission_amount_toman(int $sales,int $limit,int $baseRate,int $extraRate,bool $threshold): int {
+    if ($sales<0 || $limit<0 || $baseRate<0 || $baseRate>100000 || $extraRate<0 || $extraRate>100000) {
+        throw new RuntimeException('مبلغ یا نرخ محاسبه پورسانت معتبر نیست.');
+    }
+    $base=$threshold?min($sales,$limit):$sales;
+    $extra=$threshold?($sales-$base):0;
+    $quotient=intdiv($base,100000)*$baseRate + intdiv($extra,100000)*$extraRate;
+    $remainder=($base%100000)*$baseRate + ($extra%100000)*$extraRate;
+    return $quotient + intdiv($remainder+50000,100000);
+}
+
 /** Display monetary values in the existing stored unit (toman). */
 function money_toman(int|string $amount): string {
     return money($amount).' تومان';
