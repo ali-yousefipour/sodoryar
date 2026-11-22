@@ -75,6 +75,31 @@ function normalize_invoice_service_ids(mixed $submitted): array {
     return array_values($ids);
 }
 
+/** Validate ad-hoc invoice rows with the same monetary parser as fixed services. */
+function normalize_invoice_extra_rows(mixed $titles,mixed $prices): array {
+    if (!is_array($titles) || !is_array($prices) || count($titles)>10 || count($prices)>10) {
+        throw new RuntimeException('حداکثر ۱۰ ردیف خدمات موردی مجاز است.');
+    }
+    if (array_keys($titles)!==array_keys($prices)) {
+        throw new RuntimeException('ردیف‌های خدمات موردی ناقص یا ناسازگار هستند.');
+    }
+    $rows=[];
+    foreach ($titles as $key=>$value) {
+        if (!is_string($value) || !is_scalar($prices[$key])) {
+            throw new RuntimeException('ردیف خدمات موردی نامعتبر است.');
+        }
+        $title=trim($value);
+        $raw=trim((string)$prices[$key]);
+        if ($title==='' && $raw==='') continue;
+        $amount=parse_money_input($raw,1,100000000000);
+        if ($title==='' || mb_strlen($title)>200 || $amount===false) {
+            throw new RuntimeException('عنوان و مبلغ خدمت موردی معتبر نیست.');
+        }
+        $rows[]=['title'=>$title,'price'=>$amount];
+    }
+    return $rows;
+}
+
 /** Sum integer monetary lines safely; never silently round an overflowing invoice. */
 function sum_invoice_line_amounts(array $lines): int {
     $total=0;
