@@ -512,10 +512,17 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
             require_permission($page==='reports' ? 'reports.export' : 'activity.export');
             if ($page==='reports') {
                 $reportData=invoice_report($tenant,$reportFilter,10000);
+                if ((int)$reportData['summary']['qty']>10000) {
+                    throw new RuntimeException('تعداد فاکتورهای این خروجی بیش از ۱۰٬۰۰۰ مورد است؛ برای دریافت فایل کامل، بازه تاریخ یا فیلترها را محدود کنید.');
+                }
                 $rows=array_map(static fn($r)=>[fa_digits($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',fa_digits((string)$r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
                 export_excel_xlsx('sodoryar-invoices',['شماره فاکتور','تاریخ','کد ملی','نام راننده','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],$rows);
             } else {
-                $rows=activity_report($tenant,$reportFilter,10000);
+                // Fetch one extra record to detect and refuse a silently truncated export.
+                $rows=activity_report($tenant,$reportFilter,10001);
+                if (count($rows)>10000) {
+                    throw new RuntimeException('تعداد سوابق فعالیت بیش از ۱۰٬۰۰۰ ردیف است؛ برای خروجی کامل، فیلتر تاریخ یا کاربر را محدود کنید.');
+                }
                 export_excel_xlsx('sodoryar-activity',['تاریخ و ساعت','کاربر','عملیات','توضیحات'],array_map(static fn($r)=>[jalali_datetime($r['created_at']),$r['full_name'],$r['action'],$r['details']],$rows));
             }
         }
