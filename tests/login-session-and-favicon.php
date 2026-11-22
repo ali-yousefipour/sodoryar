@@ -16,7 +16,7 @@ if (!str_contains($bootstrap, 'hash_equals(csrf_token(), $submitted)')
     || !str_contains($bootstrap, 'Sodoryar CSRF mismatch: cookie=')) {
     throw new RuntimeException('CSRF protection and non-sensitive session diagnostics must remain in place.');
 }
-if (!str_contains($index, "if ($page === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST')")
+if (!str_contains($index, 'if ($page === \'login\' && $_SERVER[\'REQUEST_METHOD\'] === \'POST\')')
     || !str_contains($index, 'verify_csrf();')
     || !str_contains($index, '<?=csrf_field()?>')
     || !str_contains($index, '/favicon.svg')) {
