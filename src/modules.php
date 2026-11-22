@@ -376,8 +376,16 @@ function handle_module_post(string $page, string $action): void {
         $old=(string)($_POST['current_password']??''); $new=(string)($_POST['new_password']??'');
         $hash=query('SELECT password_hash FROM users WHERE id=?',[user()['id']])->fetchColumn();
         if (!password_verify($old,(string)$hash) || strlen($new)<12 || $old===$new) throw new RuntimeException('رمز فعلی نادرست است یا رمز جدید حداقل ۱۲ کاراکتر و متفاوت نیست.');
-        query('UPDATE users SET password_hash=? WHERE id=?',[password_hash($new,PASSWORD_DEFAULT),user()['id']]);
-        audit('password.change'); session_regenerate_id(true); redirect('profile','رمز عبور تغییر کرد.');
+        db()->beginTransaction();
+        try {
+            $versioned=auth_version_ready();
+            query('UPDATE users SET password_hash=?'.($versioned?',auth_version=auth_version+1':'').' WHERE id=?',[password_hash($new,PASSWORD_DEFAULT),user()['id']]);
+            if ($versioned) $_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[user()['id']])->fetchColumn();
+            audit('password.change');
+            db()->commit();
+        } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        session_regenerate_id(true);
+        redirect('profile','رمز عبور تغییر کرد؛ نشست‌های قبلی در دستگاه‌های دیگر لغو شدند.');
     }
     if ($page === 'profile' && $action === 'photo') {
         save_profile_photo((int)user()['id']);
