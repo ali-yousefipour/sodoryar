@@ -107,7 +107,17 @@ def main() -> None:
         assert number(total.inner_text()) == 12345, "Fixed service amount missing from UI total"
         page.locator("[data-add-invoice-item]").click()
         page.locator('input[name="extra_title[]"]').fill("خدمت موردی")
-        page.locator('input[name="extra_price[]"]').fill("۲۵۰۰۰")
+        price_field = page.locator('input[name="extra_price[]"]')
+        price_field.fill("۱.۵")
+        assert price_field.evaluate("(el) => el.validity.customError"), (
+            "A decimal money value was silently converted instead of rejected"
+        )
+        price_field.fill("۱,۵")
+        assert price_field.evaluate("(el) => el.validity.customError"), (
+            "Malformed comma grouping was silently converted into a different amount"
+        )
+        price_field.fill("۲۵۰۰۰")
+        assert not price_field.evaluate("(el) => el.validity.customError")
         assert number(total.inner_text()) == 37345, "Ad-hoc amount missing from live invoice total"
         columns = page.locator(".extra-invoice-row").evaluate(
             "(element) => getComputedStyle(element).gridTemplateColumns"
@@ -131,6 +141,14 @@ def main() -> None:
         page.locator(".jalali-dialog .calendar-day").first.click()
         assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", page.locator('[name="invoice_date"]').input_value()), (
             "Calendar did not update ISO form value"
+        )
+
+        page.evaluate("""() => document.querySelector('#invoiceCreateForm')
+            .dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}))""")
+        assert page.locator(".invoice-submit").is_disabled(), "Invoice form was not locked after submission"
+        page.evaluate("window.dispatchEvent(new Event('pageshow'))")
+        assert page.locator(".invoice-submit").is_enabled(), (
+            "Browser history restoration left invoice submission disabled"
         )
 
         page.emulate_media(media="print")
@@ -158,7 +176,7 @@ def main() -> None:
             print(f"Chrome {paper_class}: PDF page width {width:.1f}pt; {pages} page(s)")
         assert not errors, "Browser JavaScript errors: " + "; ".join(errors)
         browser.close()
-    print("PASS: real Chromium invoice totals, responsive forms, modal, Jalali calendar, print widths and pagination")
+    print("PASS: Chromium invoice amounts, invalid input, busy-state recovery, responsive forms, modal, Jalali date, print widths and pagination")
 
 
 if __name__ == "__main__":
