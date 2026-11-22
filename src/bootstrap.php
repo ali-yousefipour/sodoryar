@@ -141,12 +141,18 @@ function permission_catalog(): array {
         'bills.view'=>'مشاهده قبوض', 'bills.create'=>'ثبت پرداخت قبض',
         'commissions.view'=>'مشاهده پورسانت', 'pos.view'=>'مشاهده کارتخوان‌ها',
         'activity.view'=>'مشاهده لاگ فعالیت',
+        'users.manage'=>'مدیریت کاربران شرکت',
+        'invoices.print'=>'چاپ فاکتور', 'invoices.payment_edit'=>'ویرایش روش پرداخت فاکتور',
+        'invoices.void'=>'ابطال فاکتور',
+        'bills.soft_delete'=>'انتقال فیش به سطل زباله',
+        'bills.restore'=>'بازیابی فیش حذف‌شده',
+        'bills.permanent_delete'=>'حذف دائمی فیش مجاز',
     ];
 }
 function can(string $permission): bool {
     $u = require_login();
-    if (in_array($u['role'],['superadmin','company_admin'],true)) return true;
     if (!array_key_exists($permission,permission_catalog())) return false;
+    if (in_array($u['role'],['superadmin','company_admin'],true)) return true;
     static $allowed = null;
     if ($allowed === null) $allowed = query('SELECT permission_key FROM user_permissions WHERE user_id=?',[$u['id']])->fetchAll(PDO::FETCH_COLUMN);
     return in_array($permission,$allowed,true);
