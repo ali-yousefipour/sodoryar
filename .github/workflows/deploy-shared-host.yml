@@ -69,6 +69,35 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Validate isolated Sodoryar target and public origin before upload
+        env:
+          FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '' }}
+          SODORYAR_PUBLIC_BASE_URL: ${{ vars.SODORYAR_PUBLIC_BASE_URL || '' }}
+        run: |
+          set -euo pipefail
+          # Shared host also contains Khatyar and ServiceYar. Configuration is explicit.
+          if [[ -z "$FTP_REMOTE_DIR" || -z "$SODORYAR_PUBLIC_BASE_URL" ]]; then
+            echo "::error::Set SODORYAR_FTP_REMOTE_DIR and SODORYAR_PUBLIC_BASE_URL to independently verified Sodoryar values."
+            exit 1
+          fi
+          if [[ ! "$FTP_REMOTE_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]] ||
+             [[ "$FTP_REMOTE_DIR" == *".."* ]] ||
+             [[ "$FTP_REMOTE_DIR" == "/taxiranico.ir"* ]] ||
+             [[ "$FTP_REMOTE_DIR" == "/service-yar.ir"* ]] ||
+             [[ "$FTP_REMOTE_DIR" == "/khat-yar.ir"* ]] ||
+             [[ "$FTP_REMOTE_DIR" == "/app"* ]]; then
+            echo "::error::Refusing a shared or unsafe remote FTP path."
+            exit 1
+          fi
+          if [[ ! "$SODORYAR_PUBLIC_BASE_URL" =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]*(:443)?$ ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://taxiranico.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://service-yar.ir" ]] ||
+             [[ "$SODORYAR_PUBLIC_BASE_URL" == "https://khat-yar.ir" ]]; then
+            echo "::error::Refusing the shared ServiceYar/Khatyar public URL."
+            exit 1
+          fi
+          echo "Sodoryar deployment target and public URL have independent shapes; ownership marker verification follows."
+
       - name: Build isolated host payload
         run: |
           set -euo pipefail
