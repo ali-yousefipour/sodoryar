@@ -634,6 +634,17 @@ document.addEventListener('DOMContentLoaded',()=>{
     const submit=invoiceForm.querySelector('button[type="submit"]');
     if(submit){submit.disabled=true;submit.setAttribute('aria-busy','true');submit.textContent='در حال ثبت فاکتور…';}
   });
+  document.querySelectorAll('form[data-once-submit]').forEach(form=>{
+    form.addEventListener('submit',event=>{
+      if(event.defaultPrevented)return;
+      const submit=form.querySelector('button[type="submit"],button:not([type])');
+      if(submit){
+        submit.disabled=true;
+        submit.setAttribute('aria-busy','true');
+        submit.textContent='در حال ثبت…';
+      }
+    });
+  });
   // Render-only Persian numerals for labels, counters and table content.
   // Inputs, URLs, machine identifiers and Latin technical strings are deliberately excluded.
   const localizeVisibleDigits=root=>{
