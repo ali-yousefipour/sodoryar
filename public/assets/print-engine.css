@@ -42,7 +42,9 @@
 .receipt-toolbar { display:flex; justify-content:center; gap:8px; padding:8px; }
 @page sodoryarA5 { size:A5 portrait; margin:8mm; }
 @page sodoryarA4 { size:A4 portrait; margin:10mm; }
-@page sodoryarThermal { margin:0; }
+/* Named thermal media must carry a roll-width page size, not A4 defaults.
+   Browsers/printer drivers can still override page size; verify on the device. */
+@page sodoryarThermal { size:80mm 297mm; margin:0; }
 @media print {
   html,body { margin:0!important; padding:0!important; background:#fff!important; }
   .app-shell,.main-wrap,.content { display:contents!important; }
@@ -54,6 +56,12 @@
   .receipt-thermal h1 { font-size:12pt!important; }
   .receipt-thermal h2 { font-size:10pt!important; padding:2mm 0!important; background:none!important; color:#000!important; }
   .receipt th,.receipt td,.receipt h1,.receipt h2,.receipt p { color:#000!important; background:transparent!important; }
+  /* Protect financial rows and amounts from clipping on narrow rolls. */
+  .receipt { box-sizing:border-box!important; overflow-wrap:anywhere!important; }
+  .receipt-thermal table { width:100%!important; table-layout:fixed!important; }
+  .receipt-thermal th:first-child,.receipt-thermal td:first-child { width:59%; }
+  .receipt-thermal th:last-child,.receipt-thermal td:last-child { width:41%; text-align:left!important; }
+  .receipt-thermal .receipt-contact,.receipt-thermal .receipt-amount-words { max-width:100%; overflow-wrap:anywhere; }
   .receipt table { break-inside:auto!important; }
   .receipt thead { display:table-header-group!important; }
   .receipt tr { break-inside:avoid!important; page-break-inside:avoid!important; }
