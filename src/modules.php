@@ -372,10 +372,12 @@ function handle_module_post(string $page, string $action): void {
         if (mb_strlen(trim((string)($_POST['company_name']??'')))>180) throw new RuntimeException('نام شرکت بیش از حد طولانی است.');
         $website=trim((string)($_POST['company_website']??''));
         if ($website!=='' && (!filter_var($website,FILTER_VALIDATE_URL) || !in_array(strtolower((string)parse_url($website,PHP_URL_SCHEME)),['http','https'],true))) throw new RuntimeException('آدرس وب‌سایت معتبر نیست.');
-        foreach (['commission_rate','commission_limit','commission_over_limit_rate'] as $key) {
-            $value=(string)($_POST[$key]??'0');
-            if (!is_numeric($value) || (float)$value<0 || (float)$value>($key==='commission_limit'?1000000000000:100)) throw new RuntimeException('درصد یا سقف پورسانت نامعتبر است.');
+        foreach (['commission_rate','commission_over_limit_rate'] as $key) {
+            commission_rate_milli_percent($_POST[$key]??'0');
         }
+        $normalizedLimit=parse_money_input($_POST['commission_limit']??'0',0,1000000000000);
+        if ($normalizedLimit===false) throw new RuntimeException('سقف پورسانت باید مبلغ صحیح به تومان باشد.');
+        $post['commission_limit']=(string)$normalizedLimit;
         if ((string)($_POST['currency']??'')!=='toman') {
             // Invoice, service, bill and commission amounts are stored in toman.
             // An unsupported rial display toggle would silently misstate money.
@@ -423,10 +425,11 @@ function handle_module_post(string $page, string $action): void {
             throw new RuntimeException('درخواست محاسبه پورسانت قبلاً ثبت شده یا فرم منقضی شده است.');
         }
         $userId=filter_var($_POST['user_id']??null,FILTER_VALIDATE_INT);
-        $rate=filter_var($_POST['rate']??null,FILTER_VALIDATE_FLOAT);
+        $rateMilli=commission_rate_milli_percent($_POST['rate']??null);
+        $rateSql=sprintf('%d.%03d',intdiv($rateMilli,1000),$rateMilli%1000);
         $date=ascii_digits(trim((string)($_POST['period_key']??'')));
         $period=(string)($_POST['period_type']??'');
-        if (!$userId || $rate===false || $rate<0 || $rate>100 || !in_array($period,['daily','monthly'],true) || !preg_match($period==='daily'?'/^1[34]\d{2}[\/-]\d{2}[\/-]\d{2}$/':'/^1[34]\d{2}[\/-]\d{2}$/',$date)) throw new RuntimeException('دوره شمسی، نرخ یا کاربر نامعتبر است.');
+        if (!$userId || !in_array($period,['daily','monthly'],true) || !preg_match($period==='daily'?'/^1[34]\d{2}[\/-]\d{2}[\/-]\d{2}$/':'/^1[34]\d{2}[\/-]\d{2}$/',$date)) throw new RuntimeException('دوره شمسی، نرخ یا کاربر نامعتبر است.');
         if (!query('SELECT id FROM users WHERE id=? AND company_id=? AND is_active=1',[$userId,$tenant])->fetch()) throw new RuntimeException('کاربر متعلق به شرکت نیست.');
         $date=str_replace('/','-',$date);
         $from=jalali_to_gregorian_date($period==='daily'?$date:$date.'-01');
@@ -439,13 +442,20 @@ function handle_module_post(string $page, string $action): void {
         $total=commission_sales_total($tenant,$userId,$from,$to);
         $settings=query('SELECT setting_key,setting_value FROM app_settings WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
         if (($settings['commission_enabled']??'0')!=='1') throw new RuntimeException('ابتدا سیستم پورسانت را از تنظیمات شرکت فعال کنید.');
-        $limit=max(0,(float)($settings['commission_limit']??0));
-        $overRate=(float)($settings['commission_over_limit_rate']??0);
-        $amount=($settings['commission_enabled']??'0')==='1' && ($settings['commission_type']??'fixed')==='threshold'
-            ? (int)round(min($total,$limit)*(float)$rate/100 + max(0,$total-$limit)*$overRate/100)
-            : (int)round($total*(float)$rate/100);
-        query('INSERT INTO commissions(company_id,user_id,period_type,period_key,sales_total,rate,amount) VALUES(?,?,?,?,?,?,?)',[$tenant,$userId,$period,$date,$total,$rate,$amount]);
-        audit('commission.calculate',$date);
+        $limit=parse_money_input($settings['commission_limit']??'0',0,1000000000000);
+        if ($limit===false) throw new RuntimeException('سقف پورسانت شرکت نامعتبر است.');
+        $overRateMilli=commission_rate_milli_percent($settings['commission_over_limit_rate']??'0');
+        $amount=commission_amount_toman($total,$limit,$rateMilli,$overRateMilli,
+            ($settings['commission_type']??'fixed')==='threshold');
+        db()->beginTransaction();
+        try {
+            query('INSERT INTO commissions(company_id,user_id,period_type,period_key,sales_total,rate,amount) VALUES(?,?,?,?,?,?,?)',[$tenant,$userId,$period,$date,$total,$rateSql,$amount]);
+            audit('commission.calculate',$date);
+            db()->commit();
+        } catch (Throwable $ex) {
+            db()->rollBack();
+            throw $ex;
+        }
         unset($_SESSION['commission_calculate_nonce']);
         redirect('commissions','پورسانت محاسبه و ثبت شد.');
     }
