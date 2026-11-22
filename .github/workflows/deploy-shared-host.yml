@@ -36,6 +36,7 @@ jobs:
           cp .env.example deploy-payload/_private/.env.example
           test -s deploy-payload/public/index.php
           test -s deploy-payload/_private/src/bootstrap.php
+          printf '{"commit":"%s"}\n' "$GITHUB_SHA" > deploy-payload/public/sodoryar-version.json
           echo 'Deploying public/ to the Sodoryar root and protected application code to _private/.'
 
       - name: Upload through FTP with host-compatible TLS
@@ -71,10 +72,26 @@ jobs:
           set net:max-retries 5
           set net:timeout 60
           set net:reconnect-interval-base 2
-          mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
           mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
           bye
           EOF
+
+      - name: Verify deployed application commit manifest
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
+            -H 'Cache-Control: no-cache' \
+            "https://taxiranico.ir/sodoryar-version.json?deploy=${GITHUB_SHA}" \
+            -o /tmp/sodoryar-deployed-version.json
+          php -r '
+            $info=json_decode((string)file_get_contents("/tmp/sodoryar-deployed-version.json"),true);
+            if(!is_array($info) || ($info["commit"]??"") !== getenv("GITHUB_SHA")) {
+              fwrite(STDERR,"Deployed version does not match the triggering commit.\n");
+              exit(1);
+            }
+            echo "Deployed application commit verified.\n";
+          '
 
       - name: Verify public invoice stylesheet matches deployed commit
         run: |
