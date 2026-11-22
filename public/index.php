@@ -86,6 +86,7 @@ try {
                 login_succeeded($attemptKey);
                 session_regenerate_id(true);
                 $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
+                if (auth_version_ready()) $_SESSION['auth_version']=(int)$u['auth_version'];
                 $_SESSION['last_activity']=time(); $_SESSION['regenerated_at']=time();
                 unset($_SESSION['selected_company']); audit('login'); redirect('dashboard');
             }
