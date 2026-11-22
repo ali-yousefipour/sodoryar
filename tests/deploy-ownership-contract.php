@@ -29,6 +29,10 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || ''") !== 2
     || substr_count($workflow, 'Unsafe or unspecified Sodoryar deployment directory.') !== 2
     || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/taxiranico.ir"') !== 2
     || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/service-yar.ir"') !== 2
+    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/taxiranico.ir/"*') !== 2
+    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/service-yar.ir/"*') !== 2
+    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/khat-yar.ir/"*') !== 2
+    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/app/"*') !== 2
     || str_contains($workflow, 'FTP_REMOTE_DIR: .')
     || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') !== 2) {
     throw new RuntimeException('Shared-host deployment must use a scoped directory and safely passed FTP credentials in both stages.');
