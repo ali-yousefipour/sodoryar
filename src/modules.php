@@ -385,7 +385,7 @@ function handle_module_post(string $page, string $action): void {
             db()->commit();
         } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         session_regenerate_id(true);
-        redirect('profile','رمز عبور تغییر کرد؛ نشست‌های قبلی در دستگاه‌های دیگر لغو شدند.');
+        redirect('profile',$versioned?'رمز عبور تغییر کرد و نشست‌های قبلی دستگاه‌های دیگر لغو شدند.':'رمز عبور تغییر کرد. برای لغو نشست‌های قبلی Migration شماره ۰۱۴ را اجرا کنید.');
     }
     if ($page === 'profile' && $action === 'photo') {
         save_profile_photo((int)user()['id']);
