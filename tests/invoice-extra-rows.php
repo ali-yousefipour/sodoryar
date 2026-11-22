@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/../src/bootstrap.php';
 require_once __DIR__.'/../src/localization.php';
 
 $rows=normalize_invoice_extra_rows(['خدمت','ردیف خالی','خدمت دوم'],['۱۲٬۳۴۵','','100,000']);
