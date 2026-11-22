@@ -25,17 +25,14 @@ if (substr_count($workflow, 'FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}') !== 2
     || substr_count($workflow, '          $ca_setting') !== 2) {
     throw new RuntimeException('Both FTPS phases must support validated custom CA certificates without disabling TLS verification.');
 }
-if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || ''") !== 2
+if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || substr_count($workflow, 'Unsafe or unspecified Sodoryar deployment directory.') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/taxiranico.ir"') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/service-yar.ir"') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/taxiranico.ir/"*') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/service-yar.ir/"*') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/khat-yar.ir/"*') !== 2
-    || substr_count($workflow, '"$FTP_REMOTE_DIR" == "/app/"*') !== 2
-    || str_contains($workflow, 'FTP_REMOTE_DIR: .')
-    || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') !== 2) {
-    throw new RuntimeException('Shared-host deployment must use a scoped directory and safely passed FTP credentials in both stages.');
+    || substr_count($workflow, 'if [[ "$FTP_REMOTE_DIR" != "." ]]') !== 3
+    || !str_contains($workflow, 'get "_private/.sodoryar-instance"')
+    || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') !== 2
+    || str_contains($workflow, 'FTP_REMOTE_DIR: /')
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
+    throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
 if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origin before upload')
     || substr_count($workflow, "vars.SODORYAR_PUBLIC_BASE_URL || ''") !== 4
