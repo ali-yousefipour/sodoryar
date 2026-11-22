@@ -308,6 +308,28 @@ jobs:
             echo "Verified deployed $file ($expected)"
           done
 
+      - name: Verify live anonymous PHP session and CSRF stability
+        run: |
+          set -euo pipefail
+          origin="https://taxiranico.ir"
+          jar="$RUNNER_TEMP/sodoryar-session-cookie.txt"
+          first="$RUNNER_TEMP/sodoryar-login-first.html"
+          second="$RUNNER_TEMP/sodoryar-login-second.html"
+          curl --fail --silent --show-error --max-time 30 --cookie-jar "$jar" "$origin/?page=login" -o "$first"
+          curl --fail --silent --show-error --max-time 30 --cookie "$jar" "$origin/?page=login" -o "$second"
+          first_token="$(grep -oE 'name="csrf" value="[a-f0-9]{64}"' "$first" | head -n 1)"
+          second_token="$(grep -oE 'name="csrf" value="[a-f0-9]{64}"' "$second" | head -n 1)"
+          if [[ -z "$first_token" || "$first_token" != "$second_token" ]]; then
+            echo "::error::Anonymous PHP session did not persist the same CSRF token across requests."
+            exit 1
+          fi
+          if ! grep -q 'sodoryar_session' "$jar"; then
+            echo "::error::Login did not set Sodoryar session cookie."
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 "$origin/favicon.svg" -o /dev/null
+          echo 'Live login session, CSRF consistency and favicon passed.'
+
       - name: Deployment notes
         run: |
           echo 'Contents of public/ uploaded directly to the FTP account root.'
