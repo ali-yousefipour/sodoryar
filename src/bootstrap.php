@@ -289,6 +289,8 @@ function can(string $permission): bool {
 function require_permission(string $permission): void {
     if (!can($permission)) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 }
+/** Rotate CSRF when identity or effective tenant changes to invalidate old forms. */
+function rotate_csrf_token(): void { $_SESSION['csrf']=bin2hex(random_bytes(32)); }
 function csrf_token(): string { return $_SESSION['csrf'] ??= bin2hex(random_bytes(32)); }
 function csrf_field(): string { return '<input type="hidden" name="csrf" value="' . e(csrf_token()) . '">'; }
 function verify_csrf(): void {
