@@ -102,7 +102,7 @@ function export_excel_xlsx(string $name, array $headers, array $rows): never {
 function render_report_filters(string $page, array $filter, bool $invoice=true): void {
     $scope=document_scope();
     $users=query('SELECT id,full_name FROM users WHERE company_id=? AND is_active=1'.($scope==='own'?' AND id=?':'').' ORDER BY full_name',$scope==='own'?[tenant_id(),user()['id']]:[tenant_id()])->fetchAll();
-    echo '<form method="get" class="card report-filter"><input type="hidden" name="page" value="'.e($page).'"><div class="form-grid">';
+    echo '<form method="get" class="card report-filter" data-report-filter-form><input type="hidden" name="page" value="'.e($page).'"><div class="form-grid">';
     echo '<label>از تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_from" value="'.e($filter['date_from']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ شروع">×</button></span></label><label>تا تاریخ (شمسی)<span class="jalali-field"><input type="hidden" name="date_to" value="'.e($filter['date_to']).'" data-jalali-iso><button type="button" class="jalali-picker-button secondary" data-jalali-open>انتخاب تاریخ</button><button type="button" class="jalali-clear secondary" data-jalali-clear aria-label="پاک کردن تاریخ پایان">×</button></span></label>';
     echo '<label>کاربر<select name="user_id"><option value="">همه کاربران</option>';
     foreach($users as $u) echo '<option value="'.e($u['id']).'"'.($filter['user_id']===(string)$u['id']?' selected':'').'>'.e($u['full_name']).'</option>';
@@ -116,5 +116,5 @@ function render_report_filters(string $page, array $filter, bool $invoice=true):
     if (can($page === 'reports' ? 'reports.export' : 'activity.export')) {
         echo '<button type="submit" name="export" value="excel" class="secondary">خروجی اکسل</button>';
     }
-    echo '<a class="button-link" href="?page='.e($page).'">پاک‌کردن فیلترها</a></div></form>';
+    echo '<a class="button-link" href="?page='.e($page).'">پاک‌کردن فیلترها</a><span class="report-progress" data-report-progress role="status" aria-live="polite" hidden></span></div></form>';
 }
