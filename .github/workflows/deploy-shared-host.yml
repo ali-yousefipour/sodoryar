@@ -342,7 +342,7 @@ jobs:
             echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
-          for file in ux-unified.css iam-ux.css print-engine.css app.js table-experience.js report-progress.js; do
+          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css app.js table-experience.js report-progress.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
@@ -370,6 +370,14 @@ jobs:
           second_token="$(grep -oE 'name="csrf" value="[a-f0-9]{64}"' "$second" | head -n 1)"
           if [[ -z "$first_token" || "$first_token" != "$second_token" ]]; then
             echo "::error::Anonymous PHP session did not persist the same CSRF token across requests."
+            exit 1
+          fi
+          if ! grep -Fq 'assets/login-experience.css?v=' "$first"; then
+            echo "::error::Live login HTML is missing the new dedicated stylesheet; PHP page or deployed index.php is stale."
+            exit 1
+          fi
+          if ! grep -Fq 'class="login-layout"' "$first"; then
+            echo "::error::Live login HTML is missing the expected branded layout."
             exit 1
           fi
           if ! grep -q 'sodoryar_session' "$jar"; then
