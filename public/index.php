@@ -442,18 +442,7 @@ try {
             $tenant = tenant_id();
             $national=ascii_digits(trim((string)($_POST['driver_national_code']??'')));
             $selected = normalize_invoice_service_ids($_POST['service_ids'] ?? []);
-            $extraTitles=(array)($_POST['extra_title']??[]);
-            $extraPrices=(array)($_POST['extra_price']??[]);
-            if (count($extraTitles)>10 || count($extraPrices)>10) throw new RuntimeException('حداکثر ۱۰ ردیف اضافی مجاز است.');
-            $extras=[];
-            foreach ($extraTitles as $key=>$title) {
-                if (!is_string($title) || !is_scalar($extraPrices[$key]??null)) throw new RuntimeException('ردیف اضافی نامعتبر است.');
-                $title=trim($title);
-                $rawPrice=ascii_digits(str_replace([',','٬','،',' '], '',trim((string)$extraPrices[$key])));
-                if ($title==='' && $rawPrice==='') continue;
-                if ($title==='' || mb_strlen($title)>200 || !ctype_digit($rawPrice) || (int)$rawPrice<1 || (int)$rawPrice>100000000000) throw new RuntimeException('عنوان و مبلغ ردیف اضافی معتبر نیست.');
-                $extras[]=['title'=>$title,'price'=>(int)$rawPrice];
-            }
+            $extras=normalize_invoice_extra_rows($_POST['extra_title']??[],$_POST['extra_price']??[]);
             // The invoice date is independent of its immutable creation timestamp.
             $invoiceDate=ascii_digits(trim((string)($_POST['invoice_date']??'')));
             $parsedInvoiceDate=DateTimeImmutable::createFromFormat('!Y-m-d',$invoiceDate);
@@ -464,7 +453,7 @@ try {
                 throw new RuntimeException('برای ثبت تاریخ فاکتور، ابتدا مهاجرت دیتابیس ۰۰۸ را اجرا کنید.');
             }
             $payment = (string)($_POST['payment_type'] ?? ''); $ref = trim((string)($_POST['pos_ref'] ?? ''));
-            if (!preg_match('/^[0-9]{10}$/',$national) || (!$selected && !$extras) || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && $ref==='')) throw new RuntimeException('کد ملی، خدمات و شیوه پرداخت را کامل کنید.');
+            if (!preg_match('/^[0-9]{10}$/D',$national) || (!$selected && !$extras) || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && ($ref==='' || mb_strlen($ref)>120))) throw new RuntimeException('کد ملی، خدمات و شیوه پرداخت را کامل کنید.');
             if ($extras && !invoice_extensions_ready()) throw new RuntimeException('برای ثبت آیتم اضافی، ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
             db()->beginTransaction();
             try {
