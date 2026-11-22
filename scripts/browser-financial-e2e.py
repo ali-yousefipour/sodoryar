@@ -109,7 +109,7 @@ def main() -> None:
                 "POS bill not visible after save; URL=" + manager_a.url
                 + "; body=" + manager_a.locator("body").inner_text()[:2300]
             )
-        expect(manager_a.get_by_text("CI-E2E-BILL")).to_be_visible()
+        expect(manager_a.get_by_role("cell", name="CI-E2E-BILL", exact=True)).to_be_visible()
 
         manager_a.goto(f"{ORIGIN}/?page=reports")
         expect(manager_a.locator(".content")).to_be_visible()
