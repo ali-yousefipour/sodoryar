@@ -150,6 +150,22 @@ function permission_catalog(): array {
     ];
 }
 /** Optional IAM schema; retain the legacy permission system until migration 010. */
+/** Consistent, localized permission groups used by company IAM screens. */
+function permission_groups(): array {
+    $names=[
+        'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
+        'bills'=>'فیش‌ها و قبوض', 'reports'=>'گزارش‌های مالی', 'activity'=>'گزارش فعالیت‌ها',
+        'commissions'=>'پورسانت', 'pos'=>'کارتخوان‌ها', 'users'=>'کاربران',
+        'roles'=>'مدیریت نقش‌ها'
+    ];
+    $groups=[];
+    foreach(permission_catalog() as $key=>$label) {
+        $module=explode('.',$key,2)[0];
+        $group=$names[$module]??$module;
+        $groups[$group][$key]=$label;
+    }
+    return $groups;
+}
 function company_roles_ready(): bool {
     static $ready=null;
     if ($ready===null) {
