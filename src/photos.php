@@ -9,7 +9,12 @@ function user_photo_table_ready(): bool {
     static $ready=null;
     if ($ready===null) {
         try { query('SELECT 1 FROM user_photos LIMIT 0'); $ready=true; }
-        catch (PDOException $ex) { error_log('Sodoryar user photo migration pending: '.$ex->getCode()); $ready=false; }
+        catch (PDOException $ex) {
+            // Only a genuinely absent table may disable the optional photo feature.
+            // Connection/permission failures must surface instead of masquerading as 404s.
+            if ((string)$ex->getCode() === '42S02') $ready=false;
+            else throw $ex;
+        }
     }
     return $ready;
 }
