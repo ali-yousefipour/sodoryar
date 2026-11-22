@@ -2,7 +2,7 @@
 declare(strict_types=1);
 $workflow=(string)file_get_contents(__DIR__.'/../.github/workflows/deploy-shared-host.yml');
 $marker=strpos($workflow,'Verify FTP destination belongs to Sodoryar before changing files');
-$upload=strpos($workflow,'Upload through FTP with host-compatible TLS');
+$upload=strpos($workflow,'Upload through dedicated FTP account');
 $check=strpos($workflow,"grep -Fxq 'SODORYAR_DEPLOY_ROOT'");
 if($marker===false||$upload===false||$check===false||!($marker<$check&&$check<$upload)) {
     throw new RuntimeException('FTP target ownership verification must run before every upload.');
