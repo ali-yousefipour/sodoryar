@@ -1,5 +1,28 @@
 /* Sodoryar print isolation: A5 and nominal 80 mm receipt rolls only. */
 .receipt { box-sizing:border-box; direction:rtl; background:#fff; color:#111827; overflow-wrap:anywhere; margin-inline:auto; }
+.receipt-font-tahoma { font-family:Tahoma,sans-serif; }
+.receipt-font-vazirmatn { font-family:Vazirmatn,Tahoma,sans-serif; }
+.receipt-roll-56 { --thermal-content-width:56mm; }
+.receipt-roll-57 { --thermal-content-width:57mm; }
+.receipt-roll-58 { --thermal-content-width:58mm; }
+.receipt-roll-59 { --thermal-content-width:59mm; }
+.receipt-roll-60 { --thermal-content-width:60mm; }
+.receipt-roll-61 { --thermal-content-width:61mm; }
+.receipt-roll-62 { --thermal-content-width:62mm; }
+.receipt-roll-63 { --thermal-content-width:63mm; }
+.receipt-roll-64 { --thermal-content-width:64mm; }
+.receipt-roll-65 { --thermal-content-width:65mm; }
+.receipt-roll-66 { --thermal-content-width:66mm; }
+.receipt-roll-67 { --thermal-content-width:67mm; }
+.receipt-roll-68 { --thermal-content-width:68mm; }
+.receipt-roll-69 { --thermal-content-width:69mm; }
+.receipt-roll-70 { --thermal-content-width:70mm; }
+.receipt-roll-71 { --thermal-content-width:71mm; }
+.receipt-roll-72 { --thermal-content-width:72mm; }
+.receipt-roll-73 { --thermal-content-width:73mm; }
+.receipt-roll-74 { --thermal-content-width:74mm; }
+.receipt-roll-75 { --thermal-content-width:75mm; }
+.receipt-roll-76 { --thermal-content-width:76mm; }
 .receipt table { width:100%; border-collapse:collapse; table-layout:fixed; }
 .receipt th,.receipt td { text-align:right; vertical-align:top; overflow-wrap:anywhere; }
 .receipt thead { display:table-header-group; }
