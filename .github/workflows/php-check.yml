@@ -54,6 +54,8 @@ jobs:
         run: php tests/print-layout-contracts.php
       - name: Verify dashboard ranking is accessible under strict CSP
         run: php tests/dashboard-csp-progress.php
+      - name: Verify CSP permits safe company logo previews
+        run: php tests/csp-company-logo.php
       - name: Verify company scoped print template editing
         run: php tests/print-template-edit.php
       - name: Verify Persian invoice amount words
