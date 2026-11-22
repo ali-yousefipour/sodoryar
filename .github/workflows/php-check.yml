@@ -38,3 +38,5 @@ jobs:
         run: php tests/financial-module-routes.php
       - name: Verify payment edits and voids serialize correctly
         run: php tests/invoice-edit-void-serialization.php
+      - name: Verify Excel exports do not silently drop records
+        run: php tests/report-export-completeness.php
