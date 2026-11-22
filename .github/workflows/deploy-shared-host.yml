@@ -13,7 +13,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  database-integration:
+    name: Validate isolated MySQL migrations and tenant boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: sodoryar-ci-only-password
+          MARIADB_DATABASE: sodoryar_integration_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      SODORYAR_INTEGRATION: '1'
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_NAME: sodoryar_integration_test
+      DB_USER: root
+      DB_PASS: sodoryar-ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure PHP 8.4 for MariaDB integration
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, zip, gd
+          coverage: none
+      - name: Verify migrations and two-company financial isolation
+        run: php integration/mysql-tenant-smoke.php
+
   deploy:
+    needs: database-integration
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -29,7 +63,7 @@ jobs:
       - name: Gate deployment on PHP, JavaScript and security regression tests
         run: |
           set -euo pipefail
-          find public src scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          find public src scripts tests integration -name '*.php' -print0 | xargs -0 -n1 php -l
           node --check public/assets/app.js
           node --check public/assets/table-experience.js
           node --check public/assets/report-progress.js
