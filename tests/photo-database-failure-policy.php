@@ -5,7 +5,7 @@ declare(strict_types=1);
 // permission errors must never be treated as a missing photo migration.
 $source=(string)file_get_contents(__DIR__.'/../src/photos.php');
 $start=strpos($source, 'function user_photo_table_ready(): bool {');
-$end=strpos($source, '\nfunction validate_photo_target(', $start === false ? 0 : $start);
+$end=strpos($source, "\nfunction validate_photo_target(", $start === false ? 0 : $start);
 if ($start===false || $end===false) {
     throw new RuntimeException('Photo-table readiness implementation is missing.');
 }
