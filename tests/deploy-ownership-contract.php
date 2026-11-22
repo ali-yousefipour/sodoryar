@@ -19,4 +19,10 @@ if (!str_contains($workflow, 'needs: [source-validation, database-integration]')
 if (!str_contains($workflow, 'run: bash scripts/validate-release.sh')) {
     throw new RuntimeException('Independent source/regression release gate must run before deployment.');
 }
+if (substr_count($workflow, 'FTPS_CA_PEM: ${{ secrets.FTPS_CA_PEM }}') !== 2
+    || substr_count($workflow, 'openssl x509 -in "$ca_file" -noout') !== 2
+    || substr_count($workflow, 'ca_setting="set ssl:ca-file $ca_file"') !== 2
+    || substr_count($workflow, '          $ca_setting') !== 2) {
+    throw new RuntimeException('Both FTPS phases must support validated custom CA certificates without disabling TLS verification.');
+}
 echo "Release ownership, TLS and migration gate contracts passed\n";
