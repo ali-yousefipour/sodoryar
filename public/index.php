@@ -431,7 +431,11 @@ try {
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
                 audit('invoice.create',$number); db()->commit();
                 unset($_SESSION['invoice_create_nonce']);
-                header('Location: ?page=receipt&id='.$invoiceId); exit;
+                // Creation alone must not imply access to the receipt or invoice list.
+                if (can('invoices.view') && can('invoices.print')) {
+                    header('Location: ?page=receipt&id='.$invoiceId); exit;
+                }
+                redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
         }
         if ($page==='invoices' && $action==='edit') {
