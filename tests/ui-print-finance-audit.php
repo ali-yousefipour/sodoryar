@@ -24,5 +24,12 @@ $assert(str_contains($print,'@page sodoryarThermal { size:80mm 297mm; margin:0; 
 $assert(str_contains($print,'.receipt-thermal th:last-child'),'thermal money column layout');
 $assert(str_contains($modules,'function commission_sales_total('),'commission calculation helper');
 $assert(str_contains($modules,'COALESCE(invoice_date,DATE(created_at))'),'invoice date financial period');
+$assert(str_contains($modules,'commission_period_already_recorded($tenant,$userId,$period,$date)'),'duplicate commission rejection');
+$assert(str_contains($modules,'FOR UPDATE'),'financial row locking');
+$assert(str_contains($index,'receipt-payment-note'),'unverified POS disclosure on receipt');
+$assert(str_contains($print,'.receipt-payment-note'),'POS disclosure print formatting');
+$assert(str_contains($app,"window.addEventListener('pageshow'"),'restore disabled form controls after browser history navigation');
+$assert(str_contains($app,"form.dataset.submitting==='1'"),'duplicate browser financial submission protection');
+
 $assert(str_contains($modules,"\$_POST['currency']??''") && str_contains($modules,"!=='toman'"),'toman-only accounting guarantee');
 echo "UI, printing and financial flow regression contracts passed\n";
