@@ -421,8 +421,9 @@ try {
             $payment=(string)($_POST['payment_type']??'');
             $ref=trim((string)($_POST['pos_ref']??''));
             if (!$id || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && ($ref==='' || mb_strlen($ref)>120))) throw new RuntimeException('اطلاعات پرداخت نامعتبر است.');
-            $invoice=query('SELECT id,payment_type,pos_ref FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch();
+            $invoice=query('SELECT id,payment_type,pos_ref,user_id FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch();
             if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+            require_document_owner((int)$invoice['user_id']);
             if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
             db()->beginTransaction();
             try {
@@ -438,7 +439,9 @@ try {
             $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
             $reason=trim((string)($_POST['reason']??''));
             if (!$id || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('دلیل ابطال را در ۵ تا ۵۰۰ کاراکتر وارد کنید.');
-            if (!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+            $targetInvoice=query('SELECT id,user_id FROM invoices WHERE id=? AND company_id=?',[$id,$tenant])->fetch();
+            if (!$targetInvoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+            require_document_owner((int)$targetInvoice['user_id']);
             db()->beginTransaction();
             try {
                 // Lock the tenant's invoice while recording its void and audit trail.
@@ -616,6 +619,7 @@ $navGroup=null;
 <?php elseif($page==='receipt'): ?>
 <?php
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
+if ($invoice) require_document_owner((int)$invoice['user_id']);
 $selectedTemplate=query('SELECT id,title,paper_type,header_text,footer_text,logo_path,layout_json FROM print_templates WHERE company_id=? ORDER BY is_default DESC,id DESC LIMIT 1',[$tenant])->fetch();
 $templateStyle=$selectedTemplate?json_decode((string)$selectedTemplate['layout_json'],true):[];
 $companyPrintDetails=query("SELECT setting_key,setting_value FROM app_settings WHERE company_id=? AND setting_key IN ('company_phone','company_address')",[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -652,7 +656,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 function render_invoices(int $tenant, int $limit): void {
     $voidColumn=database_table_exists('invoice_voids')?'v.reason AS void_reason, v.voided_at':'NULL AS void_reason, NULL AS voided_at';
     $voidJoin=database_table_exists('invoice_voids')?' LEFT JOIN invoice_voids v ON v.invoice_id=i.id AND v.company_id=i.company_id':'';
-    $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.pos_ref,i.invoice_date,i.created_at,c.first_name,c.last_name,'.$voidColumn.' FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id'.$voidJoin.' WHERE i.company_id=? ORDER BY i.id DESC LIMIT '.(int)$limit,[$tenant])->fetchAll();
+    $own=document_scope()==='own';
+    $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.pos_ref,i.invoice_date,i.created_at,c.first_name,c.last_name,'.$voidColumn.' FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id'.$voidJoin.' WHERE i.company_id=?'.($own?' AND i.user_id=?':'').' ORDER BY i.id DESC LIMIT '.(int)$limit,$own?[$tenant,user()['id']]:[$tenant])->fetchAll();
     echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
     foreach($rows as $r) {
         $voided=$r['voided_at']!==null;
