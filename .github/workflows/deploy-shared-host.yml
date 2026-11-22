@@ -19,6 +19,12 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Set up PHP 8.4 and required extensions
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
 
       - name: Gate deployment on PHP, JavaScript and security regression tests
         run: |
@@ -26,6 +32,7 @@ jobs:
           find public src scripts tests -name '*.php' -print0 | xargs -0 -n1 php -l
           node --check public/assets/app.js
           node --check public/assets/table-experience.js
+          node --check public/assets/report-progress.js
           for test_file in tests/*.php; do
             echo "Running $test_file"
             php "$test_file"
