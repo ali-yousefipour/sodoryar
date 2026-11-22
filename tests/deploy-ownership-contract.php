@@ -30,13 +30,14 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
     throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
-if (!str_contains($workflow, 'elif [[ ! -s "$listing" ]]; then')
+if (!str_contains($workflow, 'if [[ -f "$marker_file" ]]; then')
+    || !str_contains($workflow, 'Existing FTP destination marker does not identify Sodoryar.')
     || !str_contains($workflow, 'sodoryar-ownership-$(openssl rand -hex 16).txt')
     || !str_contains($workflow, 'https://taxiranico.ir/$challenge')
-    || !str_contains($workflow, 'Empty FTP root does not serve the configured HTTPS domain.')
-    || !str_contains($workflow, 'FTP root has existing content but no protected _private marker')
-    || !str_contains($workflow, 'get "_private/.sodoryar-instance" -o /tmp/sodoryar-ftp-target-marker')) {
-    throw new RuntimeException('First-deploy bootstrap must require an empty FTP root and HTTPS binding, and fail closed on populated unknown roots.');
+    || !str_contains($workflow, 'FTP root does not serve the declared Sodoryar HTTPS domain.')
+    || !str_contains($workflow, 'put "$RUNNER_TEMP/sodoryar-marker" -o "_private/.sodoryar-instance"')
+    || !str_contains($workflow, 'New destination marker failed verification.')) {
+    throw new RuntimeException('Populated FTP root bootstrap must validate its public origin, preserve existing markers, and verify any new marker.');
 }
 if (!str_contains($workflow, 'Validate isolated Sodoryar target and public origin before upload')
     || substr_count($workflow, 'SODORYAR_PUBLIC_BASE_URL: https://taxiranico.ir') !== 4
