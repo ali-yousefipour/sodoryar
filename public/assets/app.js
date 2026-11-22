@@ -298,8 +298,19 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(field.dataset.moneyComposing==='1')return;
     decorateMoneyInput(field);
     const previous=field.value;
+    const normalized=previous.trim().replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776))
+      .replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632));
+    const acceptable=normalized==='' || /^[0-9]+$/.test(normalized)
+      || /^[0-9]{1,3}(?:[,٬، ][0-9]{3})+$/.test(normalized);
+    const digits=moneyDigits(normalized);
+    if(!acceptable || digits.length>15){
+      field.setCustomValidity('مبلغ را بدون اعشار و علامت منفی و با جداکننده‌های سه‌رقمی معتبر وارد کنید.');
+      field.setAttribute('aria-invalid','true');
+      return;
+    }
+    field.setCustomValidity('');
+    field.removeAttribute('aria-invalid');
     const before=keepCaret?moneyDigits(previous.slice(0,field.selectionStart??previous.length)).length:0;
-    const digits=moneyDigits(previous).slice(0,15);
     const formatted=digits?persianMoney.format(BigInt(digits)):'';
     if(previous!==formatted)field.value=formatted;
     if(keepCaret&&document.activeElement===field){
