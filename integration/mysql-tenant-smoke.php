@@ -154,6 +154,15 @@ integration_assert(commission_sales_total($companyB,$userB,'2026-11-22','2026-11
     'Commission excluded a legitimate foreign tenant invoice.');
 integration_assert(commission_sales_total($companyA,$userA,'2025-01-02','2025-01-03')===0,
     'Commission incorrectly used creation timestamp.');
+if (database_table_exists('invoice_voids')) {
+    query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',
+        [$invoiceA,$companyA,$userA,'CI void check']);
+    integration_assert(commission_sales_total($companyA,$userA,'2026-11-22','2026-11-23')===0,
+        'Voided invoice must not contribute to commission sales.');
+    integration_assert(commission_sales_total($companyA,$otherUserA,'2026-11-22','2026-11-23')===888,
+        'Voiding one operator invoice must not alter other employee sales.');
+}
+
 integration_assert(!query('SELECT id FROM invoices WHERE id=? AND company_id=?',[$invoiceB,$companyA])->fetch(),
     'Foreign invoice accepted by tenant lookup');
 integration_assert(!query('SELECT id FROM bill_payments WHERE id=? AND company_id=?',[$billB,$companyA])->fetch(),
