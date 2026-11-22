@@ -60,7 +60,7 @@ async function main() {
       const visible = await page.locator('.receipt').evaluate(el => getComputedStyle(el).display !== 'none');
       assert(visible, 'receipt hidden before printing: ' + paperClass);
       const pdf = await page.pdf({ printBackground: true, preferCSSPageSize: true });
-      const matches = /\\/MediaBox\\s*\\[\\s*0\\s+0\\s+([\\d.]+)\\s+([\\d.]+)/.exec(pdf.toString('latin1'));
+      const matches = /\/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)/.exec(pdf.toString('latin1'));
       assert(matches, 'printed PDF missing page dimensions: ' + paperClass);
       const actualWidth = Number(matches[1]);
       assert(Math.abs(actualWidth - expectedWidth) < 8,
