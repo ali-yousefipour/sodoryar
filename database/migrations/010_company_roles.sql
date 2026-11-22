@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS company_roles (
  name VARCHAR(120) NOT NULL,
  description VARCHAR(500) NOT NULL DEFAULT '',
  is_active TINYINT(1) NOT NULL DEFAULT 1,
+ is_default TINYINT(1) NOT NULL DEFAULT 0,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  UNIQUE KEY uq_company_role_name(company_id,name),
  UNIQUE KEY uq_company_role_id(id,company_id),
