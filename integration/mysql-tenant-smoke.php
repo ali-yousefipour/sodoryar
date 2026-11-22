@@ -24,7 +24,22 @@ function apply_sql_fixture(string $path): void {
     $raw=(string)preg_replace('/^\s*--[^\n]*(?:\n|$)/m','',$raw);
     foreach (explode(';',$raw) as $statement) {
         $statement=trim($statement);
-        if ($statement!=='') db()->exec($statement);
+        if ($statement === '') continue;
+        // Idempotent migrations sometimes EXECUTE a prepared SELECT 1. Consume
+        // every result set before issuing another statement on this connection;
+        // PDO::exec() otherwise leaves a pending result (MySQL error 2014).
+        $cursor = db()->query($statement);
+        try {
+            do {
+                if ($cursor->columnCount() > 0) {
+                    while ($cursor->fetch(PDO::FETCH_NUM) !== false) {
+                        // Discard fixture-only rows; no production data is read here.
+                    }
+                }
+            } while ($cursor->nextRowset());
+        } finally {
+            $cursor->closeCursor();
+        }
     }
 }
 $root=dirname(__DIR__);
