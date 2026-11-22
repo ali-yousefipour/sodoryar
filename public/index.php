@@ -653,7 +653,7 @@ $configuredOrder=$templateStyle['order']??null;
 if (is_array($configuredOrder) && count($configuredOrder)===count($receiptSections) && count(array_diff($receiptSections,$configuredOrder))===0 && count(array_unique($configuredOrder))===count($receiptSections)) $receiptSections=$configuredOrder;
 $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_at FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$invoice['id'],$tenant])->fetch():false;
 ?>
-<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':'receipt-a5'?>" style="--thermal-content-width:<?=e((string)$rollWidth)?>mm;font-family:<?=($templateStyle['font']??'')==='Tahoma'?'Tahoma,sans-serif':'Vazirmatn,Tahoma,sans-serif'?>">
+<div class="receipt card <?=$selectedTemplate && $selectedTemplate['paper_type']==='thermal80'?'receipt-thermal':'receipt-a5'?> receipt-roll-<?=e((string)$rollWidth)?> <?=($templateStyle['font']??'')==='Tahoma'?'receipt-font-tahoma':'receipt-font-vazirmatn'?>">
 <div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ فاکتور</button></div>
 <?php if($voidRecord): ?><div class="alert error"><strong>فاکتور باطل شده است؛ برای ارائه به مشتری معتبر نیست.</strong><p>دلیل: <?=e($voidRecord['reason'])?></p></div><?php endif; ?>
 <?php foreach($receiptSections as $section): ?>
