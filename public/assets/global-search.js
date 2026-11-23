@@ -14,6 +14,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   dialog.querySelector('[data-global-search-close]')?.addEventListener('click',()=>dialog.close());
   dialog.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();dialog.close();}},true);
   document.addEventListener('keydown',event=>{
+    const tag=document.activeElement?.tagName?.toLowerCase();
+    const editable=Boolean(document.activeElement?.isContentEditable || ['input','textarea','select'].includes(tag));
+    if(event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&!event.isComposing&&!editable){
+      const destination=event.code==='KeyN'?document.querySelector('#primaryNav a[href="?page=invoices"]'):
+        event.code==='KeyF'?document.querySelector('#primaryNav a[href="?page=invoice_manager"]'):null;
+      if(destination){event.preventDefault();destination.click();return;}
+    }
     if(event.key==='Escape' && dialog.open){event.preventDefault();dialog.close();return;}
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!event.altKey&&!event.isComposing){
       event.preventDefault();if(!dialog.open)open();else input.focus();
