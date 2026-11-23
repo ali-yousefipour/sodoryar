@@ -268,6 +268,25 @@ def main() -> None:
 
 
 
+        # Driver financial profile must stay tenant-scoped and keep numeric XLSX cells.
+        manager_a.goto(f"{ORIGIN}/?page=customers")
+        driver_link=manager_a.locator('a[href^="?page=driver_account&id="]').first
+        expect(driver_link).to_be_visible()
+        driver_url=driver_link.get_attribute("href")
+        assert driver_url, "Customer financial statement link missing"
+        manager_a.goto(f"{ORIGIN}/{driver_url}")
+        expect(manager_a.get_by_role("heading", name="پرونده مالی تاکسیران")).to_be_visible()
+        expect(manager_a.get_by_text("مانده مطالبات")).to_be_visible()
+        export_link=manager_a.locator('a[href*="export=excel"]').first
+        expect(export_link).to_be_visible()
+        statement=context_a.request.get(f"{ORIGIN}/{export_link.get_attribute('href').replace('&amp;', '&')}")
+        assert statement.status==200, "Driver account Excel export failed"
+        with zipfile.ZipFile(io.BytesIO(statement.body())) as archive:
+            sheet=archive.read("xl/worksheets/sheet1.xml")
+            assert b'rightToLeft="1"' in sheet, "Driver XLSX must retain RTL sheet setting"
+            assert b't="n"' in sheet, "Driver invoice monetary amounts must be numeric XLSX cells"
+            assert b"CI-B-0001" not in sheet, "Foreign-company invoice leaked into driver statement"
+
         manager_a.goto(f"{ORIGIN}/?page=bills")
         form = manager_a.locator("form[data-once-submit]").first
         form.locator('[name="bill_id"]').fill("CI-E2E-BILL")
