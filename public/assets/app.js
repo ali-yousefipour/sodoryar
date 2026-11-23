@@ -37,9 +37,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   const collapseButton=document.querySelector('[data-sidebar-collapse]');
   const collapsedSearchButton=document.querySelector('[data-sidebar-search-expand]');
   const desktopSidebar=window.matchMedia('(min-width: 901px)');
-  const sidebarPreferenceKey='sodoryar.sidebar.collapsed.v1';
+  // Prefer the authenticated user's tenant-scoped settings over shared browser state.
   let sidebarCollapsed=false;
-  try{sidebarCollapsed=window.localStorage.getItem(sidebarPreferenceKey)==='1';}catch(_error){}
   const setSidebarCollapsed=(collapsed,{persist=true}={})=>{
     sidebarCollapsed=Boolean(collapsed);
     if(sidebarCollapsed&&desktopSidebar.matches){
@@ -55,7 +54,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       const icon=collapseButton.querySelector('use');
       if(icon)icon.setAttribute('href','assets/sidebar-icons.svg#'+(sidebarCollapsed?'panel-expand':'panel-collapse'));
     }
-    if(persist){try{window.localStorage.setItem(sidebarPreferenceKey,sidebarCollapsed?'1':'0');}catch(_error){}}
+    if(persist)window.sodoryarPrefs?.save('sidebar_collapsed',sidebarCollapsed);
   };
   collapseButton?.addEventListener('click',()=>setSidebarCollapsed(!sidebarCollapsed));
   collapsedSearchButton?.addEventListener('click',()=>{
@@ -64,6 +63,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   desktopSidebar.addEventListener('change',()=>setSidebarCollapsed(sidebarCollapsed,{persist:false}));
   setSidebarCollapsed(sidebarCollapsed,{persist:false});
+  window.sodoryarPrefs?.get().then(preferences=>{
+    if(typeof preferences.sidebar_collapsed==='boolean')
+      setSidebarCollapsed(preferences.sidebar_collapsed,{persist:false});
+  });
   const navSearch=document.querySelector('[data-nav-search]');
   if(navSearch&&sidebarNav){
     const links=[...sidebarNav.querySelectorAll('.nav-link')];
