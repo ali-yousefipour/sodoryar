@@ -181,3 +181,7 @@
 }
 .main-wrap>.content .sd-table-scroll-hint[hidden]{display:none!important}
 @media print{.main-wrap>.content .sd-table-scroll-hint{display:none!important}}
+.main-wrap>.content .sd-table-toolbar .sd-table-scroll-hint{
+  flex:1 1 100%;width:100%;border:0;border-radius:8px;
+  padding:6px 10px;background:#eeeff8;line-height:1.8
+}
