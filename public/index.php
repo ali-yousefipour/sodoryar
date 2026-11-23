@@ -611,7 +611,7 @@ if ($tenant) {
     if (user()['role']!=='operator') {
         $navItems[]=['users','کاربران شرکت','users','کاربران و دسترسی'];
         $navItems[]=['roles','نقش‌ها و مجوزها','users','کاربران و دسترسی'];
-        $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
+        if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
         $navItems[]=['templates','قالب چاپ','templates','تنظیمات و پیکربندی'];
         $navItems[]=['settings','تنظیمات شرکت','settings','تنظیمات و پیکربندی'];
     } elseif (can('pos.view')) {
