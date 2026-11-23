@@ -489,22 +489,32 @@ try {
             require_permission('invoices.payment_edit'); $tenant=tenant_id();
             $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
             $payment=(string)($_POST['payment_type']??'');
-            $ref=trim((string)($_POST['pos_ref']??''));
-            if (!$id || !in_array($payment,['cash','pos'],true) || ($payment==='pos' && ($ref==='' || mb_strlen($ref)>120))) throw new RuntimeException('اطلاعات پرداخت نامعتبر است.');
+            $ref=trim(ascii_digits((string)($_POST['pos_ref']??'')));
+            $reason=trim((string)($_POST['reason']??''));
+            if (!$id || !in_array($payment,['cash','pos'],true) || mb_strlen($ref)>120
+                || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('روش پرداخت و دلیل اصلاح (۵ تا ۵۰۰ کاراکتر) الزامی است.');
             db()->beginTransaction();
             try {
-                // Payment edits and invoice voids serialize on the same invoice row.
-                $invoice=query('SELECT id,payment_type,pos_ref,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                $invoice=query('SELECT id,payment_type,pos_ref,total_amount,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 require_document_owner((int)$invoice['user_id']);
                 if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
+                if (invoice_payment_ledger_ready()) {
+                    $active=get_invoice_payment_rows($tenant,(int)$id);
+                    if (count($active)!==1 || (int)$active[0]['amount']!==(int)$invoice['total_amount']) {
+                        throw new RuntimeException('برای اصلاح چندتراکنشی از عملیات تخصصی مالی استفاده کنید؛ جایگزینی یکباره مجاز نیست.');
+                    }
+                    query('UPDATE invoice_payments SET voided_at=NOW(),voided_by=?,void_reason=? WHERE id=? AND company_id=? AND voided_at IS NULL',
+                        [(int)user()['id'],$reason,$active[0]['id'],$tenant]);
+                    create_invoice_payment_rows($tenant,(int)$id,(int)user()['id'],[['method'=>$payment,'amount'=>(int)$invoice['total_amount'],'tracking'=>$payment==='pos'?$ref:'','reference'=>'']]);
+                }
                 query('UPDATE invoices SET payment_type=?,pos_ref=? WHERE id=? AND company_id=?',[$payment,$payment==='pos'?$ref:null,$id,$tenant]);
-                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'reason'=>$reason,'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
-            redirect('invoices','شیوه پرداخت فاکتور به‌روزرسانی شد.');
+            redirect('invoices','شیوه پرداخت فاکتور با ثبت سابقه اصلاح شد.');
         }
         if ($page==='invoices' && $action==='void') {
             require_permission('invoices.void'); $tenant=tenant_id();
@@ -837,7 +847,7 @@ function render_invoices(int $tenant, int $limit): void {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
             if (can('invoices.payment_edit')) {
                 echo ' <button type="button" class="small secondary" data-dialog-open="'.$editId.'">ویرایش پرداخت</button>';
-                echo '<dialog class="app-dialog" id="'.$editId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ویرایش شیوه پرداخت</h2><label>نوع پرداخت<select name="payment_type"><option value="cash"'.($r['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($r['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label><label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e($r['pos_ref']).'"></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div></form></dialog>';
+                echo '<dialog class="app-dialog" id="'.$editId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ویرایش شیوه پرداخت</h2><label>نوع پرداخت<select name="payment_type"><option value="cash"'.($r['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($r['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label><label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e($r['pos_ref']).'"></label><label>دلیل اصلاح<textarea name="reason" minlength="5" maxlength="500" required></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div></form></dialog>';
             }
             if (can('invoices.void') && database_table_exists('invoice_voids')) {
                 echo ' <button type="button" class="small danger" data-dialog-open="'.$voidId.'">ابطال</button>';
