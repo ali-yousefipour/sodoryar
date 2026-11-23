@@ -20,6 +20,15 @@ document.addEventListener('DOMContentLoaded',()=>{
       if(event.key==='Escape'&&mobileViewport.matches){setMenuOpen(false);sidebarToggle.focus();}
     });
     sidebarNav.addEventListener('click',event=>{if(mobileViewport.matches&&event.target.closest('a'))setMenuOpen(false);});
+    document.addEventListener('pointerdown',event=>{
+      if(!mobileViewport.matches||!sidebarNav.classList.contains('nav-open'))return;
+      if(!event.target.closest('#siteSidebar'))setMenuOpen(false);
+    });
+    document.addEventListener('keydown',event=>{
+      if(event.key==='Escape'&&mobileViewport.matches&&sidebarNav.classList.contains('nav-open')){
+        setMenuOpen(false);sidebarToggle.focus();
+      }
+    });
     mobileViewport.addEventListener('change',()=>setMenuOpen(false));
     setMenuOpen(false);
   }
