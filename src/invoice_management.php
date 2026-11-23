@@ -48,7 +48,7 @@ function invoice_management_filters(array $input): array {
     return $f;
 }
 
-function invoice_management_data(int $tenant,array $f): array {
+function invoice_management_data(int $tenant,array $f,bool $exportAll=false): array {
     $hasLedger=invoice_payment_ledger_ready();
     $hasVoids=database_table_exists('invoice_voids');
     $paymentJoin=$hasLedger
@@ -99,14 +99,44 @@ function invoice_management_data(int $tenant,array $f): array {
         'customer'=>'c.last_name','paid'=>$paidExpr
     ];
     $order=$orders[$f['sort']].($f['direction']==='asc'?' ASC':' DESC').', i.id DESC';
-    $offset=($f['page']-1)*$f['size'];
+    $offset=$exportAll?0:(($f['page']-1)*$f['size']);
+    $limit=$exportAll?10000:$f['size'];
     $rows=query('SELECT i.id,i.invoice_number,i.invoice_date,i.created_at,i.total_amount,i.payment_type,'.
         ' c.first_name,c.last_name,c.national_code,c.mobile,COALESCE(u.full_name,\'—\') operator_name,'.
         ' ('.$paidExpr.') paid_amount,('.$cashCount.') cash_count,('.$posCount.') pos_count,'.
         ' ('.$voidExpr.') is_void,'.
         ' (SELECT GROUP_CONCAT(DISTINCT it.service_title ORDER BY it.service_title SEPARATOR 0xD88C20) FROM invoice_items it WHERE it.company_id=i.company_id AND it.invoice_id=i.id) services'.
-        $source.' ORDER BY '.$order.' LIMIT '.(int)$f['size'].' OFFSET '.(int)$offset,$params)->fetchAll();
+        $source.' ORDER BY '.$order.' LIMIT '.(int)$limit.' OFFSET '.(int)$offset,$params)->fetchAll();
     return ['summary'=>$summary,'rows'=>$rows,'has_ledger'=>$hasLedger,'page_count'=>max(1,(int)ceil(((int)$summary['invoice_count'])/$f['size']))];
+}
+
+/** Export only permitted, filtered invoice documents; amounts remain numeric Excel cells. */
+function export_invoice_management(int $tenant): never {
+    require_permission('invoices.view');
+    require_permission('reports.export');
+    $f=invoice_management_filters($_GET);
+    $result=invoice_management_data($tenant,$f,true);
+    if ((int)$result['summary']['invoice_count']>10000) {
+        throw new RuntimeException('بیش از ۱۰٬۰۰۰ فاکتور با این فیلترها یافت شد؛ بازه را محدود کنید.');
+    }
+    $heads=['ردیف','شماره فاکتور','تاریخ شمسی','مشتری','کد ملی','موبایل','شرح خدمات','مبلغ فاکتور (تومان)','دریافتی (تومان)','مانده (تومان)','روش پرداخت','صادرکننده','وضعیت'];
+    $rows=[];
+    foreach($result['rows'] as $i=>$item) {
+        $cash=(int)$item['cash_count'];$pos=(int)$item['pos_count'];
+        $method=$cash>0 && $pos>0?'ترکیبی':($pos>0?'کارتخوان':'نقدی');
+        $amount=(int)$item['total_amount'];$paid=(int)$item['paid_amount'];
+        $void=(bool)$item['is_void'];
+        $rows[]=[
+            $i+1,display_financial_reference($item['invoice_number']),
+            jalali_datetime($item['invoice_date']?:$item['created_at'],true),
+            $item['first_name'].' '.$item['last_name'],fa_digits($item['national_code']),
+            fa_digits((string)$item['mobile']),(string)$item['services'],
+            $amount,$paid,max(0,$amount-$paid),
+            $method,$item['operator_name'],
+            $void?'باطل‌شده':($paid>=$amount?'تسویه‌شده':'دارای مانده')
+        ];
+    }
+    export_excel_xlsx('sodoryar-invoice-management',$heads,$rows,[0,7,8,9]);
 }
 
 function render_invoice_management(int $tenant): void {
@@ -159,6 +189,7 @@ function render_invoice_management(int $tenant): void {
     foreach([20,50,100] as $size)echo '<option value="'.$size.'"'.($f['size']===$size?' selected':'').'>'.fa_digits((string)$size).'</option>';
     echo '</select></label></div><div class="filter-actions"><button type="submit">اعمال فیلترها</button><a class="button-link secondary" href="?page=invoice_manager">پاک کردن فیلترها</a>';
     if(can('reports.view')) echo '<a class="button-link secondary" href="?page=reports">گزارش‌های مالی و اکسل تراکنش‌ها</a>';
+    if(can('reports.export')) echo '<a class="button-link secondary" href="'.e($url(['export'=>'excel'])).'">خروجی اکسل فاکتورهای فیلترشده</a>';
     echo '</div></form>';
     echo '<section class="card manager-results"><div class="heading"><h2>فهرست اسناد</h2><span>'.money($sum['invoice_count']).' نتیجه</span></div>';
     echo '<div class="table-wrap"><table><thead><tr><th>ردیف</th><th>شماره فاکتور</th><th>تاریخ</th><th>مشتری</th><th>خدمات</th><th>مبلغ</th><th>دریافتی</th><th>مانده</th><th>روش پرداخت</th><th>صادرکننده</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>';
