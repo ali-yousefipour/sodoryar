@@ -15,6 +15,7 @@ require __DIR__ . '/_private/src/accounting_periods.php';
 require __DIR__ . '/_private/src/service_rates.php';
 require __DIR__ . '/_private/src/finance_presets.php';
 require __DIR__ . '/_private/src/finance_presets_ui.php';
+require __DIR__ . '/_private/src/user_preferences.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -31,7 +32,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -54,6 +55,30 @@ if ($page==='template_logo') {
     header('Content-Type: '.(str_ends_with($path,'.png')?'image/png':'image/jpeg'));
     header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, no-store');
     readfile($path); exit;
+}
+if ($page==='user_preferences') {
+    require_login();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    try {
+        $tenant=tenant_id();$actor=(int)user()['id'];
+        if ($_SERVER['REQUEST_METHOD']==='GET') {
+            echo json_encode(['ready'=>user_preferences_ready(),'preferences'=>user_preferences_all($tenant,$actor)],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+            exit;
+        }
+        if ($_SERVER['REQUEST_METHOD']!=='POST') {http_response_code(405);echo '{}';exit;}
+        verify_csrf();
+        $key=$_POST['key']??'';
+        $valueJson=$_POST['value']??'';
+        if(!is_string($key)||!is_string($valueJson)||strlen($valueJson)>8000)throw new RuntimeException('تنظیم شخصی نامعتبر است.');
+        $value=json_decode($valueJson,true,32,JSON_THROW_ON_ERROR);
+        user_preference_save($tenant,$actor,$key,$value);
+        echo json_encode(['saved'=>true],JSON_THROW_ON_ERROR);exit;
+    } catch(Throwable $ex) {
+        error_log('Sodoryar user prefs: '.$ex->getCode());
+        http_response_code(422);
+        echo json_encode(['error'=>'ثبت یا دریافت تنظیمات شخصی امکان‌پذیر نیست.'],JSON_UNESCAPED_UNICODE);exit;
+    }
 }
 if ($page==='service_rate_quotes') {
     require_login();
@@ -780,7 +805,7 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
 $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><?php if($page!=='login'): ?><meta name="csrf-token" content="<?=e(csrf_token())?>"><?php endif; ?>
 <title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e((string)filemtime(__DIR__.'/assets/app.css'))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='invoices'): ?><script src="assets/invoice-payments.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-payments.js'),0,16))?>" defer></script><script src="assets/service-rates.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/service-rates.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoice_manager'): ?><script src="assets/invoice-manager.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-manager.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?><link rel="stylesheet" href="assets/design-system-audit.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/design-system-audit.css'),0,16))?>"><link rel="stylesheet" href="assets/global-search.css?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.css'))?>"></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap" id="mainContent">
