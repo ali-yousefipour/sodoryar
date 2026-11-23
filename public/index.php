@@ -454,7 +454,7 @@ try {
                 throw new RuntimeException('برای ثبت تاریخ فاکتور، ابتدا مهاجرت دیتابیس ۰۰۸ را اجرا کنید.');
             }
             if (!preg_match('/^[0-9]{10}$/D',$national) || (!$selected && !$extras)) throw new RuntimeException('کد ملی و خدمات را کامل کنید.');
-            if (!invoice_payment_ledger_ready()) throw new RuntimeException('ابتدا میگرشن ۰۱۶ پرداخت‌ها را اجرا کنید.');
+
             if ($extras && !invoice_extensions_ready()) throw new RuntimeException('برای ثبت آیتم اضافی، ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
             db()->beginTransaction();
             try {
@@ -468,6 +468,7 @@ try {
                 if (count($items)!==count($selected)) throw new RuntimeException('یک یا چند خدمت معتبر نیست.');
                 $total = sum_invoice_line_amounts(array_merge($items,$extras));
                 $paymentRows=invoice_payment_rows((array)($_POST['payments']??[]),$total);
+                if (!invoice_payment_ledger_ready() && count($paymentRows)>1) throw new RuntimeException('ثبت چندتراکنشی پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
                 $payment=$paymentRows[0]['method'];
                 $ref=count($paymentRows)===1?$paymentRows[0]['tracking']:null;
                 $number = date('YmdHis') . '-' . bin2hex(random_bytes(4));
@@ -475,7 +476,7 @@ try {
                 $invoiceId = (int)db()->lastInsertId();
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
-                create_invoice_payment_rows($tenant,$invoiceId,(int)user()['id'],$paymentRows);
+                if (invoice_payment_ledger_ready()) create_invoice_payment_rows($tenant,$invoiceId,(int)user()['id'],$paymentRows);
                 audit('invoice.create',$number); db()->commit();
                 unset($_SESSION['invoice_create_nonce']);
                 // Creation alone must not imply access to the receipt or invoice list.
