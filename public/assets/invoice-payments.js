@@ -7,8 +7,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   const error=document.getElementById('invoicePaymentError');
   const format=new Intl.NumberFormat('fa-IR');
   const ascii=s=>String(s||'').replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632));
-  const digits=s=>ascii(s).replace(/[٬,،\s]/g,'');
-  const amount=s=>/^\d+$/.test(digits(s))?BigInt(digits(s)):0n;
+  const normalized=s=>ascii(s).trim().replace(/[٬،]/g,',');
+  const validGroup=s=>/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(normalized(s));
+  const digits=s=>normalized(s).replace(/,/g,'');
+  const amount=s=>validGroup(s)?BigInt(digits(s)):0n;
   let serial=0,mode='cash',rows=[];
   const total=()=>{
     let sum=0n;
@@ -55,8 +57,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     const amountLabel=el('label',{},'مبلغ پرداخت (تومان)');
     const field=el('input',{type:'text',inputmode:'numeric',name:`payments[${index}][amount]`,required:'required',autocomplete:'off','aria-label':'مبلغ پرداخت'});
     field.value=row.amount?format.format(BigInt(row.amount)):'';
-    field.addEventListener('input',()=>{row.manual=true;row.amount=digits(field.value);if(!/^\d*$/.test(row.amount)){row.amount='';}refresh();});
-    field.addEventListener('blur',()=>{field.value=row.amount?format.format(BigInt(row.amount)):'';});
+    field.addEventListener('input',()=>{row.manual=true;row.amount=validGroup(field.value)?digits(field.value):'INVALID';refresh();});
+    field.addEventListener('blur',()=>{if(validGroup(field.value))field.value=format.format(BigInt(digits(field.value)));});
     amountLabel.append(field);
     const pos=el('div',{class:'payment-pos-fields'});
     const source=document.getElementById('invoiceTerminalOptions');
@@ -120,8 +122,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 // Audit-preserving correction of an existing invoice's full payment allocation.
 document.addEventListener('DOMContentLoaded',()=>{
   const ascii=s=>String(s??'').replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632));
-  const raw=s=>ascii(s).replace(/[٬,،\s]/g,'');
-  const valid=s=>/^\d+$/.test(raw(s)) && BigInt(raw(s))>0n;
+  const normalized=s=>ascii(s).trim().replace(/[٬،]/g,',');
+  const raw=s=>normalized(s).replace(/,/g,'');
+  const valid=s=>/^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(normalized(s)) && BigInt(raw(s))>0n;
   const display=n=>new Intl.NumberFormat('fa-IR').format(n);
   document.querySelectorAll('form.invoice-payment-replace').forEach(form=>{
     const list=form.querySelector('[data-edit-payment-list]');
