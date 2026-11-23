@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     servicePicker.addEventListener('change',event=>{if(event.target.matches('input[type="checkbox"]'))updateServices();});
     // The delegated money formatter runs on document after this container
     // listener; recompute the total once the formatted value is canonical.
-    extraItems?.addEventListener('input',()=>queueMicrotask(updateServices));
+    extraItems?.addEventListener('input',updateServices);
     updateServices();
   }
   // Toman inputs accept localized digits and display grouped Persian numbers.
@@ -353,7 +353,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('[data-money-input]').forEach(field=>formatMoneyField(field));
   document.addEventListener('input',event=>{
     const field=event.target;
-    if(field instanceof HTMLInputElement&&field.matches('[data-money-input]'))formatMoneyField(field,true,event);
+    if(field instanceof HTMLInputElement&&field.matches('[data-money-input]')){
+      formatMoneyField(field,true,event);
+      // Refresh invoice preview after the document-level money formatter runs.
+      // Dispatch from the container to avoid recursive formatting of the input.
+      if(extraItems?.contains(field))extraItems.dispatchEvent(new Event('input'));
+    }
   });
   document.addEventListener('compositionstart',event=>{if(event.target?.matches?.('[data-money-input]'))event.target.dataset.moneyComposing='1';});
   document.addEventListener('compositionend',event=>{if(event.target?.matches?.('[data-money-input]')){delete event.target.dataset.moneyComposing;formatMoneyField(event.target,true);}});
