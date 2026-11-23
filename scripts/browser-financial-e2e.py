@@ -227,6 +227,16 @@ def main() -> None:
             if status != 200 or "Fatal error:" in body or "Uncaught " in body:
                 manager_a.screenshot(path=str(OUTPUT / f"route-{route}-failure.png"), full_page=True)
                 raise AssertionError(f"{route} HTTP {status}, body={body[:1200]}")
+            active_route = manager_a.locator("#primaryNav a[aria-current='page']")
+            expect(active_route).to_have_count(1)
+            assert active_route.get_attribute("href") == f"?page={route}", (
+                f"{route} sidebar highlight points to a different page"
+            )
+            if route in ("dashboard", "customers", "services", "invoices", "users",
+                         "roles", "reports", "bills", "settings", "templates", "profile"):
+                manager_a.screenshot(
+                    path=str(OUTPUT / f"layout-{route}-mobile.png"), full_page=True
+                )
             width = manager_a.evaluate("document.documentElement.scrollWidth")
             viewport = manager_a.evaluate("window.innerWidth")
             if width > viewport + 2:
