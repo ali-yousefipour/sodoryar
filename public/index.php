@@ -620,13 +620,14 @@ if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
             <input id="loginUsername" name="username" autocomplete="username" maxlength="100" spellcheck="false" required autofocus value="<?=e(isset($error)?(string)($_POST['username']??''):'')?>" placeholder="نام کاربری">
           </span>
         </label>
-        <label for="loginPassword">رمز عبور
+        <div class="login-field">
+          <label for="loginPassword">رمز عبور</label>
           <span class="login-input-wrap">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
             <input id="loginPassword" name="password" type="password" autocomplete="current-password" required placeholder="رمز عبور">
             <button type="button" class="login-password-toggle" data-login-password-toggle aria-controls="loginPassword" aria-label="نمایش رمز عبور" aria-pressed="false">نمایش</button>
           </span>
-        </label>
+        </div>
         <fieldset class="captcha-fieldset">
           <legend>تأیید امنیتی</legend>
           <p class="captcha-hint">برای تأیید، پاسخ جمع زیر را وارد کنید.</p>
