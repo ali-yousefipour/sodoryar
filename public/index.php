@@ -891,6 +891,16 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <article class="stat"><span>دریافتی کارتخوان</span><b><?=money($reportData['summary']['pos_paid'])?></b><small>تومان</small></article>
 <article class="stat"><span>تعداد تراکنش‌ها</span><b><?=money($reportData['summary']['transaction_count'])?></b></article>
 <?php endif; ?></div>
+
+<?php if(invoice_payment_ledger_ready()): ?>
+<?php $controlIssues=financial_control_exceptions((int)$tenant,$reportFilter); ?>
+<section class="card"><div class="heading"><div><h2>کنترل مغایرت‌های مالی</h2>
+<p class="muted">موارد نیازمند بررسی داخلی؛ این فهرست به‌معنای تأیید یا رد بانکی تراکنش نیست. در صورت انتخاب‌نکردن بازه، ۳۰ روز اخیر بررسی می‌شود.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>نوع مغایرت</th><th>شماره فاکتور</th><th>جزئیات</th></tr></thead><tbody>
+<?php foreach($controlIssues as $issue): ?><tr><td><?=e($issue['kind'])?></td><td><?=e(display_financial_reference($issue['invoice']))?></td><td><?=e($issue['detail'])?></td></tr><?php endforeach; ?>
+<?php if (!$controlIssues): ?><tr><td colspan="3">در بازه بررسی‌شده مغایرتی از انواع تحت پوشش شناسایی نشد.</td></tr><?php endif; ?>
+</tbody></table></div></section>
+<?php endif; ?>
 <?php $paymentReport=invoice_payment_report((int)$tenant,$reportFilter); ?>
 <?php if(invoice_payment_ledger_ready()): ?>
 <section class="card"><div class="heading"><div><h2>ریز تراکنش‌های دریافت</h2><p class="muted">مبنای این جدول زمان واقعی دریافت است؛ برای جلوگیری از دوباره‌شماری، هر تراکنش به‌صورت مستقل محاسبه می‌شود.</p></div></div>
