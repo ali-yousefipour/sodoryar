@@ -1,5 +1,7 @@
 -- 016: invoice payment ledger. Apply after a verified backup, prior to enabling multi-payments.
--- Safe to re-run: CREATE IF NOT EXISTS and legacy backfill guarded by unique invoice identity.
+-- Safe to re-run: backfill only on first creation, never on subsequent runs after partial invoices exist.
+-- Historical invoices are assumed fully paid ONLY at the original one-time migration boundary.
+SET @sodoryar_payments_existed = (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='invoice_payments');
 CREATE TABLE IF NOT EXISTS invoice_payments (
  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
  company_id BIGINT UNSIGNED NOT NULL,
@@ -35,4 +37,4 @@ INSERT INTO invoice_payments
 SELECT i.company_id,i.id,i.payment_type,i.total_amount,i.pos_ref,i.created_at,i.user_id,i.id
 FROM invoices i
 LEFT JOIN invoice_payments p ON p.invoice_id=i.id AND p.company_id=i.company_id
-WHERE p.id IS NULL AND i.total_amount>0;
+WHERE @sodoryar_payments_existed=0 AND p.id IS NULL AND i.total_amount>0;
