@@ -22,6 +22,7 @@ require dirname(__DIR__).'/src/service_rates.php';
 require dirname(__DIR__).'/src/finance_presets.php';
 require dirname(__DIR__).'/src/user_preferences.php';
 require dirname(__DIR__).'/src/financial_issue_reviews.php';
+require dirname(__DIR__).'/src/dashboard_finance.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -362,6 +363,10 @@ $invalidPreferenceRejected=false;
 try{user_preference_save($companyA,$managerA,'table_page_size',9999);}
 catch(RuntimeException $expected){$invalidPreferenceRejected=true;}
 integration_assert($invalidPreferenceRejected,'Out-of-range user preference accepted');
+$dashboardFinancial=dashboard_financial_snapshot($companyA);
+integration_assert($dashboardFinancial['ledger_ready']===true
+    && $dashboardFinancial['due_total']>=0 && $dashboardFinancial['unsettled_count']>=0,
+    'Financial dashboard miscomputed valid tenant receivables');
 $driverFinance=driver_account_data($companyA,$customerA);
 integration_assert((int)$driverFinance['summary']['invoices']>=2,
     'Driver statement failed to retrieve tenant-owned invoices');
