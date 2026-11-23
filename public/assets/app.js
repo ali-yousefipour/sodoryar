@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     unit.setAttribute('aria-hidden','true');
     shell.append(unit);
   };
-  const formatMoneyField=(field,keepCaret=false)=>{
+  const formatMoneyField=(field,keepCaret=false,inputEvent=null)=>{
     if(field.dataset.moneyComposing==='1')return;
     decorateMoneyInput(field);
     const previous=field.value;
@@ -321,9 +321,18 @@ document.addEventListener('DOMContentLoaded',()=>{
       .replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632));
     const acceptable=normalized==='' || /^[0-9]+$/.test(normalized)
       || /^[0-9]{1,3}(?:[,٬، ][0-9]{3})+$/.test(normalized);
+    // Typing onto an already grouped value temporarily creates an incomplete
+    // thousands group (e.g. ۱٬۲۳۴۵). Regroup digit keystrokes immediately.
+    // Do NOT reinterpret manually pasted malformed grouping such as "1,5".
+    const typedDigit=inputEvent?.inputType==='insertText'
+      && /^[0-9۰-۹٠-٩]$/.test(inputEvent.data||'');
+    const deleting=inputEvent?.inputType?.startsWith('delete');
+    const autoGroup=(typedDigit||deleting) && field.dataset.moneyLastValid!==undefined
+      && /^[0-9,٬، ]*$/.test(normalized);
     const digits=moneyDigits(normalized);
-    if(!acceptable || digits.length>15){
-      field.setCustomValidity('مبلغ را بدون اعشار و علامت منفی و با جداکننده‌های سه‌رقمی معتبر وارد کنید.');
+    const inRange=digits.length<=15 && (digits==='' || BigInt(digits)<=100000000000n);
+    if((!acceptable&&!autoGroup)||!inRange){
+      field.setCustomValidity('مبلغ را با ارقام صحیح، حداکثر صد میلیارد تومان و بدون اعشار یا جداکننده نامعتبر وارد کنید.');
       field.setAttribute('aria-invalid','true');
       return;
     }
@@ -332,6 +341,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const before=keepCaret?moneyDigits(previous.slice(0,field.selectionStart??previous.length)).length:0;
     const formatted=digits?persianMoney.format(BigInt(digits)):'';
     if(previous!==formatted)field.value=formatted;
+    field.dataset.moneyLastValid=formatted;
     if(keepCaret&&document.activeElement===field){
       let offset=0,seen=0;
       if(before){for(;offset<formatted.length;offset++){if(/[۰-۹]/.test(formatted[offset]))seen++;if(seen>=before){offset++;break;}}}
@@ -341,7 +351,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('[data-money-input]').forEach(field=>formatMoneyField(field));
   document.addEventListener('input',event=>{
     const field=event.target;
-    if(field instanceof HTMLInputElement&&field.matches('[data-money-input]'))formatMoneyField(field,true);
+    if(field instanceof HTMLInputElement&&field.matches('[data-money-input]'))formatMoneyField(field,true,event);
   });
   document.addEventListener('compositionstart',event=>{if(event.target?.matches?.('[data-money-input]'))event.target.dataset.moneyComposing='1';});
   document.addEventListener('compositionend',event=>{if(event.target?.matches?.('[data-money-input]')){delete event.target.dataset.moneyComposing;formatMoneyField(event.target,true);}});
