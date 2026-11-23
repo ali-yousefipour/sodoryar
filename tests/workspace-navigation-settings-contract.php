@@ -28,7 +28,7 @@ foreach (['.settings-workspace','.settings-index','.settings-panel','.settings-s
           '@media(max-width:900px)','@media(max-width:620px)','@media(prefers-reduced-motion:reduce)'] as $style) {
     if (!str_contains($css,$style)) throw new RuntimeException('Workspace CSS contract missing: '.$style);
 }
-if (!str_contains($workflow,'login-experience.css workspace-refresh.css app.js')) {
+if (!str_contains($workflow,'login-experience.css workspace-refresh.css login-ui.js app.js')) {
     throw new RuntimeException('Live workspace stylesheet must be hash-verified during deploy.');
 }
 echo "Navigation, settings form, responsive workspace and publication contracts passed\n";
