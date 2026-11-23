@@ -136,6 +136,8 @@ query('INSERT INTO invoice_items(company_id,invoice_id,service_title,price) VALU
 query('INSERT INTO user_document_scopes(user_id,company_id,scope) VALUES(?,?,?)',
     [$userA,$companyA,'own']);
 integration_assert(document_scope()==='own','Migrated document scope must be enforced for operators');
+// Ensure the ledger exists before invoice_report() caches table availability.
+apply_sql_fixture($root.'/database/migrations/016_invoice_payments.sql');
 $report=invoice_report(tenant_id(),report_filters_default(),20);
 integration_assert((int)$report['summary']['qty']===1,'A report included a different company');
 integration_assert((int)$report['summary']['total']===123456,'A report total includes other tenant');
