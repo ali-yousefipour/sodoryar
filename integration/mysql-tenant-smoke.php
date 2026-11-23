@@ -20,6 +20,7 @@ require dirname(__DIR__).'/src/driver_account.php';
 require dirname(__DIR__).'/src/accounting_periods.php';
 require dirname(__DIR__).'/src/service_rates.php';
 require dirname(__DIR__).'/src/finance_presets.php';
+require dirname(__DIR__).'/src/user_preferences.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -163,6 +164,9 @@ integration_assert(accounting_periods_ready(),'Financial periods migration faile
 apply_sql_fixture($root.'/database/migrations/020_service_rate_history.sql');
 apply_sql_fixture($root.'/database/migrations/020_service_rate_history.sql');
 integration_assert(service_rates_ready(),'Rate version migration failed');
+apply_sql_fixture($root.'/database/migrations/021_user_preferences.sql');
+apply_sql_fixture($root.'/database/migrations/021_user_preferences.sql');
+integration_assert(user_preferences_ready(),'User preferences schema failed');
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
 cashbox_add_register($companyA,'CI Cash Register');
 $registerId=(int)query('SELECT id FROM cash_registers WHERE company_id=? AND name=?',[$companyA,'CI Cash Register'])->fetchColumn();
@@ -340,6 +344,20 @@ foreach(array_keys(finance_preset_catalog()) as $presetType) {
                 'Foreign-company national identity leaked into report: '.$presetType);
     }
 }
+
+user_preference_save($companyA,$managerA,'sidebar_collapsed',true);
+user_preference_save($companyA,$managerA,'report_favorites',['sales_daily','debtors']);
+integration_assert(user_preferences_all($companyA,$managerA)['sidebar_collapsed']===true
+    && count(user_preferences_all($companyA,$managerA)['report_favorites'])===2,
+    'Stored user preferences failed to roundtrip');
+integration_assert(user_preferences_all($companyA,$userA)===[],
+    'Company colleague incorrectly inherited manager preferences');
+integration_assert(user_preferences_all($companyB,$userB)===[],
+    'Another tenant read the manager preferences');
+$invalidPreferenceRejected=false;
+try{user_preference_save($companyA,$managerA,'table_page_size',9999);}
+catch(RuntimeException $expected){$invalidPreferenceRejected=true;}
+integration_assert($invalidPreferenceRejected,'Out-of-range user preference accepted');
 $driverFinance=driver_account_data($companyA,$customerA);
 integration_assert((int)$driverFinance['summary']['invoices']>=2,
     'Driver statement failed to retrieve tenant-owned invoices');
