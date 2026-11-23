@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS invoice_payments (
  INDEX idx_invoice_payments_invoice (company_id,invoice_id,voided_at),
  INDEX idx_invoice_payments_day (company_id,paid_at,payment_method),
  CONSTRAINT fk_invoice_payments_invoice FOREIGN KEY (invoice_id,company_id) REFERENCES invoices(id,company_id) ON DELETE RESTRICT,
+ CONSTRAINT fk_invoice_payments_terminal FOREIGN KEY (terminal_id) REFERENCES pos_settings(id) ON DELETE RESTRICT,
  CONSTRAINT fk_invoice_payments_creator FOREIGN KEY (created_by) REFERENCES users(id),
  CONSTRAINT fk_invoice_payments_voider FOREIGN KEY (voided_by) REFERENCES users(id),
  CONSTRAINT chk_invoice_payments_positive CHECK(amount>0)
