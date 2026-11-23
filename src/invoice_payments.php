@@ -84,8 +84,10 @@ function invoice_payment_totals(int $tenant,int $invoiceId,int $total): array {
 
 /** Follow-up collections require 017 and execute under the caller's locked invoice transaction. */
 function invoice_followup_ready(): bool {
-    return invoice_payment_ledger_ready()
+    static $ready=null;
+    if ($ready===null) $ready=invoice_payment_ledger_ready()
         && (bool)query("SHOW COLUMNS FROM invoice_payments LIKE 'request_key'")->fetch();
+    return $ready;
 }
 function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $row,string $key): int {
     if (!invoice_followup_ready()) throw new RuntimeException('برای دریافت مانده، ابتدا مهاجرت دیتابیس ۰۱۷ را اجرا کنید.');
