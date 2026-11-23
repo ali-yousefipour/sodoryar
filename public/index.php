@@ -29,7 +29,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','invoices','invoice_manager','cashbox','periods','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -52,6 +52,24 @@ if ($page==='template_logo') {
     header('Content-Type: '.(str_ends_with($path,'.png')?'image/png':'image/jpeg'));
     header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, no-store');
     readfile($path); exit;
+}
+if ($page==='service_rate_quotes') {
+    require_login();
+    require_permission('invoices.create');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    $dateValue=$_GET['date']??'';
+    if(!is_string($dateValue) || !preg_match('/^\\d{4}-\\d{2}-\\d{2}$/D',$dateValue)){
+        http_response_code(422); echo json_encode(['error'=>'تاریخ نامعتبر است.'],JSON_UNESCAPED_UNICODE);exit;
+    }
+    try {
+        $rows=effective_service_rows(tenant_id(),$dateValue);
+        echo json_encode(['services'=>$rows],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE);
+    } catch(Throwable $ex){
+        error_log('Sodoryar rate quotes: '.$ex->getCode());
+        http_response_code(503);echo json_encode(['error'=>'دریافت تعرفه در دسترس نیست.'],JSON_UNESCAPED_UNICODE);
+    }
+    exit;
 }
 if ($page==='global_search') {
     require_login();
@@ -683,7 +701,7 @@ if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دس�
 if ($page === 'companies' && is_super() && isset($_SESSION['selected_company'])) redirect('dashboard','برای مدیریت شرکت‌ها ابتدا به داشبورد مدیریت کل بازگردید.');
 if ($page === 'users') require_admin();
 if ($page === 'roles') { require_admin(); require_permission('roles.manage'); }
-if ($page === 'services') require_permission('services.view');
+if ($page === 'services' || $page==='service_rate_history') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
 if ($page === 'customers') require_permission('customers.view');
@@ -859,7 +877,7 @@ $navGroup=null;
 <nav id="primaryNav" aria-label="منوی اصلی صدوریار" data-nav-menu>
 <?php foreach($navItems as [$navPage,$navLabel,$navIcon,$navCategory]): ?>
 <?php if ($navCategory!==$navGroup): $navGroup=$navCategory; ?><p class="nav-section-label"><?=e($navCategory)?></p><?php endif; ?>
-<a class="nav-link<?=($page===$navPage || ($page==='driver_account' && $navPage==='customers'))?' active':''?>" href="?page=<?=e($navPage)?>" data-nav-category="<?=e($navCategory)?>" <?=($page===$navPage || ($page==='driver_account' && $navPage==='customers'))?'aria-current="page"':''?> title="<?=e($navLabel)?>" aria-label="<?=e($navLabel)?>"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#<?=e($navIcon)?>"></use></svg><span class="nav-link-label"><?=e($navLabel)?></span></a>
+<a class="nav-link<?=($page===$navPage || (($page==='driver_account' && $navPage==='customers') || ($page==='service_rate_history' && $navPage==='services')))?' active':''?>" href="?page=<?=e($navPage)?>" data-nav-category="<?=e($navCategory)?>" <?=($page===$navPage || ($page==='driver_account' && $navPage==='customers'))?'aria-current="page"':''?> title="<?=e($navLabel)?>" aria-label="<?=e($navLabel)?>"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#<?=e($navIcon)?>"></use></svg><span class="nav-link-label"><?=e($navLabel)?></span></a>
 <?php endforeach; ?><p class="sidebar-no-results" data-nav-empty hidden>بخشی با این عبارت پیدا نشد.</p></nav>
 <div class="sidebar-footer">
 <?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="sidebar-action" type="submit" title="بازگشت به مدیریت کل" aria-label="بازگشت به مدیریت کل"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#back"></use></svg><span>بازگشت به مدیریت کل</span></button></form><?php endif; ?>
@@ -934,7 +952,10 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <?php elseif($page==='services'): ?>
 <div class="heading"><h1>تعریف خدمات و تعرفه‌ها</h1><?php if(user()['role']!=='operator'): ?><button type="button" data-dialog-open="serviceCreate">+ خدمت جدید</button><?php endif; ?></div>
 <?php if(user()['role']!=='operator'): ?><dialog id="serviceCreate" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><h2>ثبت خدمت جدید</h2><label>عنوان خدمت<input name="title" maxlength="200" placeholder="مثلاً هزینه تمدید پروانه تاکسیرانی" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره خدمت</button></div></form></dialog><?php endif; ?>
-<div class="card table-wrap"><table><thead><tr><th>شناسه</th><th>عنوان خدمت</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,price,is_active FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['id'])?></td><td><?=e($r['title'])?></td><td><span class="money-value"><?=money_toman($r['price'])?></span></td><td><span class="status-chip <?=$r['is_active']?'status-good':'status-muted'?>"><?=$r['is_active']?'فعال':'غیرفعال'?></span></td><td><?php if(user()['role']!=='operator'): ?><button type="button" class="small secondary" data-dialog-open="serviceEdit<?=e($r['id'])?>">ویرایش</button><dialog id="serviceEdit<?=e($r['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="service_id" value="<?=e($r['id'])?>"><h2>ویرایش خدمت</h2><label>عنوان خدمت<input name="title" maxlength="200" value="<?=e($r['title'])?>" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" value="<?=e($r['price'])?>" required></label><label class="choice"><input type="checkbox" name="is_active" value="1" <?=$r['is_active']?'checked':''?>>فعال باشد</label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
+<div class="card table-wrap"><table><thead><tr><th>شناسه</th><th>عنوان خدمت</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT id,title,price,is_active FROM services WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $r): ?><tr><td><?=e($r['id'])?></td><td><?=e($r['title'])?></td><td><span class="money-value"><?=money_toman($r['price'])?></span></td><td><span class="status-chip <?=$r['is_active']?'status-good':'status-muted'?>"><?=$r['is_active']?'فعال':'غیرفعال'?></span></td><td><?php if(user()['role']!=='operator'): ?><button type="button" class="small secondary" data-dialog-open="serviceEdit<?=e($r['id'])?>">ویرایش</button> <a class="small button-link" href="?page=service_rate_history&amp;id=<?=e($r['id'])?>">تاریخچه تعرفه</a><dialog id="serviceEdit<?=e($r['id'])?>" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="update"><input type="hidden" name="service_id" value="<?=e($r['id'])?>"><h2>ویرایش خدمت</h2><label>عنوان خدمت<input name="title" maxlength="200" value="<?=e($r['title'])?>" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" value="<?=e($r['price'])?>" required></label><label>شروع اعتبار نرخ جدید (شمسی، اختیاری؛ پیش‌فرض امروز)<input name="effective_from" inputmode="numeric" placeholder="۱۴۰۵/۰۹/۰۲" maxlength="10"></label><label>دلیل تغییر تعرفه<input name="change_reason" maxlength="500" placeholder="در صورت تغییر نرخ یا عنوان، دلیل الزامی است"></label><label class="choice"><input type="checkbox" name="is_active" value="1" <?=$r['is_active']?'checked':''?>>فعال باشد</label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div>
+<?php elseif($page==='service_rate_history'): ?>
+<?php $serviceHistoryId=(int)($_GET['id']??0);$serviceHistory=query('SELECT title FROM services WHERE company_id=? AND id=?',[$tenant,$serviceHistoryId])->fetch(); ?>
+<?php if(!$serviceHistory): ?><div class="alert error">این خدمت در شرکت وجود ندارد.</div><?php else: ?><div class="card"><h1>تاریخچه تعرفه خدمت <?=e($serviceHistory['title'])?></h1><?=render_service_rate_history((int)$tenant,$serviceHistoryId)?><p><a href="?page=services">بازگشت به تعرفه‌ها</a></p></div><?php endif; ?>
 <?php elseif($page==='invoices'): ?>
 <?php if(can('invoices.create')): ?>
 <?php $invoiceDriverLines=query("SELECT DISTINCT TRIM(line_area) AS line_name FROM global_drivers WHERE line_area IS NOT NULL AND TRIM(line_area) <> '' ORDER BY line_name")->fetchAll(PDO::FETCH_COLUMN); ?>
