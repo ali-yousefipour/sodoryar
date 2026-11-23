@@ -19,6 +19,9 @@ $assert(str_contains($app,"if(extraItems?.contains(field))extraItems.dispatchEve
 $assert(str_contains($app,"submit.setAttribute('aria-busy','true')"),'duplicate submit feedback');
 $assert(str_contains($app,"titleLabel.textContent='عنوان خدمت موردی'"),'visible label for new service');
 $assert(str_contains($ux,'.invoice-extras .extra-invoice-row'),'responsive financial items');
+$tableUx=(string)file_get_contents(__DIR__.'/../public/assets/table-experience.js');
+$assert(str_contains($tableUx,'sd-table-scroll-hint') && str_contains($tableUx,"wrap.scrollWidth<=wrap.clientWidth+2"),'discoverability of horizontally clipped table columns');
+$assert(str_contains($ux,'.sd-table-scroll-hint[hidden]'),'accessible scroll hint state');
 $assert(str_contains($ux,':focus-visible'),'visible keyboard focus');
 $assert(str_contains($ux,'prefers-reduced-motion:reduce'),'reduced animation support');
 $assert(str_contains($print,'@page sodoryarThermal { size:80mm 297mm; margin:0; }'),'thermal paper width');
