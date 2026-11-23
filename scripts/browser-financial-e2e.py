@@ -176,8 +176,13 @@ def main() -> None:
         assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
             "Custom invoice item was not included in the browser total"
         )
-        manager_a.locator('[data-payment="pos"]').click()
-        manager_a.locator("#posRef").fill("CI-INVOICE-POS-2026")
+        manager_a.locator('[data-payment-mode="multi"]').click()
+        manager_a.locator('input[name="payments[0][amount]"]').fill("۲۰۰۰۰")
+        manager_a.locator("#invoiceAddPayment").click()
+        manager_a.locator('select[name="payments[1][method]"]').select_option("pos")
+        manager_a.locator('input[name="payments[1][tracking]"]').fill("CI-INVOICE-POS-2026")
+        expect(manager_a.locator("[data-payment-paid]")).to_contain_text("۷۰٬۰۰۰")
+        expect(manager_a.locator("[data-payment-count]")).to_contain_text("۲")
         manager_a.locator(".invoice-submit").click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         expect(manager_a.locator(".receipt")).to_be_visible()
