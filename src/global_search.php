@@ -4,7 +4,7 @@ declare(strict_types=1);
 /** Bounded, permission-filtered, tenant-isolated global search results. */
 function sodoryar_global_search(int $tenant,string $needle): array {
     $q=mb_substr(trim(ascii_digits($needle)),0,80);
-    $result=['customers'=>[],'invoices'=>[],'payments'=>[],'services'=>[]];
+    $result=['customers'=>[],'invoices'=>[],'payments'=>[],'vehicles'=>[],'services'=>[]];
     if (mb_strlen($q)<3 || str_contains($q,'%') || str_contains($q,'_') || str_contains($q,chr(92))
         || (preg_match('/^[0-9]+$/D',$q) && mb_strlen($q)<6)) return $result;
     $prefix=$q.'%';
@@ -18,6 +18,19 @@ function sodoryar_global_search(int $tenant,string $needle): array {
                 'title'=>$row['first_name'].' '.$row['last_name'],
                 'detail'=>fa_digits($row['national_code']),
                 'url'=>can('invoices.view')?'?page=invoice_manager&q='.rawurlencode($row['national_code']):'?page=customers'
+            ];
+        }
+    }
+    if (can('customers.view') && mb_strlen($q)>=5 && database_table_exists('global_drivers')) {
+        $vehicles=query('SELECT c.national_code,c.first_name,c.last_name,g.vehicle_plate
+            FROM customers c JOIN global_drivers g ON g.national_code=c.national_code
+            WHERE c.company_id=? AND g.vehicle_plate LIKE ?
+            ORDER BY c.id DESC LIMIT 6',[$tenant,$contains])->fetchAll();
+        foreach($vehicles as $vehicle) {
+            $result['vehicles'][]=[
+              'title'=>fa_digits((string)$vehicle['vehicle_plate']),
+              'detail'=>$vehicle['first_name'].' '.$vehicle['last_name'],
+              'url'=>can('invoices.view')?'?page=invoice_manager&q='.rawurlencode($vehicle['national_code']):'?page=customers'
             ];
         }
     }
@@ -36,16 +49,18 @@ function sodoryar_global_search(int $tenant,string $needle): array {
             ];
         }
         if (invoice_payment_ledger_ready()) {
-            $rows=query('SELECT DISTINCT i.id,i.invoice_number,p.tracking_number
+            $paymentId=ctype_digit($q) && strlen($q)<=18?(int)$q:0;
+            if(preg_match('/^(?:تراکنش|پرداخت)[ -]*([0-9]{1,18})$/u',$q,$paymentMatch))$paymentId=(int)$paymentMatch[1];
+            $rows=query('SELECT DISTINCT i.id,i.invoice_number,p.id payment_id,p.tracking_number
                 FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
                 WHERE p.company_id=? AND p.voided_at IS NULL
-                  AND (p.tracking_number LIKE ? OR p.reference_number LIKE ?)'.$scope.'
-                ORDER BY i.id DESC LIMIT 6',[$tenant,$contains,$contains])->fetchAll();
+                  AND (p.tracking_number LIKE ? OR p.reference_number LIKE ? OR p.id=?)'.$scope.'
+                ORDER BY i.id DESC LIMIT 6',[$tenant,$contains,$contains,$paymentId])->fetchAll();
             foreach($rows as $row) {
                 $result['payments'][]=[
-                    'title'=>display_financial_reference($row['tracking_number']?:$row['invoice_number']),
+                    'title'=>display_financial_reference($row['tracking_number']?:'تراکنش '.$row['payment_id']),
                     'detail'=>'فاکتور '.display_financial_reference($row['invoice_number']),
-                    'url'=>can('invoices.print')?'?page=receipt&id='.(int)$row['id']
+                    'url'=>can('invoices.print')?'?page=payment_receipt&id='.(int)$row['payment_id']
                         :'?page=invoice_manager&q='.rawurlencode($row['invoice_number'])
                 ];
             }
