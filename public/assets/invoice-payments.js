@@ -54,7 +54,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     const card=el('div',{class:'invoice-payment-row','data-payment-id':String(row.id)});
     const methodLabel=el('label',{},'روش پرداخت');
     const select=el('select',{name:`payments[${index}][method]`,'aria-label':'روش پرداخت'});
-    [['cash','نقدی'],['pos','کارتخوان']].forEach(([v,label])=>select.append(el('option',{value:v},label)));
+    [['cash','نقدی'],['pos','کارتخوان']].filter(([value])=>mode==='multi'||value===mode)
+      .forEach(([v,label])=>select.append(el('option',{value:v},label)));
     select.value=method;
     select.addEventListener('change',()=>{row.method=select.value;refresh();});
     methodLabel.append(select);

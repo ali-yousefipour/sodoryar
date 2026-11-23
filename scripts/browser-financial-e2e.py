@@ -190,7 +190,21 @@ def main() -> None:
         assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
             "Custom invoice item was not included in the browser total"
         )
+        method = manager_a.locator('#invoicePaymentRows select[name$="[method]"]')
+        for mode in ('cash', 'pos', 'cash'):
+            manager_a.locator(f'[data-payment-mode="{mode}"]').click()
+            assert method.locator('option').evaluate_all('(options) => options.map(o => o.value)') == [mode], (
+                'Single payment mode must not offer a conflicting method'
+            )
+            expect(method).to_have_value(mode)
+            assert method.is_enabled(), 'Payment method must remain included in form submission'
+            assert manager_a.locator('#invoicePaymentRows .payment-pos-fields').is_visible() == (mode == 'pos')
         manager_a.locator('[data-payment-mode="multi"]').click()
+        assert method.locator('option').evaluate_all('(options) => options.map(o => o.value)') == ['cash', 'pos']
+        method.select_option('pos')
+        expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_visible()
+        method.select_option('cash')
+        expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_hidden()
         payment_amount = manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]')
         payment_amount.fill("1,5")
         manager_a.locator(".invoice-submit").click()
