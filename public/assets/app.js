@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const typedDigit=inputEvent?.inputType==='insertText'
       && /^[0-9۰-۹٠-٩]$/.test(inputEvent.data||'');
     const deleting=inputEvent?.inputType?.startsWith('delete');
-    const autoGroup=(typedDigit||deleting) && field.dataset.moneyLastValid!==undefined
+    const autoGroup=(typedDigit||deleting) && field.getAttribute('aria-invalid')!=='true' && field.dataset.moneyLastValid!==undefined
       && /^[0-9,٬، ]*$/.test(normalized);
     const digits=moneyDigits(normalized);
     const inRange=digits.length<=15 && (digits==='' || BigInt(digits)<=100000000000n);
