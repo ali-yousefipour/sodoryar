@@ -603,6 +603,13 @@ if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSI
     $tenant = tenant_id();
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
+if ($page==='invoice_manager' && ($_GET['export']??'')==='excel' && $tenant) {
+    try { export_invoice_management((int)$tenant); }
+    catch (Throwable $ex) {
+        error_log('Sodoryar invoice manager export: '.$ex->getCode());
+        $error=public_operation_error($ex);
+    }
+}
 if (in_array($page,['reports','activity'],true) && $tenant) {
     try {
         $reportFilter=report_filters();
