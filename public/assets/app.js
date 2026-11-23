@@ -321,6 +321,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     message.setAttribute('role','status');
     message.hidden=true;
     field.dataset.moneyErrorId=message.id;
+    if(field.dataset.moneyLastValid===undefined)field.dataset.moneyLastValid='';
     shell.insertAdjacentElement('afterend',message);
   };
   const formatMoneyField=(field,keepCaret=false,inputEvent=null)=>{
@@ -346,8 +347,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       // An over-limit amount is NOT silently truncated into a different price.
       const localized=previous.replace(/[0-9]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[Number(ch)])
         .replace(/[٠-٩]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[ch.charCodeAt(0)-1632]);
-      if(!inRange && field.dataset.moneyLastValid!==undefined){
-        field.value=field.dataset.moneyLastValid;
+      if(!inRange){
+        field.value=field.dataset.moneyLastValid||'';
       }else if(field.value!==localized){
         field.value=localized;
       }
