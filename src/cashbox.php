@@ -82,6 +82,7 @@ function cashbox_close_shift(int $tenant,int $shift,int $actor,int $declared,str
         $totals=cashbox_shift_totals($tenant,$shift);
         $expected=(int)$row['opening_cash']+$totals['cash']+$totals['incoming']-$totals['outgoing'];
         $difference=$declared-$expected;
+        if($difference!==0 && mb_strlen($note)<5) throw new RuntimeException('برای مغایرت نقدی، توضیح حداقل ۵ نویسه الزامی است.');
         query("UPDATE cash_shifts SET declared_cash=?,expected_cash=?,difference_cash=?,closed_at=NOW(),
                 close_note=?,status='pending',manager_note=NULL,reviewed_by=NULL,reviewed_at=NULL
                 WHERE id=? AND company_id=?",
@@ -109,4 +110,14 @@ function cashbox_add_register(int $tenant,string $name): void {
     if($name===''||mb_strlen($name)>120) throw new RuntimeException('نام صندوق نامعتبر است.');
     query('INSERT INTO cash_registers(company_id,name) VALUES(?,?)',[$tenant,$name]);
     audit('cashbox.register.create',$name);
+}
+
+/** Historical receipts assigned to a submitted or approved shift cannot be rewritten. */
+function cashbox_assert_payments_mutable(int $tenant,int $invoiceId): void {
+    if(!cashbox_ready()) return;
+    $closed=query("SELECT p.id FROM invoice_payments p
+        JOIN cash_shifts s ON s.id=p.cash_shift_id AND s.company_id=p.company_id
+        WHERE p.company_id=? AND p.invoice_id=? AND p.voided_at IS NULL
+          AND s.status<>'open' LIMIT 1",[$tenant,$invoiceId])->fetch();
+    if($closed) throw new RuntimeException('پرداخت‌های این فاکتور در صندوق بسته یا در انتظار بررسی ثبت شده‌اند؛ اصلاح مستقیم مجاز نیست.');
 }
