@@ -27,7 +27,7 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || !str_contains($workflow, 'get "_private/.sodoryar-instance"')
     || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') < 2
     || str_contains($workflow, 'FTP_REMOTE_DIR: /')
-    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
     throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
 if (!str_contains($workflow, 'if [[ -f "$marker_file" ]]; then')
