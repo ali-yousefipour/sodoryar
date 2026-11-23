@@ -95,3 +95,14 @@ body:has(.login-wrap){background:var(--sd-paper);color:var(--sd-ink)}
 .manager-table-column-options label{display:flex;align-items:center;gap:6px}
 .manager-results th[hidden],.manager-results td[hidden]{display:none!important}
 @media(max-width:800px){.manager-table-column-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.manager-trend-list{display:grid;gap:10px}
+.manager-trend-row{display:grid;grid-template-columns:120px minmax(0,1fr);gap:12px;align-items:center;border-bottom:1px solid var(--sd-border);padding:7px 0}
+.manager-trend-row>span{font-weight:750;font-size:12px}
+.manager-trend-bars{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.manager-trend-bars label{display:grid;grid-template-columns:70px minmax(0,1fr) 145px;gap:8px;align-items:center;font-size:11px}
+.manager-trend-bars progress{width:100%;height:11px;accent-color:var(--sd-brand)}
+.manager-trend-bars .manager-receipt-progress{accent-color:var(--sd-success)}
+.manager-trend-bars small{white-space:nowrap;text-align:end;font-size:11px}
+@media(max-width:1000px){.manager-trend-row{grid-template-columns:1fr}.manager-trend-bars label{grid-template-columns:60px minmax(0,1fr) 115px}}
+@media(max-width:600px){.manager-trend-bars{grid-template-columns:1fr;gap:7px}.manager-trend-bars label{grid-template-columns:60px minmax(0,1fr) 120px}}
