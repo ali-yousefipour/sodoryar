@@ -37,8 +37,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     const paid=noInitial?.checked?0n:totalPaid(), remaining=due-paid;
     host.querySelectorAll('.invoice-payment-row').forEach((card,index)=>{
       const row=rows[index];if(!row)return;
-      const method=card.querySelector('select');if(method.value!==row.method)method.value=row.method;
+      const method=card.querySelector('[name$="[method]"]');if(method.value!==row.method)method.value=row.method;
       card.querySelector('.payment-pos-fields').hidden=row.method!=='pos';
+      card.querySelector('input[name$="[tracking]"]').required=row.method==='pos';
       card.querySelector('[data-remove-payment]').hidden=mode!=='multi';
     });
     const set=(selector,n)=>{form.querySelector(selector).textContent=format.format(n);};
@@ -53,9 +54,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     const index=rows.length-1;
     const card=el('div',{class:'invoice-payment-row','data-payment-id':String(row.id)});
     const methodLabel=el('label',{},'روش پرداخت');
-    const select=el('select',{name:`payments[${index}][method]`,'aria-label':'روش پرداخت'});
-    [['cash','نقدی'],['pos','کارتخوان']].filter(([value])=>mode==='multi'||value===mode)
-      .forEach(([v,label])=>select.append(el('option',{value:v},label)));
+    const select=el(mode==='multi'?'select':'input',{name:`payments[${index}][method]`,'aria-label':'روش پرداخت'});
+    if(mode==='multi') [['cash','نقدی'],['pos','کارتخوان']].forEach(([v,label])=>select.append(el('option',{value:v},label)));
+    else {select.type='hidden';methodLabel.append(el('input',{type:'text',readonly:'readonly',value:method==='pos'?'کارتخوان':'نقدی','aria-label':'روش پرداخت'}));}
     select.value=method;
     select.addEventListener('change',()=>{row.method=select.value;refresh();});
     methodLabel.append(select);
@@ -75,7 +76,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       terminal.addEventListener('change',()=>{row.terminal=terminal.value;});
       terminalLabel.append(terminal);pos.append(terminalLabel);
     }
-    const trackingLabel=el('label',{},'شماره پیگیری (اختیاری)');
+    const trackingLabel=el('label',{},'شماره پیگیری (الزامی)');
     const tracking=el('input',{type:'text',name:`payments[${index}][tracking]`,maxlength:'120'});
     tracking.addEventListener('input',()=>{row.tracking=tracking.value;});trackingLabel.append(tracking);
     const referenceLabel=el('label',{},'شماره مرجع (اختیاری)');
@@ -130,6 +131,11 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 // Audit-preserving correction of an existing invoice's full payment allocation.
 document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('[data-collect-method]').forEach(method=>{
+    const tracking=method.closest('form').querySelector('[data-collect-tracking]');
+    const update=()=>{tracking.required=method.value==='pos';};
+    method.addEventListener('change',update);update();
+  });
   const ascii=s=>String(s??'').replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632));
   const normalized=s=>ascii(s).trim().replace(/[٬،]/g,',');
   const raw=s=>normalized(s).replace(/,/g,'');
@@ -153,7 +159,9 @@ document.addEventListener('DOMContentLoaded',()=>{
         const number=raw(input.value);
         if(valid(input.value))sum+=BigInt(number);
         else invalid=true;
-        row.querySelector('.payment-pos-fields').hidden=row.querySelector('select[name$="[method]"]').value!=='pos';
+        const isPos=row.querySelector('select[name$="[method]"]').value==='pos';
+        row.querySelector('.payment-pos-fields').hidden=!isPos;
+        row.querySelector('input[name$="[tracking]"]').required=isPos;
       });
       note.textContent=`جمع پرداخت‌ها: ${display(sum)} تومان | مانده: ${display(expected-sum)} تومان`;
       return !invalid && sum===expected && list.children.length>0;

@@ -567,6 +567,7 @@ try {
                 $total = sum_invoice_line_amounts(array_merge($items,$extras));
                 $allowPartial=isset($_POST['allow_partial']) && (string)$_POST['allow_partial']==='1';
                 $paymentRows=invoice_payment_rows((array)($_POST['payments']??[]),$total,$allowPartial);
+                if (!invoice_payment_ledger_ready() && in_array('pos',array_column($paymentRows,'method'),true)) throw new RuntimeException('برای ثبت و کنترل فیش کارتخوان، ابتدا میگرشن ۰۱۶ را اجرا کنید.');
                 if ($allowPartial && !invoice_payment_ledger_ready()) throw new RuntimeException('صدور فاکتور با مانده پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
                 if (!invoice_payment_ledger_ready() && count($paymentRows)>1) throw new RuntimeException('ثبت چندتراکنشی پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
                 $payment=$paymentRows[0]['method']??'cash';
@@ -624,7 +625,7 @@ try {
             $payment=(string)($_POST['payment_type']??'');
             $ref=trim(ascii_digits((string)($_POST['pos_ref']??'')));
             $reason=trim((string)($_POST['reason']??''));
-            if (!$id || !in_array($payment,['cash','pos'],true) || mb_strlen($ref)>120
+            if (!$id || !in_array($payment,['cash','pos'],true) || mb_strlen($ref)>120 || ($payment==='pos' && $ref==='')
                 || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('روش پرداخت و دلیل اصلاح (۵ تا ۵۰۰ کاراکتر) الزامی است.');
             db()->beginTransaction();
             try {
@@ -1234,12 +1235,12 @@ function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance):
         .'<input type="hidden" name="collect_nonce" value="'.e($nonce).'"><h2>ثبت دریافت جدید</h2>'
         .'<p>مانده قابل دریافت: <strong>'.money_toman($balance).'</strong></p>'
         .'<label>مبلغ دریافت (تومان)<input name="amount" type="text" inputmode="numeric" data-money-input required maxlength="22"></label>'
-        .'<label>روش پرداخت<select name="payment_method"><option value="cash">نقدی</option><option value="pos">کارتخوان</option></select></label>'
+        .'<label>روش پرداخت<select name="payment_method" data-collect-method><option value="cash">نقدی</option><option value="pos">کارتخوان</option></select></label>'
         .'<label>دستگاه کارتخوان (در صورت استفاده)<select name="terminal"><option value="">بدون انتخاب دستگاه</option>';
     foreach ($terminals[$tenant] as $terminal) {
         echo '<option value="'.(int)$terminal['id'].'">'.e($terminal['brand']).'</option>';
     }
-    echo '</select></label><label>شماره پیگیری کارتخوان<input name="tracking" maxlength="120"></label>'
+    echo '</select></label><label>شماره پیگیری کارتخوان<input name="tracking" maxlength="120" data-collect-tracking></label>'
         .'<label>شماره مرجع<input name="reference" maxlength="120"></label>'
         .'<p class="muted">دریافت جدید مستقل از پرداخت‌های قبلی ثبت می‌شود و مبلغ آن نباید از مانده بیشتر باشد.</p>'
         .'<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button>'

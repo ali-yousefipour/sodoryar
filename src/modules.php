@@ -199,8 +199,8 @@ function handle_module_post(string $page, string $action): void {
         $type=(string)($_POST['bill_type']??'');
         $method=(string)($_POST['paid_method']??'');
         $amount=parse_money_input($_POST['amount']??null,1);
-        $bill=trim((string)($_POST['bill_id']??'')); $payment=trim((string)($_POST['payment_id']??''));
-        $reference=trim((string)($_POST['ref_code']??''));
+        $bill=trim(ascii_digits((string)($_POST['bill_id']??''))); $payment=trim(ascii_digits((string)($_POST['payment_id']??'')));
+        $reference=trim(ascii_digits((string)($_POST['ref_code']??'')));
         $national=ascii_digits(trim((string)($_POST['national_code']??'')));
         $driver=trim((string)($_POST['driver_name']??''));
         if (!in_array($type,['abonman','citizen','other'],true) || !in_array($method,['manual','pos'],true) || !$amount || $bill==='' || $payment===''
@@ -211,6 +211,11 @@ function handle_module_post(string $page, string $action): void {
         }
         db()->beginTransaction();
         try {
+            query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+            if (query('SELECT id FROM bill_payments WHERE company_id=? AND ((bill_id=? AND payment_id=?) OR (ref_code<>\'\' AND ref_code=?)) LIMIT 1 FOR UPDATE',
+                [$tenant,$bill,$payment,$reference])->fetch()) {
+                throw new RuntimeException('این فیش قبلاً ثبت شده است؛ شناسه قبض و پرداخت یا شماره پیگیری تکراری است.');
+            }
             query('INSERT INTO bill_payments(company_id,user_id,bill_type,bill_id,payment_id,amount,ref_code,response_code,national_code,driver_name,paid_method) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[
                 $tenant,user()['id'],$type,$bill,$payment,$amount,$reference,null,$national,$driver,$method
             ]);

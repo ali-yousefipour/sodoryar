@@ -46,12 +46,16 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
         $tracking=trim(ascii_digits((string)($entry['tracking']??'')));
         $reference=trim(ascii_digits((string)($entry['reference']??'')));
         if (mb_strlen($tracking)>120 || mb_strlen($reference)>120) throw new RuntimeException('شناسه پیگیری یا مرجع طولانی است.');
+        if ($method==='pos' && $tracking==='') throw new RuntimeException('شماره پیگیری کارتخوان الزامی است.');
         if ($method==='pos' && $tracking!=='') {
             // Same device and tracking number cannot represent two payments on this invoice.
             // Tracking numbers may legitimately repeat across different terminals.
-            $key=($terminal===null?'unspecified':(string)$terminal).':'.$tracking;
-            if (isset($seenPosReferences[$key])) throw new RuntimeException('شماره پیگیری تکراری برای این کارتخوان ثبت شده است.');
-            $seenPosReferences[$key]=true;
+            foreach ($seenPosReferences as $seen) {
+                if ($seen['tracking']===$tracking && ($terminal===null || $seen['terminal']===null || $seen['terminal']===$terminal)) {
+                    throw new RuntimeException('شماره پیگیری تکراری برای این کارتخوان ثبت شده است.');
+                }
+            }
+            $seenPosReferences[]=['terminal'=>$terminal,'tracking'=>$tracking];
         }
         $rows[]=['method'=>$method,'amount'=>$amount,'tracking'=>$method==='pos'?$tracking:'','reference'=>$method==='pos'?$reference:'','terminal'=>$terminal];
         $sum+=$amount;
@@ -63,6 +67,7 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
 }
 function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,array $rows): void {
     foreach ($rows as $row) {
+        assert_unique_invoice_pos_receipt($tenant,$row);
         $terminal=$row['terminal']??null;
         if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
             throw new RuntimeException('کارتخوان انتخاب‌شده معتبر یا متعلق به این شرکت نیست.');
@@ -70,12 +75,25 @@ function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,arr
         $cashShift=function_exists('cashbox_active_shift')?cashbox_active_shift($tenant,$creator):null;
         if ($cashShift!==null) {
             query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,cash_shift_id) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
-                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$cashShift]);
+                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']!==''?$row['tracking']:null,$row['reference']?:null,$creator,$cashShift]);
         } else {
             query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by) VALUES (?,?,?,?,?,?,?,NOW(),?)',
-                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator]);
+                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']!==''?$row['tracking']:null,$row['reference']?:null,$creator]);
         }
     }
+}
+/** Company lock serializes receipt checks across different invoices and sessions. */
+function assert_unique_invoice_pos_receipt(int $tenant,array $row): void {
+    if ($row['method']!=='pos') return;
+    if (trim((string)($row['tracking']??''))==='') throw new RuntimeException('شماره پیگیری کارتخوان الزامی است.');
+    if (!db()->inTransaction()) throw new LogicException('Receipt validation requires a transaction.');
+    query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+    $terminal=$row['terminal']??null;
+    $duplicate=query('SELECT id FROM invoice_payments WHERE company_id=? AND payment_method=\'pos\'
+        AND tracking_number=? AND voided_at IS NULL
+        AND (terminal_id=? OR terminal_id IS NULL OR ? IS NULL) LIMIT 1 FOR UPDATE',
+        [$tenant,$row['tracking'],$terminal,$terminal])->fetch();
+    if ($duplicate) throw new RuntimeException('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.');
 }
 function get_invoice_payment_rows(int $tenant,int $invoiceId): array {
     if (!invoice_payment_ledger_ready()) return [];
@@ -102,18 +120,14 @@ function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $
     if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
         throw new RuntimeException('دستگاه کارتخوان متعلق به شرکت یا فعال نیست.');
     }
-    if ($row['method']==='pos' && ($row['tracking']??'')!=='') {
-        $duplicate=query('SELECT id FROM invoice_payments WHERE company_id=? AND invoice_id=? AND payment_method=? AND terminal_id <=> ? AND tracking_number=? AND voided_at IS NULL LIMIT 1',
-            [$tenant,$invoiceId,'pos',$terminal,$row['tracking']])->fetch();
-        if ($duplicate) throw new RuntimeException('شماره پیگیری این کارتخوان قبلاً برای فاکتور ثبت شده است.');
-    }
+    assert_unique_invoice_pos_receipt($tenant,$row);
     $cashShift=function_exists('cashbox_active_shift')?cashbox_active_shift($tenant,$creator):null;
     if ($cashShift!==null) {
         query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key,cash_shift_id) VALUES (?,?,?,?,?,?,?,NOW(),?,?,?)',
-            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key,$cashShift]);
+            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']!==''?$row['tracking']:null,$row['reference']?:null,$creator,$key,$cashShift]);
     } else {
         query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
-            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key]);
+            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']!==''?$row['tracking']:null,$row['reference']?:null,$creator,$key]);
     }
     return (int)db()->lastInsertId();
 }

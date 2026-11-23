@@ -190,19 +190,22 @@ def main() -> None:
         assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
             "Custom invoice item was not included in the browser total"
         )
-        method = manager_a.locator('#invoicePaymentRows select[name$="[method]"]')
+        method = manager_a.locator('#invoicePaymentRows [name$="[method]"]')
         for mode in ('cash', 'pos', 'cash'):
             manager_a.locator(f'[data-payment-mode="{mode}"]').click()
-            assert method.locator('option').evaluate_all('(options) => options.map(o => o.value)') == [mode], (
-                'Single payment mode must not offer a conflicting method'
-            )
+            assert manager_a.locator('#invoicePaymentRows select[name$="[method]"]').count() == 0
+            expect(method).to_have_attribute('type', 'hidden')
             expect(method).to_have_value(mode)
             assert method.is_enabled(), 'Payment method must remain included in form submission'
             assert manager_a.locator('#invoicePaymentRows .payment-pos-fields').is_visible() == (mode == 'pos')
+            assert manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').evaluate('(el) => el.required') == (mode == 'pos')
         manager_a.locator('[data-payment-mode="multi"]').click()
         assert method.locator('option').evaluate_all('(options) => options.map(o => o.value)') == ['cash', 'pos']
         method.select_option('pos')
         expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_visible()
+        manager_a.locator('.invoice-submit').click()
+        assert manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').evaluate('(el) => el.validity.valueMissing')
+        assert 'page=invoices' in manager_a.url, 'POS without tracking was submitted'
         method.select_option('cash')
         expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_hidden()
         payment_amount = manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]')
@@ -229,6 +232,15 @@ def main() -> None:
         media = re.findall(rb"/MediaBox\s*\[\s*0\s+0\s+([0-9.]+)", receipt_pdf)
         assert media and 585 < float(media[0]) < 605, "Default invoice receipt did not print on A4"
         (OUTPUT / "invoice-a4.pdf").write_bytes(receipt_pdf)
+        # A second invoice cannot reuse the same active POS receipt.
+        manager_a.goto(f"{ORIGIN}/?page=invoices")
+        manager_a.locator('#invoiceDriverNational').fill('1234567890')
+        expect(manager_a.locator('#invoiceDriverStatus')).to_contain_text('CI Driver', timeout=12000)
+        manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
+        manager_a.locator('[data-payment-mode="pos"]').click()
+        manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').fill('CI-INVOICE-POS-2026')
+        manager_a.locator('.invoice-submit').click()
+        expect(manager_a.get_by_text('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.')).to_be_visible()
         # Issue a partially collected invoice and settle the remainder later.
         manager_a.goto(f"{ORIGIN}/?page=invoices")
         manager_a.locator("#invoiceDriverNational").fill("1234567890")
@@ -321,6 +333,19 @@ def main() -> None:
                 + "; body=" + manager_a.locator("body").inner_text()[:2300]
             )
         expect(manager_a.get_by_role("cell", name="CI-E2E-BILL", exact=True)).to_be_visible()
+        for bill_id, payment_id, tracking in (
+            ('CI-E2E-BILL', 'CI-E2E-PAYMENT', 'CI-OTHER-REF'),
+            ('CI-OTHER-BILL', 'CI-OTHER-PAYMENT', 'CI-E2E-REF'),
+        ):
+            manager_a.goto(f'{ORIGIN}/?page=bills')
+            form = manager_a.locator('form[data-once-submit]').first
+            form.locator('[name="bill_id"]').fill(bill_id)
+            form.locator('[name="payment_id"]').fill(payment_id)
+            form.locator('[name="amount"]').fill('25000')
+            form.locator('[name="paid_method"]').select_option('pos')
+            form.locator('[name="ref_code"]').fill(tracking)
+            form.locator('button').last.click()
+            expect(manager_a.get_by_text('این فیش قبلاً ثبت شده است؛ شناسه قبض و پرداخت یا شماره پیگیری تکراری است.')).to_be_visible()
 
         manager_a.goto(f"{ORIGIN}/?page=reports")
         expect(manager_a.locator(".content")).to_be_visible()

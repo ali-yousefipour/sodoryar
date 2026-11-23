@@ -414,7 +414,39 @@ integration_assert($invalidGroupingRejected,'Invalid grouped amount 1,5 was sile
 
 $multiInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
     [$companyA,'CI-MULTI',$customerA,$userA,1500000,'cash','2026-11-22']);
+db()->beginTransaction();
 create_invoice_payment_rows($companyA,$multiInvoice,$userA,$expected);
+db()->commit();
+$repeatedPosBlocked=false;
+db()->beginTransaction();
+try {
+    create_invoice_payment_rows($companyA,$invoiceA,$userA,[$expected[1]]);
+} catch (RuntimeException $ex) {
+    $repeatedPosBlocked=true;
+} finally { db()->rollBack(); }
+integration_assert($repeatedPosBlocked,'Same receipt was accepted on a different invoice.');
+$otherConnection=new PDO(sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',config('DB_HOST'),config('DB_PORT','3306'),config('DB_NAME')),
+    config('DB_USER'),config('DB_PASS'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$otherConnection->exec('SET innodb_lock_wait_timeout=1');
+db()->beginTransaction();
+assert_unique_invoice_pos_receipt($companyA,['method'=>'pos','tracking'=>'CI-CONCURRENT-UNUSED']);
+$otherConnection->beginTransaction();
+$lock=$otherConnection->prepare('SELECT id FROM companies WHERE id=? FOR UPDATE');
+$lock->execute([$companyB]);
+$sameCompanySerialized=false;
+try { $lock->execute([$companyA]); }
+catch(PDOException $ex) {
+    if ((int)($ex->errorInfo[1]??0)!==1205) throw $ex;
+    $sameCompanySerialized=true;
+} finally { $otherConnection->rollBack(); db()->rollBack(); }
+integration_assert($sameCompanySerialized,'Concurrent receipt validation did not serialize by company.');
+db()->beginTransaction();
+create_invoice_payment_rows($companyB,$invoiceB,$userB,[$expected[1]]);
+db()->rollBack();
+db()->beginTransaction();
+query('UPDATE invoice_payments SET voided_at=NOW() WHERE invoice_id=? AND company_id=? AND payment_method=\'pos\'',[$multiInvoice,$companyA]);
+create_invoice_payment_rows($companyA,$invoiceA,$userA,[$expected[1]]);
+db()->rollBack();
 $totals=invoice_payment_totals($companyA,$multiInvoice,1500000);
 integration_assert($totals['paid']===1500000 && $totals['remaining']===0 && count($totals['payments'])===2,
     'Multiple transactions were not persisted accurately.');
