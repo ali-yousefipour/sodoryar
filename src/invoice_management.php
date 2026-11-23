@@ -161,6 +161,20 @@ function render_invoice_management(int $tenant): void {
         ['مانده مطالبات',max(0,(int)$sum['invoiced']-(int)$sum['received']),true],
     ] as [$label,$value,$isMoney]) echo '<article class="stat"><span>'.e($label).'</span><b>'.money($value).'</b>'.($isMoney?'<small>تومان</small>':'').'</article>';
     echo '</div>';
+    $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Tehran')))->format('Y-m-d');
+    $yesterday=(new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
+    $weekStart=(new DateTimeImmutable($today))->modify('-6 days')->format('Y-m-d');
+    [$jy,$jm]=gregorian_to_jalali((int)substr($today,0,4),(int)substr($today,5,2),(int)substr($today,8,2));
+    $monthStart=jalali_to_gregorian_date(sprintf('%04d/%02d/01',$jy,$jm));
+    echo '<nav class="manager-quick-filters" aria-label="فیلتر سریع تاریخ">';
+    foreach([
+        ['امروز',['date_from'=>$today,'date_to'=>$today,'p'=>1]],
+        ['دیروز',['date_from'=>$yesterday,'date_to'=>$yesterday,'p'=>1]],
+        ['۷ روز اخیر',['date_from'=>$weekStart,'date_to'=>$today,'p'=>1]],
+        ['ماه جاری شمسی',['date_from'=>$monthStart,'date_to'=>$today,'p'=>1]],
+        ['همه تاریخ‌ها',['date_from'=>'','date_to'=>'','p'=>1]]
+    ] as [$label,$patch]) echo '<a class="button-link secondary" href="'.e($url($patch)).'">'.e($label).'</a>';
+    echo '</nav>';
     echo '<form class="card manager-filters" method="get"><input type="hidden" name="page" value="invoice_manager"><div class="form-grid">';
     echo '<label>شماره، نام، کد ملی یا همراه<input type="search" name="q" value="'.e($f['q']).'" placeholder="جستجو در فاکتورها"></label>';
     echo '<label>عنوان خدمت<input type="search" name="service" value="'.e($f['service']).'" placeholder="بخشی از شرح خدمت"></label>';
