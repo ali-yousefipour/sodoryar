@@ -93,3 +93,37 @@ function render_driver_account(int $tenant,int $customerId): void {
     if(!$data['history']) echo '<tr><td colspan="5">دریافتی ثبت نشده است.</td></tr>';
     echo '</tbody></table></div></div>';
 }
+
+/** Complete filtered financial customer statement with real numeric XLSX amounts. */
+function export_driver_account(int $tenant,int $customerId): never {
+    require_permission('customers.view');
+    require_permission('invoices.view');
+    require_permission('reports.export');
+    $data=driver_account_data($tenant,$customerId);
+    if((int)$data['summary']['invoices']>10000) {
+        throw new RuntimeException('تعداد فاکتورهای پرونده بیش از سقف گزارش است؛ ابتدا گزارش دوره‌ای تهیه کنید.');
+    }
+    $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
+    $valid=database_table_exists('invoice_voids')?
+        ' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':'';
+    $ledger=invoice_payment_ledger_ready();
+    $paid=$ledger?'COALESCE(pay.paid,0)':'i.total_amount';
+    $join=$ledger?
+        ' LEFT JOIN (SELECT company_id,invoice_id,SUM(amount) paid FROM invoice_payments
+                    WHERE company_id='.(int)$tenant.' AND voided_at IS NULL GROUP BY company_id,invoice_id) pay
+                    ON pay.company_id=i.company_id AND pay.invoice_id=i.id':'';
+    $records=query('SELECT i.invoice_number,i.invoice_date,i.created_at,i.total_amount,'.$paid.' collected
+        FROM invoices i'.$join.'
+        WHERE i.company_id=? AND i.customer_id=?'.$scope.$valid.'
+        ORDER BY i.id DESC LIMIT 10000',[$tenant,$customerId])->fetchAll();
+    $rows=[];
+    foreach($records as $index=>$record){
+        $amount=(int)$record['total_amount'];$collected=(int)$record['collected'];
+        $rows[]=[(int)$index+1,display_financial_reference($record['invoice_number']),
+            jalali_datetime($record['invoice_date']?:$record['created_at'],true),
+            fa_digits($data['customer']['national_code']),$data['customer']['first_name'].' '.$data['customer']['last_name'],
+            $amount,$collected,max(0,$amount-$collected)];
+    }
+    export_excel_xlsx('sodoryar-driver-account',['ردیف','شماره فاکتور','تاریخ شمسی',
+        'کد ملی','تاکسیران','مبلغ فاکتور','دریافتی','مانده'],$rows,[0,5,6,7]);
+}
