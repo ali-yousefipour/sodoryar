@@ -50,3 +50,52 @@
 @media(max-width:620px){.settings-index{grid-template-columns:1fr;padding:12px}.settings-index-link{justify-content:flex-start}.settings-form .form-grid{grid-template-columns:1fr}.settings-savebar{position:static;bottom:auto;margin-inline:0;padding:12px;flex-wrap:wrap;backdrop-filter:none;box-shadow:none}.settings-savebar p{flex:1 1 100%}.settings-savebar button{width:100%}.settings-panel-heading{align-items:flex-start}.app-shell .topbar{padding:12px}.app-shell .main-wrap>.content{padding:13px}}
 @media(prefers-reduced-motion:reduce){.app-shell .sidebar .nav-link{transition:none}}
 @media print{.settings-index,.settings-savebar{position:static}.app-shell .main-wrap>.content .settings-panel{box-shadow:none!important}}
+
+/* One coherent Sodoryar visual scale, scoped to application chrome and forms.
+   Paper/receipt print templates remain untouched. */
+.app-shell{
+  --sd-brand:#56439b;--sd-brand-strong:#46367f;--sd-ink:#29263f;
+  --sd-muted:#68677a;--sd-border:#e1dfeb;--sd-surface:#fff;
+  --sd-focus:#826bb9;--sd-radius:14px;
+  font-size:14px;line-height:1.8;color:var(--sd-ink);
+}
+.app-shell :where(.sidebar,.topbar,.main-wrap>.content){
+  font-family:Vazirmatn,Tahoma,Arial,sans-serif;
+}
+.app-shell .sidebar .nav-link{font-size:13px;font-weight:750;line-height:1.85}
+.app-shell .sidebar .nav-section-label{font-size:11px;line-height:1.9;font-weight:800}
+.app-shell .topbar .topbar-title strong{font-size:17px;line-height:1.6}
+.app-shell .main-wrap>.content :where(h1){font-size:23px;line-height:1.55;font-weight:900}
+.app-shell .main-wrap>.content :where(h2){font-size:17px;line-height:1.65;font-weight:850}
+.app-shell .main-wrap>.content :where(form label,fieldset legend){font-size:13px;line-height:1.9;font-weight:750}
+.app-shell .main-wrap>.content :where(input:not([type=checkbox]):not([type=radio]),select,textarea){
+  font-family:inherit;font-size:14px;line-height:1.75;color:#2e2b45;
+  min-height:44px;border-radius:11px;
+}
+.app-shell .main-wrap>.content :where(input:not([type=checkbox]):not([type=radio]),select,textarea):focus-visible{
+  outline:3px solid #d9cef6;outline-offset:1px;border-color:var(--sd-focus);
+}
+.app-shell .main-wrap>.content :where(button,.button-link){
+  font-family:inherit;font-size:13px;font-weight:750;line-height:1.7;
+}
+.app-shell .main-wrap>.content .money-input-shell input[data-money-input]{
+  direction:ltr;text-align:right;font-size:15px!important;
+  font-variant-numeric:tabular-nums;unicode-bidi:plaintext;
+  letter-spacing:0;max-width:100%;
+}
+.app-shell .main-wrap>.content .money-input-shell:has(input[aria-invalid=true]){
+  border-color:#bd354c;box-shadow:0 0 0 2px #f9dce2;
+}
+.app-shell .main-wrap>.content .money-input-error{
+  display:block;color:#aa2a46;font-size:11px;line-height:1.8;
+  margin:5px 3px 0;font-weight:700;
+}
+.app-shell .main-wrap>.content .money-input-error[hidden]{display:none!important}
+.app-shell .main-wrap>.content .invoice-extra-label{min-width:0}
+.app-shell .main-wrap>.content .invoice-extras .extra-invoice-row{align-items:end}
+.app-shell .main-wrap>.content .invoice-extras :where(input,button){min-height:44px}
+@media(max-width:650px){
+  .app-shell .main-wrap>.content :where(h1){font-size:20px}
+  .app-shell .main-wrap>.content :where(h2){font-size:16px}
+  .app-shell .main-wrap>.content .invoice-extras .extra-invoice-row{align-items:stretch}
+}
