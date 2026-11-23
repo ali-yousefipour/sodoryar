@@ -6,6 +6,7 @@ require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/invoice_payments.php';
+require __DIR__ . '/_private/src/invoice_numbers.php';
 require __DIR__ . '/_private/src/invoice_management.php';
 require __DIR__ . '/_private/src/global_search.php';
 require __DIR__ . '/_private/src/cashbox.php';
@@ -570,8 +571,7 @@ try {
                 if (!invoice_payment_ledger_ready() && count($paymentRows)>1) throw new RuntimeException('ثبت چندتراکنشی پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
                 $payment=$paymentRows[0]['method']??'cash';
                 $ref=count($paymentRows)===1?$paymentRows[0]['tracking']:null;
-                $number = date('YmdHis') . '-' . bin2hex(random_bytes(4));
-                query('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,pos_ref,invoice_date) VALUES(?,?,?,?,?,?,?,?)',[$tenant,$number,$customer,user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate]);
+                $number = insert_invoice_with_short_number($tenant,$customer,(int)user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate);
                 $invoiceId = (int)db()->lastInsertId();
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);

@@ -206,6 +206,9 @@ def main() -> None:
         expect(manager_a.locator(".receipt")).to_be_visible()
         expect(manager_a.locator(".receipt")).to_contain_text("۷۰٬۰۰۰")
         expect(manager_a.locator(".receipt")).to_contain_text("CI-INVOICE-POS-2026")
+        assert re.search(r'شماره فاکتور:\s*[A-Z]{2}[0-9]{6}(?![0-9])', manager_a.locator('.receipt').inner_text()), (
+            'New invoice number must contain two letters and six digits'
+        )
         invoice_id = re.search(r"[?&]id=(\d+)", manager_a.url)
         assert invoice_id, "New invoice did not redirect to its receipt"
         receipt_pdf = manager_a.pdf(prefer_css_page_size=True, print_background=True)

@@ -288,7 +288,7 @@ jobs:
           set -euo pipefail
           # Read-only FTP readback: verify the critical private source that
           # the public PHP router uses; never expose PHP source over HTTPS.
-          for file in bootstrap.php modules.php localization.php reporting.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
             test -s "deploy-payload/_private/src/$file"
           done
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
@@ -302,9 +302,10 @@ jobs:
           get "_private/src/modules.php" -o "$RUNNER_TEMP/sodoryar-readback-modules.php"
           get "_private/src/localization.php" -o "$RUNNER_TEMP/sodoryar-readback-localization.php"
           get "_private/src/reporting.php" -o "$RUNNER_TEMP/sodoryar-readback-reporting.php"
+          get "_private/src/invoice_numbers.php" -o "$RUNNER_TEMP/sodoryar-readback-invoice_numbers.php"
           bye
           EOF
-          for file in bootstrap.php modules.php localization.php reporting.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
             expected="$(sha256sum "deploy-payload/_private/src/$file" | cut -d' ' -f1)"
             actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-$file" | cut -d' ' -f1)"
             if [[ "$expected" != "$actual" ]]; then
