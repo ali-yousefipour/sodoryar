@@ -159,6 +159,40 @@ function export_invoice_management(int $tenant): never {
     export_excel_xlsx('sodoryar-invoice-management',$heads,$rows,$numericColumns);
 }
 
+/** Recent issuance and cash receipts are separate accounting timelines. */
+function invoice_management_trend(int $tenant): array {
+    $today=new DateTimeImmutable('today',new DateTimeZone('Asia/Tehran'));
+    $start=$today->modify('-6 days')->format('Y-m-d');
+    $days=[];
+    for ($i=6;$i>=0;$i--) {
+        $date=$today->modify('-'.$i.' days')->format('Y-m-d');
+        $days[$date]=['date'=>$date,'invoices'=>0,'sales'=>0,'receipts'=>0];
+    }
+    $owner=document_scope()==='own';
+    $scope=$owner?' AND i.user_id=?':'';
+    $void=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
+    $sales=query('SELECT COALESCE(i.invoice_date,DATE(i.created_at)) d,COUNT(*) count_invoices,SUM(i.total_amount) total'.
+        ' FROM invoices i WHERE i.company_id=? AND COALESCE(i.invoice_date,DATE(i.created_at))>=?'.$scope.$void.
+        ' GROUP BY COALESCE(i.invoice_date,DATE(i.created_at))',
+        $owner?[$tenant,$start,(int)user()['id']]:[$tenant,$start])->fetchAll();
+    foreach($sales as $row) if(isset($days[$row['d']])) {
+        $days[$row['d']]['invoices']=(int)$row['count_invoices'];
+        $days[$row['d']]['sales']=(int)$row['total'];
+    }
+    if (invoice_payment_ledger_ready()) {
+        $receipts=query('SELECT DATE(p.paid_at) d,SUM(p.amount) total'.
+            ' FROM invoice_payments p JOIN invoices i ON i.company_id=p.company_id AND i.id=p.invoice_id'.
+            ' WHERE p.company_id=? AND p.voided_at IS NULL AND DATE(p.paid_at)>=?'.$scope.$void.
+            ' GROUP BY DATE(p.paid_at)',
+            $owner?[$tenant,$start,(int)user()['id']]:[$tenant,$start])->fetchAll();
+        foreach($receipts as $row) if(isset($days[$row['d']])) $days[$row['d']]['receipts']=(int)$row['total'];
+    } else {
+        foreach($days as &$day) $day['receipts']=$day['sales'];
+        unset($day);
+    }
+    return array_values($days);
+}
+
 function render_invoice_management(int $tenant): void {
     require_permission('invoices.view');
     try {$f=invoice_management_filters($_GET);} catch(RuntimeException $ex) {
@@ -186,6 +220,16 @@ function render_invoice_management(int $tenant): void {
         ['مانده مطالبات',max(0,(int)$sum['invoiced']-(int)$sum['received']),true],
     ] as [$label,$value,$isMoney]) echo '<article class="stat"><span>'.e($label).'</span><b>'.money($value).'</b>'.($isMoney?'<small>تومان</small>':'').'</article>';
     echo '</div>';
+    $trend=invoice_management_trend($tenant);
+    $maxTrend=max(1,...array_map(static fn($day)=>max($day['sales'],$day['receipts']),$trend));
+    echo '<section class="card manager-trend"><div class="heading"><h2>روند صدور و دریافت وجه — ۷ روز اخیر</h2><span class="muted">مبنای فروش تاریخ فاکتور و مبنای دریافت تاریخ تراکنش است</span></div><div class="manager-trend-list">';
+    foreach($trend as $day) {
+        echo '<div class="manager-trend-row"><span>'.e(jalali_datetime($day['date'],true)).'</span><div class="manager-trend-bars">'.
+            '<label>فروش <progress max="'.(int)$maxTrend.'" value="'.(int)$day['sales'].'"></progress><small>'.money_toman($day['sales']).'</small></label>'.
+            '<label>دریافتی <progress class="manager-receipt-progress" max="'.(int)$maxTrend.'" value="'.(int)$day['receipts'].'"></progress><small>'.money_toman($day['receipts']).'</small></label>'.
+            '</div></div>';
+    }
+    echo '</div></section>';
     $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Tehran')))->format('Y-m-d');
     $yesterday=(new DateTimeImmutable($today))->modify('-1 day')->format('Y-m-d');
     $weekStart=(new DateTimeImmutable($today))->modify('-6 days')->format('Y-m-d');
