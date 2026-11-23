@@ -186,9 +186,11 @@ $partialInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,c
     [$companyA,'CI-A-PARTIAL',$customerA,$userA,5000000,'cash','2026-11-21']);
 $initial=invoice_payment_rows([
     ['method'=>'cash','amount'=>'۱٬۰۰۰٬۰۰۰'],
-    ['method'=>'pos','amount'=>'۲٬۰۰۰٬۰۰۰'],
+    ['method'=>'pos','amount'=>'۲٬۰۰۰٬۰۰۰','tracking'=>'CI-PARTIAL-POS'],
 ],5000000,true);
+db()->beginTransaction();
 create_invoice_payment_rows($companyA,$partialInvoice,$userA,$initial);
+db()->commit();
 integration_assert(invoice_payment_totals($companyA,$partialInvoice,5000000)['remaining']===2000000,'Initial partial balance incorrect');
 $key=str_repeat('a',64);
 db()->beginTransaction();
