@@ -52,7 +52,7 @@ function invoice_management_data(int $tenant,array $f,bool $exportAll=false): ar
     $hasLedger=invoice_payment_ledger_ready();
     $hasVoids=database_table_exists('invoice_voids');
     $paymentJoin=$hasLedger
-        ? ' LEFT JOIN (SELECT company_id,invoice_id, SUM(amount) paid, SUM(payment_method=\'cash\') cash_count,SUM(payment_method=\'pos\') pos_count, SUM(CASE WHEN payment_method=\'cash\' THEN amount ELSE 0 END) cash_amount,SUM(CASE WHEN payment_method=\'pos\' THEN amount ELSE 0 END) pos_amount,COUNT(*) payment_count FROM invoice_payments WHERE voided_at IS NULL GROUP BY company_id,invoice_id) pay ON pay.company_id=i.company_id AND pay.invoice_id=i.id'
+        ? ' LEFT JOIN (SELECT company_id,invoice_id, SUM(amount) paid, SUM(payment_method=\'cash\') cash_count,SUM(payment_method=\'pos\') pos_count, SUM(CASE WHEN payment_method=\'cash\' THEN amount ELSE 0 END) cash_amount,SUM(CASE WHEN payment_method=\'pos\' THEN amount ELSE 0 END) pos_amount,COUNT(*) payment_count FROM invoice_payments WHERE company_id='.(int)$tenant.' AND voided_at IS NULL GROUP BY company_id,invoice_id) pay ON pay.company_id=i.company_id AND pay.invoice_id=i.id'
         : '';
     $paidExpr=$hasLedger?'COALESCE(pay.paid,0)':'i.total_amount';
     $cashCount=$hasLedger?'COALESCE(pay.cash_count,0)':"IF(i.payment_type='cash',1,0)";
