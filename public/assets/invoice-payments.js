@@ -26,7 +26,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   };
   const totalPaid=()=>rows.reduce((sum,r)=>sum+amount(r.amount),0n);
   const refresh=()=>{
-    const due=total(), paid=totalPaid(), remaining=due-paid;
+    const due=total();
+    if(rows.length===1 && !rows[0].manual){rows[0].amount=String(due);const first=host.querySelector('input[name$="[amount]"]');if(first&&document.activeElement!==first)first.value=due>0n?format.format(due):'';}
+    const paid=totalPaid(), remaining=due-paid;
     host.querySelectorAll('.invoice-payment-row').forEach((card,index)=>{
       const row=rows[index];if(!row)return;
       const method=card.querySelector('select');if(method.value!==row.method)method.value=row.method;
@@ -40,7 +42,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     error.hidden=true;
   };
   const createRow=(method,proposed)=>{
-    const row={id:++serial,method,amount:proposed>0n?String(proposed):'',tracking:'',reference:''};
+    const row={id:++serial,method,amount:proposed>0n?String(proposed):'',manual:false,tracking:'',reference:''};
     rows.push(row);
     const index=rows.length-1;
     const card=el('div',{class:'invoice-payment-row','data-payment-id':String(row.id)});
@@ -53,7 +55,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const amountLabel=el('label',{},'مبلغ پرداخت (تومان)');
     const field=el('input',{type:'text',inputmode:'numeric',name:`payments[${index}][amount]`,required:'required',autocomplete:'off','aria-label':'مبلغ پرداخت'});
     field.value=row.amount?format.format(BigInt(row.amount)):'';
-    field.addEventListener('input',()=>{row.amount=digits(field.value);if(!/^\d*$/.test(row.amount)){row.amount='';}refresh();});
+    field.addEventListener('input',()=>{row.manual=true;row.amount=digits(field.value);if(!/^\d*$/.test(row.amount)){row.amount='';}refresh();});
     field.addEventListener('blur',()=>{field.value=row.amount?format.format(BigInt(row.amount)):'';});
     amountLabel.append(field);
     const pos=el('div',{class:'payment-pos-fields'});
