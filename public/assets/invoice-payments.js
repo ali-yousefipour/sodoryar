@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     error.hidden=true;
   };
   const createRow=(method,proposed)=>{
-    const row={id:++serial,method,amount:proposed>0n?String(proposed):'',manual:false,tracking:'',reference:''};
+    const row={id:++serial,method,amount:proposed>0n?String(proposed):'',manual:false,terminal:'',tracking:'',reference:''};
     rows.push(row);
     const index=rows.length-1;
     const card=el('div',{class:'invoice-payment-row','data-payment-id':String(row.id)});
@@ -59,6 +59,15 @@ document.addEventListener('DOMContentLoaded',()=>{
     field.addEventListener('blur',()=>{field.value=row.amount?format.format(BigInt(row.amount)):'';});
     amountLabel.append(field);
     const pos=el('div',{class:'payment-pos-fields'});
+    const source=document.getElementById('invoiceTerminalOptions');
+    if(source && source.options.length>1){
+      const terminalLabel=el('label',{},'دستگاه کارتخوان (اختیاری)');
+      const terminal=source.cloneNode(true);
+      terminal.id='';terminal.hidden=false;terminal.removeAttribute('aria-hidden');
+      terminal.name=`payments[${index}][terminal]`;
+      terminal.addEventListener('change',()=>{row.terminal=terminal.value;});
+      terminalLabel.append(terminal);pos.append(terminalLabel);
+    }
     const trackingLabel=el('label',{},'شماره پیگیری (اختیاری)');
     const tracking=el('input',{type:'text',name:`payments[${index}][tracking]`,maxlength:'120'});
     tracking.addEventListener('input',()=>{row.tracking=tracking.value;});trackingLabel.append(tracking);
