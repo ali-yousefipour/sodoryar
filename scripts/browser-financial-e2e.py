@@ -200,7 +200,7 @@ def main() -> None:
         (OUTPUT / "invoice-a4.pdf").write_bytes(receipt_pdf)
         manager_a.goto(f"{ORIGIN}/?page=invoice_manager")
         expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
-        expect(manager_a.locator(".manager-results")).to_contain_text("CI-INVOICE")
+        expect(manager_a.locator(".manager-results")).to_contain_text("CI E2E Custom Service")
         assert manager_a.locator(".manager-results tbody tr").count() > 0, (
             "Invoice manager did not show the newly issued invoice"
         )
