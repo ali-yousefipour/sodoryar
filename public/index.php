@@ -582,7 +582,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e((string)filemtime(__DIR__.'/assets/app.css'))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?></head><body>
+<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e((string)filemtime(__DIR__.'/assets/app.css'))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap"><div class="login-layout">
 <section class="login-showcase" aria-labelledby="loginIntro"><div class="login-showcase-brand"><span class="login-showcase-symbol"><img src="assets/sodoryar-logo.png" width="78" height="78" alt=""></span><span><b>صدوریار</b><small>مدیریت خدمات کارگزاری‌های تاکسیرانی</small></span></div><div class="login-showcase-content"><span class="login-eyebrow">پنل یکپارچه کارگزاری‌ها</span><h2 id="loginIntro">مدیریت خدمات، ساده و مطمئن</h2><p>صدور فاکتور، مدیریت کاربران و پیگیری گزارش‌های مالی هر شرکت در محیطی امن و منظم.</p><div class="login-features"><span>اطلاعات مستقل هر شرکت</span><span>مدیریت دسترسی کاربران</span><span>گزارش‌های مالی یکپارچه</span></div></div><p class="login-showcase-footer">سامانه اختصاصی خدمات کارگزاری‌های تاکسیرانی</p></section>
@@ -598,22 +598,24 @@ if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 <button type="button" class="sidebar-search-expand" data-sidebar-search-expand aria-label="جستجو در منوی کناری" title="جستجو در منو"><svg class="nav-icon" aria-hidden="true"><use href="assets/sidebar-icons.svg#search"></use></svg></button>
 <div class="sidebar-search"><label for="sidebarNavSearch">جستجوی بخش‌های سامانه</label><div class="sidebar-search-field"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#search"></use></svg><input id="sidebarNavSearch" type="search" placeholder="نام بخش را بنویسید…" autocomplete="off" aria-controls="primaryNav" data-nav-search></div><small data-nav-search-status aria-live="polite"></small></div>
 <?php
-$navItems=[['dashboard',is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت','dashboard','اصلی']];
+$navItems=[['dashboard',is_super() && !$tenant?'داشبورد مدیریت کل':'داشبورد شرکت','dashboard','نمای کلی']];
 if (is_super() && !$tenant) $navItems[]=['companies','مدیریت شرکت‌ها','companies','مدیریت کل'];
 if ($tenant) {
-    if (can('customers.view')) $navItems[]=['customers','تاکسیرانان','drivers','عملیات'];
-    if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات'];
-    if (can('invoices.view') || can('invoices.create')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات'];
-    if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها'];
-    if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات'];
-    if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','مدیریت شرکت'];
-    if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها'];
-    if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها'];
+    if (can('customers.view')) $navItems[]=['customers','تاکسیرانان','drivers','عملیات و صدور'];
+    if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
+    if (can('invoices.view') || can('invoices.create')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات و صدور'];
+    if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات و صدور'];
+    if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها و نظارت'];
+    if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها و نظارت'];
+    if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها و نظارت'];
     if (user()['role']!=='operator') {
-        $navItems[]=['users','کاربران شرکت','users','مدیریت شرکت'];
-        $navItems[]=['roles','نقش‌ها و مجوزها','users','مدیریت شرکت'];
-        $navItems[]=['templates','قالب چاپ','templates','مدیریت شرکت'];
-        $navItems[]=['settings','تنظیمات شرکت','settings','مدیریت شرکت'];
+        $navItems[]=['users','کاربران شرکت','users','کاربران و دسترسی'];
+        $navItems[]=['roles','نقش‌ها و مجوزها','users','کاربران و دسترسی'];
+        $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
+        $navItems[]=['templates','قالب چاپ','templates','تنظیمات و پیکربندی'];
+        $navItems[]=['settings','تنظیمات شرکت','settings','تنظیمات و پیکربندی'];
+    } elseif (can('pos.view')) {
+        $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
     }
 }
 $navItems[]=['profile','پروفایل و امنیت','profile','حساب کاربری'];
