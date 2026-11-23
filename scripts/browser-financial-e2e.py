@@ -204,7 +204,7 @@ def main() -> None:
         expect(manager_a.locator("#invoiceDriverStatus")).to_contain_text("CI Driver", timeout=12000)
         manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
         manager_a.locator("#invoiceAllowPartial").check()
-        manager_a.locator('input[name="payments[0][amount]"]').fill("15000")
+        manager_a.locator('#invoiceCreateForm input[name="payments[0][amount]"]').fill("15000")
         expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
         manager_a.locator(".invoice-submit").click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
