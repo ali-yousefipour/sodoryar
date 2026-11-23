@@ -247,6 +247,14 @@ create_invoice_payment_rows($companyA,$multiInvoice,$userA,$expected);
 $totals=invoice_payment_totals($companyA,$multiInvoice,1500000);
 integration_assert($totals['paid']===1500000 && $totals['remaining']===0 && count($totals['payments'])===2,
     'Multiple transactions were not persisted accurately.');
+$paymentFilter=report_filters_default();
+$paymentFilter['invoice_number']='CI-MULTI';
+$paymentSummary=invoice_payment_report($companyA,$paymentFilter,50);
+integration_assert((int)$paymentSummary['summary']['transaction_count']===2
+    && (int)$paymentSummary['summary']['cash_paid']===500000
+    && (int)$paymentSummary['summary']['pos_paid']===1000000
+    && count($paymentSummary['rows'])===2,
+    'Cash/POS receipt report did not preserve both transactions without double counting.');
 $foreignPaymentRejected=false;
 try {create_invoice_payment_rows($companyB,$multiInvoice,$userB,[['method'=>'cash','amount'=>1,'tracking'=>'','reference'=>'']]);}
 catch (PDOException $ex) {if($ex->getCode()!=='23000')throw $ex;$foreignPaymentRejected=true;}
