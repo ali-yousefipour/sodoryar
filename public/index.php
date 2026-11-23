@@ -10,6 +10,7 @@ require __DIR__ . '/_private/src/invoice_management.php';
 require __DIR__ . '/_private/src/global_search.php';
 require __DIR__ . '/_private/src/cashbox.php';
 require __DIR__ . '/_private/src/cashbox_page.php';
+require __DIR__ . '/_private/src/driver_account.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -26,7 +27,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','invoice_manager','cashbox','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','invoices','invoice_manager','cashbox','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -664,6 +665,7 @@ if ($page === 'services') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
 if ($page === 'customers') require_permission('customers.view');
+if ($page==='driver_account') { require_permission('customers.view'); require_permission('invoices.view'); }
 if ($page==='invoice_manager') require_permission('invoices.view');
 if ($page==='cashbox') require_permission('cashbox.view');
 if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
@@ -898,7 +900,9 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <?php elseif($page==='customers'): ?>
 <?php if(can('customers.create')): ?><div class="card"><h2>فراخوانی از بانک مرکزی تاکسیرانان</h2><p class="muted">کد ملی را وارد کنید تا راننده به پرونده این شرکت متصل شود؛ سوابق مالی شرکت‌های دیگر منتقل یا نمایش داده نمی‌شوند.</p><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="link_global"><label>کد ملی<input name="national_code" data-driver-lookup inputmode="numeric" maxlength="10" pattern="[0-9]{10}" required><small class="lookup-result" data-driver-result role="status" aria-live="polite"></small></label><button>افزودن به پرونده شرکت</button></form></div><?php endif; ?>
 <h1>تاکسیرانان</h1><?php if(can('customers.create')): ?><div class="card"><h2>ثبت تاکسیران</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>کد ملی<input name="national_code" inputmode="numeric" pattern="[0-9]{10}" required></label><label>نام<input name="first_name" required></label><label>نام خانوادگی<input name="last_name" required></label><label>تلفن همراه<input name="mobile" inputmode="tel"></label><label>خط فعالیت<input name="line_area"></label><label>کد در خط<input name="line_code"></label><button>ثبت تاکسیران</button></form></div><?php endif; ?>
-<div class="card"><h2>فهرست تاکسیرانان</h2><div class="table-wrap"><table><thead><tr><th>کد ملی</th><th>نام</th><th>همراه</th><th>خط</th></tr></thead><tbody><?php foreach(query('SELECT * FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 100',[$tenant])->fetchAll() as $r): ?><tr><td><?=e(fa_digits($r['national_code']))?></td><td><?=e($r['first_name'].' '.$r['last_name'])?></td><td><?=e(fa_digits((string)$r['mobile']))?></td><td><?=e($r['line_area'])?></td></tr><?php endforeach; ?></tbody></table></div></div>
+<div class="card"><h2>فهرست تاکسیرانان</h2><div class="table-wrap"><table><thead><tr><th>کد ملی</th><th>نام</th><th>همراه</th><th>خط</th><th>پرونده مالی</th></tr></thead><tbody><?php foreach(query('SELECT * FROM customers WHERE company_id=? ORDER BY id DESC LIMIT 100',[$tenant])->fetchAll() as $r): ?><tr><td><?=e(fa_digits($r['national_code']))?></td><td><?=e($r['first_name'].' '.$r['last_name'])?></td><td><?=e(fa_digits((string)$r['mobile']))?></td><td><?=e($r['line_area'])?></td><td><?php if(can('invoices.view')): ?><a href="?page=driver_account&amp;id=<?=e($r['id'])?>">مشاهده حساب</a><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
+<?php elseif($page==='driver_account'): ?>
+<?php render_driver_account((int)$tenant,(int)($_GET['id']??0)); ?>
 <?php elseif($page==='services'): ?>
 <div class="heading"><h1>تعریف خدمات و تعرفه‌ها</h1><?php if(user()['role']!=='operator'): ?><button type="button" data-dialog-open="serviceCreate">+ خدمت جدید</button><?php endif; ?></div>
 <?php if(user()['role']!=='operator'): ?><dialog id="serviceCreate" class="app-dialog"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="add"><h2>ثبت خدمت جدید</h2><label>عنوان خدمت<input name="title" maxlength="200" placeholder="مثلاً هزینه تمدید پروانه تاکسیرانی" required></label><label>مبلغ (تومان)<input name="price" type="text" inputmode="numeric" data-money-input data-currency="تومان" maxlength="22" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره خدمت</button></div></form></dialog><?php endif; ?>
