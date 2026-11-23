@@ -209,6 +209,22 @@ def main() -> None:
         expect(manager_a.locator(".manager-results")).to_contain_text("فاکتوری با این فیلترها پیدا نشد.")
         manager_a.goto(f"{ORIGIN}/?page=invoice_manager&method=mixed")
         expect(manager_a.locator(".manager-results tbody")).to_contain_text("ترکیبی")
+        report_url=(
+            f"{ORIGIN}/?page=invoice_manager&export=excel&method=mixed"
+            "&columns%5B%5D=number&columns%5B%5D=amount&columns%5B%5D=paid"
+        )
+        export_response=context_a.request.get(report_url)
+        assert export_response.status==200, (
+            f"Filtered invoice XLSX returned HTTP {export_response.status}"
+        )
+        with zipfile.ZipFile(io.BytesIO(export_response.body())) as workbook:
+            sheet=workbook.read("xl/worksheets/sheet1.xml")
+            assert b'rightToLeft="1"' in sheet and b'autoFilter' in sheet and b'pane' in sheet, (
+                "Invoice XLSX must keep RTL, filters and frozen header"
+            )
+            assert b't="n"' in sheet, "Money columns must be numeric Excel cells"
+            assert b'r="D1"' not in sheet, "Export did not honor selected three-column layout"
+
 
 
         manager_a.goto(f"{ORIGIN}/?page=bills")
