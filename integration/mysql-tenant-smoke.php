@@ -15,6 +15,7 @@ require dirname(__DIR__).'/src/localization.php';
 require dirname(__DIR__).'/src/modules.php';
 require dirname(__DIR__).'/src/reporting.php';
 require dirname(__DIR__).'/src/invoice_payments.php';
+require dirname(__DIR__).'/src/cashbox.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -149,7 +150,14 @@ integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_num
     'Own-only report exposed another employee invoice');
 apply_sql_fixture($root.'/database/migrations/017_invoice_payment_idempotency.sql');
 apply_sql_fixture($root.'/database/migrations/017_invoice_payment_idempotency.sql');
+apply_sql_fixture($root.'/database/migrations/018_cash_shifts.sql');
+apply_sql_fixture($root.'/database/migrations/018_cash_shifts.sql');
+integration_assert(cashbox_ready(),'Cash-shift migration did not install');
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
+cashbox_add_register($companyA,'CI Cash Register');
+$registerId=(int)query('SELECT id FROM cash_registers WHERE company_id=? AND name=?',[$companyA,'CI Cash Register'])->fetchColumn();
+$shiftId=cashbox_start_shift($companyA,$userA,$registerId,100);
+integration_assert($shiftId>0,'Cash-shift opening failed');
 $partialInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
     [$companyA,'CI-A-PARTIAL',$customerA,$userA,5000000,'cash','2026-11-21']);
 $initial=invoice_payment_rows([
@@ -168,6 +176,24 @@ try {
 } catch(Throwable $ex) {db()->rollBack();throw $ex;}
 integration_assert($collected>0 && invoice_payment_totals($companyA,$partialInvoice,5000000)['remaining']===0,
     'Later receipt did not settle the partial invoice');
+$shiftSnapshot=cashbox_shift_totals($companyA,$shiftId);
+integration_assert($shiftSnapshot['receipts']===2 && $shiftSnapshot['cash']===1000000
+    && $shiftSnapshot['pos']===2000000,'Cashbox conflated receipt methods or lost shift attribution');
+cashbox_close_shift($companyA,$shiftId,$userA,1000100,'');
+integration_assert((string)query('SELECT status FROM cash_shifts WHERE id=? AND company_id=?',[$shiftId,$companyA])->fetchColumn()==='pending',
+    'Cashbox was not submitted for approval');
+$managerA=insert_fixture('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',
+    [$companyA,'ci_cashbox_manager',$pass,'Cashbox Manager','company_admin']);
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+cashbox_review_shift($companyA,$shiftId,$managerA,'approved','CI cash reviewed');
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+integration_assert((string)query('SELECT status FROM cash_shifts WHERE id=? AND company_id=?',[$shiftId,$companyA])->fetchColumn()==='approved',
+    'Manager cash approval failed');
+$closedReceiptBlocked=false;
+try { cashbox_assert_payments_mutable($companyA,$partialInvoice); }
+catch(RuntimeException $expected) { $closedReceiptBlocked=true; }
+integration_assert($closedReceiptBlocked,'Receipt from approved cash shift was editable');
+
 $duplicateBlocked=false;
 try {
     invoice_followup_record($companyA,$partialInvoice,$otherUserA,
