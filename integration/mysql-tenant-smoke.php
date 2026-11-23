@@ -23,6 +23,7 @@ require dirname(__DIR__).'/src/finance_presets.php';
 require dirname(__DIR__).'/src/user_preferences.php';
 require dirname(__DIR__).'/src/financial_issue_reviews.php';
 require dirname(__DIR__).'/src/dashboard_finance.php';
+require dirname(__DIR__).'/src/finance_schema_health.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -172,6 +173,10 @@ integration_assert(user_preferences_ready(),'User preferences schema failed');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 integration_assert(financial_issue_reviews_ready(),'Financial issue review journal failed to install');
+$health=sodoryar_finance_schema_checks();
+integration_assert(count($health)===7 && count(array_filter($health,static fn($check)=>$check['installed']))===7,
+    'Finance schema health checks did not recognize the seven installed migrations');
+
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
 cashbox_add_register($companyA,'CI Cash Register');
 $registerId=(int)query('SELECT id FROM cash_registers WHERE company_id=? AND name=?',[$companyA,'CI Cash Register'])->fetchColumn();
