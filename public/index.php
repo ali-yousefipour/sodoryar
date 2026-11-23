@@ -53,7 +53,9 @@ if ($page==='global_search') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: private, no-store');
-    $q=trim((string)($_GET['q']??''));
+    $queryValue=$_GET['q']??'';
+    if (!is_string($queryValue)) { http_response_code(422); echo json_encode(['error'=>'عبارت جستجو نامعتبر است.'],JSON_UNESCAPED_UNICODE); exit; }
+    $q=trim($queryValue);
     if (mb_strlen($q)>80) { http_response_code(422); echo '{"error":"عبارت جستجو طولانی است."}'; exit; }
     $now=time();
     if ($now-(int)($_SESSION['global_search_started']??0)>=60) {
