@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function database_table_exists(string $table): bool {
     static $cache=[];
-    if (!in_array($table,['user_profiles','invoice_voids'],true)) return false;
+    if (!in_array($table,['user_profiles','invoice_voids','invoice_payments'],true)) return false;
     if (!array_key_exists($table,$cache)) {
         try { query('SELECT 1 FROM '.$table.' LIMIT 0'); $cache[$table]=true; }
         catch (PDOException $ex) {
