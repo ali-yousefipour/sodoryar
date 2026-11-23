@@ -517,6 +517,43 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('invoices','شیوه پرداخت فاکتور با ثبت سابقه اصلاح شد.');
         }
+        if ($page==='invoices' && $action==='replace_payments') {
+            require_permission('invoices.payment_edit'); $tenant=tenant_id();
+            if (!invoice_payment_ledger_ready()) throw new RuntimeException('ابتدا میگرشن ۰۱۶ را اجرا کنید.');
+            $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
+            $reason=trim((string)($_POST['reason']??''));
+            $nonce=(string)($_POST['payment_replace_nonce']??'');
+            if (!$id || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('دلیل اصلاح باید بین ۵ و ۵۰۰ نویسه باشد.');
+            if (empty($_SESSION['invoice_replace_nonce']) || !hash_equals((string)$_SESSION['invoice_replace_nonce'],$nonce)) {
+                throw new RuntimeException('فرم اصلاح منقضی شده یا قبلاً ثبت شده است.');
+            }
+            db()->beginTransaction();
+            try {
+                $invoice=query('SELECT id,total_amount,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+                require_document_owner((int)$invoice['user_id']);
+                if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
+                    throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
+                }
+                $replacement=invoice_payment_rows((array)($_POST['payments']??[]),(int)$invoice['total_amount']);
+                $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
+                if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
+                $oldIds=array_map(static fn($p)=>(int)$p['id'],$oldPayments);
+                query('UPDATE invoice_payments SET voided_at=NOW(),voided_by=?,void_reason=? WHERE invoice_id=? AND company_id=? AND voided_at IS NULL',
+                    [(int)user()['id'],$reason,$id,$tenant]);
+                create_invoice_payment_rows($tenant,(int)$id,(int)user()['id'],$replacement);
+                $first=$replacement[0];
+                query('UPDATE invoices SET payment_type=?,pos_ref=? WHERE id=? AND company_id=?',
+                    [$first['method'],count($replacement)===1 && $first['method']==='pos'?$first['tracking']:null,$id,$tenant]);
+                audit('invoice.payments.replace',json_encode([
+                    'invoice_id'=>$id,'reason'=>$reason,'voided_payment_ids'=>$oldIds,
+                    'new_payment_count'=>count($replacement),'new_payment_total'=>(int)$invoice['total_amount']
+                ],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+                db()->commit();
+                unset($_SESSION['invoice_replace_nonce']);
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('invoices','پرداخت‌ها با حفظ سوابق قبلی اصلاح شدند.');
+        }
         if ($page==='invoices' && $action==='void') {
             require_permission('invoices.void'); $tenant=tenant_id();
             if (!database_table_exists('invoice_voids')) throw new RuntimeException('برای ابطال فاکتور ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
