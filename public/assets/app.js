@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tehran',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
       const date=Object.fromEntries(parts.filter(part=>['year','month','day'].includes(part.type)).map(part=>[part.type,part.value]));
       hidden.value=`${date.year}-${date.month}-${date.day}`;
-      update();
+      update();hidden.dispatchEvent(new Event('change',{bubbles:true}));
     });
     open.addEventListener('click',()=>{
       let source=new Date();
@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded',()=>{
           const value=date.toISOString().slice(0,10);
           const jalaliValue=`${p.y}/${String(p.m).padStart(2,'0')}/${String(p.d).padStart(2,'0')}`;
           if(hidden.value===value||(jalaliOutput&&hidden.value===jalaliValue))btn.classList.add('selected');
-          btn.addEventListener('click',()=>{hidden.value=jalaliOutput?(periodType?.value==='monthly'?jalaliValue.slice(0,7):jalaliValue):value;update();dialog.close();});grid.append(btn);
+          btn.addEventListener('click',()=>{hidden.value=jalaliOutput?(periodType?.value==='monthly'?jalaliValue.slice(0,7):jalaliValue):value;update();hidden.dispatchEvent(new Event('change',{bubbles:true}));dialog.close();});grid.append(btn);
         }
       };
       prev.addEventListener('click',()=>{m--;if(m===0){m=12;y--;}draw();});
