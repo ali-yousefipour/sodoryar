@@ -173,3 +173,11 @@
     animation-duration:.01ms!important;transition-duration:.01ms!important;
   }
 }
+
+/* Discoverability for horizontally scrolling tables on narrow viewports. */
+.main-wrap>.content .sd-table-scroll-hint{
+  margin:0;padding:7px 12px;border-inline:1px solid var(--ux-line,#e3e5ef);
+  color:#5e6680;background:#f8f9fc;font-size:12px;line-height:1.9;
+}
+.main-wrap>.content .sd-table-scroll-hint[hidden]{display:none!important}
+@media print{.main-wrap>.content .sd-table-scroll-hint{display:none!important}}
