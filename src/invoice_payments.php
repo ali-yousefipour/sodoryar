@@ -25,6 +25,7 @@ function invoice_payment_amount(mixed $value): int {
     return $amount;
 }
 function invoice_payment_rows(array $posted, int $total, bool $allowPartial=false): array {
+    if ($allowPartial && $posted===[]) return [];
     if (!array_is_list($posted) || !$posted || count($posted)>50) {
         throw new RuntimeException('حداقل یک و حداکثر ۵۰ تراکنش پرداخت قابل ثبت است.');
     }
@@ -79,4 +80,26 @@ function invoice_payment_totals(int $tenant,int $invoiceId,int $total): array {
     $payments=get_invoice_payment_rows($tenant,$invoiceId);
     $paid=array_sum(array_map(static fn($p)=>(int)$p['amount'],$payments));
     return ['payments'=>$payments,'paid'=>$paid,'remaining'=>max(0,$total-$paid)];
+}
+
+/** Follow-up collections require 017 and execute under the caller's locked invoice transaction. */
+function invoice_followup_ready(): bool {
+    return invoice_payment_ledger_ready()
+        && (bool)query("SHOW COLUMNS FROM invoice_payments LIKE 'request_key'")->fetch();
+}
+function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $row,string $key): int {
+    if (!invoice_followup_ready()) throw new RuntimeException('برای دریافت مانده، ابتدا مهاجرت دیتابیس ۰۱۷ را اجرا کنید.');
+    if (!preg_match('/^[a-f0-9]{64}$/D',$key)) throw new RuntimeException('شناسه یکتای عملیات دریافت نامعتبر است.');
+    $terminal=$row['terminal']??null;
+    if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
+        throw new RuntimeException('دستگاه کارتخوان متعلق به شرکت یا فعال نیست.');
+    }
+    if ($row['method']==='pos' && ($row['tracking']??'')!=='') {
+        $duplicate=query('SELECT id FROM invoice_payments WHERE company_id=? AND invoice_id=? AND payment_method=? AND terminal_id <=> ? AND tracking_number=? AND voided_at IS NULL LIMIT 1',
+            [$tenant,$invoiceId,'pos',$terminal,$row['tracking']])->fetch();
+        if ($duplicate) throw new RuntimeException('شماره پیگیری این کارتخوان قبلاً برای فاکتور ثبت شده است.');
+    }
+    query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
+        [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key]);
+    return (int)db()->lastInsertId();
 }
