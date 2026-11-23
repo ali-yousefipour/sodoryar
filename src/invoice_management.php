@@ -203,7 +203,7 @@ function render_invoice_management(int $tenant): void {
     echo '<form class="card manager-filters" method="get"><input type="hidden" name="page" value="invoice_manager"><div class="form-grid">';
     echo '<label>شماره، نام، کد ملی یا همراه<input type="search" name="q" value="'.e($f['q']).'" placeholder="جستجو در فاکتورها"></label>';
     echo '<label>عنوان خدمت<input type="search" name="service" value="'.e($f['service']).'" placeholder="بخشی از شرح خدمت"></label>';
-    echo '<label>مبلغ دقیق (تومان)<input type="text" inputmode="numeric" name="amount" value="'.e($f['amount']).'" placeholder="مبلغ فاکتور"></label>';
+    echo '<label>مبلغ دقیق (تومان)<input type="text" inputmode="numeric" data-money-input data-currency="تومان" name="amount" value="'.e($f['amount']).'" placeholder="مبلغ فاکتور"></label>';
     foreach(['date_from'=>'از تاریخ شمسی','date_to'=>'تا تاریخ شمسی'] as $field=>$label) {
         echo '<label>'.e($label).'<span class="jalali-field"><input type="hidden" name="'.$field.'" data-jalali-iso value="'.e($f[$field]).'"><button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ</button><button type="button" class="secondary" data-jalali-clear>پاک کردن</button></span></label>';
     }
