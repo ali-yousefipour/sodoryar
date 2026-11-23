@@ -147,6 +147,42 @@ integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_num
 integration_assert((int)$report['summary']['total']===123456,'Own-only report total includes another employee or tenant');
 integration_assert(count($report['rows'])===1 && $report['rows'][0]['invoice_number']==='CI-A-0001',
     'Own-only report exposed another employee invoice');
+apply_sql_fixture($root.'/database/migrations/017_invoice_payment_idempotency.sql');
+apply_sql_fixture($root.'/database/migrations/017_invoice_payment_idempotency.sql');
+integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
+$partialInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
+    [$companyA,'CI-A-PARTIAL',$customerA,$userA,5000000,'cash','2026-11-21']);
+$initial=invoice_payment_rows([
+    ['method'=>'cash','amount'=>'۱٬۰۰۰٬۰۰۰'],
+    ['method'=>'pos','amount'=>'۲٬۰۰۰٬۰۰۰'],
+],5000000,true);
+create_invoice_payment_rows($companyA,$partialInvoice,$userA,$initial);
+integration_assert(invoice_payment_totals($companyA,$partialInvoice,5000000)['remaining']===2000000,'Initial partial balance incorrect');
+$key=str_repeat('a',64);
+db()->beginTransaction();
+try {
+    query('SELECT id FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$companyA,$partialInvoice])->fetch();
+    $collected=invoice_followup_record($companyA,$partialInvoice,$otherUserA,
+        ['method'=>'cash','amount'=>2000000,'terminal'=>null,'tracking'=>'','reference'=>''],$key);
+    db()->commit();
+} catch(Throwable $ex) {db()->rollBack();throw $ex;}
+integration_assert($collected>0 && invoice_payment_totals($companyA,$partialInvoice,5000000)['remaining']===0,
+    'Later receipt did not settle the partial invoice');
+$duplicateBlocked=false;
+try {
+    invoice_followup_record($companyA,$partialInvoice,$otherUserA,
+        ['method'=>'cash','amount'=>2000000,'terminal'=>null,'tracking'=>'','reference'=>''],$key);
+} catch(PDOException $ex) {
+    if ($ex->getCode()!=='23000') throw $ex;
+    $duplicateBlocked=true;
+}
+integration_assert($duplicateBlocked,'Repeated receipt idempotency key was accepted');
+$receiptFilter=report_filters_default();
+$receiptFilter['user_id']=(string)$otherUserA;
+$receipts=invoice_payment_report($companyA,$receiptFilter);
+integration_assert((int)$receipts['summary']['transaction_count']===1,
+    'Receipt report operator filter must use the collecting operator, not invoice issuer');
+
 // A back-dated invoice entered later must belong to its service-date period.
 query('UPDATE invoices SET created_at=? WHERE id=? AND company_id=?',
     ['2025-01-02 10:00:00',$invoiceA,$companyA]);
