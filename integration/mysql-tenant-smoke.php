@@ -17,6 +17,7 @@ require dirname(__DIR__).'/src/reporting.php';
 require dirname(__DIR__).'/src/invoice_payments.php';
 require dirname(__DIR__).'/src/cashbox.php';
 require dirname(__DIR__).'/src/driver_account.php';
+require dirname(__DIR__).'/src/accounting_periods.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -154,6 +155,9 @@ apply_sql_fixture($root.'/database/migrations/017_invoice_payment_idempotency.sq
 apply_sql_fixture($root.'/database/migrations/018_cash_shifts.sql');
 apply_sql_fixture($root.'/database/migrations/018_cash_shifts.sql');
 integration_assert(cashbox_ready(),'Cash-shift migration did not install');
+apply_sql_fixture($root.'/database/migrations/019_financial_period_locks.sql');
+apply_sql_fixture($root.'/database/migrations/019_financial_period_locks.sql');
+integration_assert(accounting_periods_ready(),'Financial periods migration failed');
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
 cashbox_add_register($companyA,'CI Cash Register');
 $registerId=(int)query('SELECT id FROM cash_registers WHERE company_id=? AND name=?',[$companyA,'CI Cash Register'])->fetchColumn();
@@ -194,6 +198,23 @@ $closedReceiptBlocked=false;
 try { cashbox_assert_payments_mutable($companyA,$partialInvoice); }
 catch(RuntimeException $expected) { $closedReceiptBlocked=true; }
 integration_assert($closedReceiptBlocked,'Receipt from approved cash shift was editable');
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+[$jy,$jm,$jd]=gregorian_to_jalali(2026,11,21);
+$jalaliDay=sprintf('%04d/%02d/%02d',$jy,$jm,$jd);
+$lockId=accounting_lock_period($companyA,$managerA,$jalaliDay,$jalaliDay,'CI lock final accounting date');
+integration_assert($lockId>0,'Accounting period lock was not recorded');
+$blockedPeriod=false;
+try {
+    db()->beginTransaction();
+    accounting_assert_write_open($companyA,'2026-11-21');
+} catch (RuntimeException $expected) { $blockedPeriod=true; }
+finally {if(db()->inTransaction())db()->rollBack();}
+integration_assert($blockedPeriod,'A closed financial date permitted another write');
+db()->beginTransaction();
+try {accounting_assert_write_open($companyB,'2026-11-21'); db()->commit();}
+catch(Throwable $ex){db()->rollBack();throw $ex;}
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+
 
 $duplicateBlocked=false;
 try {
