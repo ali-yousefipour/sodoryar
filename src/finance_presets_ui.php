@@ -58,7 +58,7 @@ function render_finance_presets(int $tenant): void {
     foreach($catalog as $slug=>$title){
         echo '<option value="'.e($slug).'"'.($slug===$f['type']?' selected':'').'>'.e($title).'</option>';
     }
-    echo '</select></label>';
+    echo '</select></label><button type="button" class="secondary" data-finance-favorite="'.e($f['type']).'" aria-pressed="false">☆ افزودن به علاقه‌مندی‌ها</button>';
     foreach(['from'=>'از تاریخ','to'=>'تا تاریخ'] as $key=>$label){
         $id='finance-preset-date-'.$key;
         echo '<label for="'.$id.'">'.e($label).' (شمسی)</label><div class="jalali-field">'
