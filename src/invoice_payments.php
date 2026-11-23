@@ -28,7 +28,7 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
     if (!array_is_list($posted) || !$posted || count($posted)>50) {
         throw new RuntimeException('حداقل یک و حداکثر ۵۰ تراکنش پرداخت قابل ثبت است.');
     }
-    $rows=[]; $sum=0;
+    $rows=[]; $sum=0; $seenPosReferences=[];
     foreach ($posted as $entry) {
         if (!is_array($entry)) throw new RuntimeException('ساختار تراکنش نامعتبر است.');
         $method=(string)($entry['method']??'');
@@ -37,10 +37,21 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
         if ($amount>$total-$sum) throw new RuntimeException('مجموع تراکنش‌ها بیشتر از مبلغ فاکتور است.');
         $terminalValue=trim(ascii_digits((string)($entry['terminal']??'')));
         if ($terminalValue!=='' && !preg_match('/^[1-9][0-9]{0,18}$/D',$terminalValue)) throw new RuntimeException('شناسه کارتخوان نامعتبر است.');
+        if ($terminalValue!=='' && (strlen($terminalValue)>strlen((string)PHP_INT_MAX)
+            || (strlen($terminalValue)===strlen((string)PHP_INT_MAX) && strcmp($terminalValue,(string)PHP_INT_MAX)>0))) {
+            throw new RuntimeException('شناسه کارتخوان خارج از محدوده مجاز است.');
+        }
         $terminal=$method==='pos' && $terminalValue!==''?(int)$terminalValue:null;
         $tracking=trim(ascii_digits((string)($entry['tracking']??'')));
         $reference=trim(ascii_digits((string)($entry['reference']??'')));
         if (mb_strlen($tracking)>120 || mb_strlen($reference)>120) throw new RuntimeException('شناسه پیگیری یا مرجع طولانی است.');
+        if ($method==='pos' && $tracking!=='') {
+            // Same device and tracking number cannot represent two payments on this invoice.
+            // Tracking numbers may legitimately repeat across different terminals.
+            $key=($terminal===null?'unspecified':(string)$terminal).':'.$tracking;
+            if (isset($seenPosReferences[$key])) throw new RuntimeException('شماره پیگیری تکراری برای این کارتخوان ثبت شده است.');
+            $seenPosReferences[$key]=true;
+        }
         $rows[]=['method'=>$method,'amount'=>$amount,'tracking'=>$method==='pos'?$tracking:'','reference'=>$method==='pos'?$reference:'','terminal'=>$terminal];
         $sum+=$amount;
     }
