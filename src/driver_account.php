@@ -59,7 +59,7 @@ function render_driver_account(int $tenant,int $customerId): void {
     echo '<div class="heading"><div><h1>پرونده مالی تاکسیران</h1><p class="muted">'
       .e($customer['first_name'].' '.$customer['last_name']).' | کد ملی '
       .e(fa_digits($customer['national_code'])).' | همراه '.e(fa_digits((string)$customer['mobile']))
-      .'</p></div><a class="button-link" href="?page=customers">بازگشت به تاکسیرانان</a></div>';
+      .'</p></div>'.(can('reports.export')?'<a class="button-link" href="?page=driver_account&amp;id='.(int)$customerId.'&amp;export=excel">خروجی Excel پرونده</a>':'').'<a class="button-link" href="?page=customers">بازگشت به تاکسیرانان</a></div>';
     echo '<div class="stats"><article class="stat"><span>تعداد فاکتور معتبر</span><b>'.fa_digits((string)$data['summary']['invoices']).'</b></article>'
       .'<article class="stat"><span>جمع خدمات و فاکتورها</span><b>'.money_toman($invoiced).'</b></article>'
       .'<article class="stat"><span>جمع وجوه دریافت‌شده</span><b>'.money_toman($paid).'</b></article>'
