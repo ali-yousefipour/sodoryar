@@ -19,6 +19,7 @@ require dirname(__DIR__).'/src/cashbox.php';
 require dirname(__DIR__).'/src/driver_account.php';
 require dirname(__DIR__).'/src/accounting_periods.php';
 require dirname(__DIR__).'/src/service_rates.php';
+require dirname(__DIR__).'/src/finance_presets.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -326,6 +327,19 @@ $effective=effective_operator_permissions($userA,$companyA);
 integration_assert(in_array('invoices.view',$effective,true),'Company role grant missing');
 integration_assert(!in_array('roles.manage',$effective,true),'Manager permission inherited by operator');
 $_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+
+foreach(array_keys(finance_preset_catalog()) as $presetType) {
+    $presetFilter=finance_preset_input(['report_type'=>$presetType,
+        'date_from'=>'2026-11-21','date_to'=>'2026-11-23']);
+    $presetResult=finance_preset_data($companyA,$presetFilter);
+    integration_assert(is_array($presetResult['rows']) && !empty($presetResult['headers']),
+        'Financial report preset failed: '.$presetType);
+    foreach($presetResult['rows'] as $presetRow) {
+        if(isset($presetRow['national_code']))
+            integration_assert($presetRow['national_code']!=='0987654321',
+                'Foreign-company national identity leaked into report: '.$presetType);
+    }
+}
 $driverFinance=driver_account_data($companyA,$customerA);
 integration_assert((int)$driverFinance['summary']['invoices']>=2,
     'Driver statement failed to retrieve tenant-owned invoices');
