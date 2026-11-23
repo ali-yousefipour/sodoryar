@@ -32,7 +32,7 @@ def ascii_number(value: str) -> int:
 def log_in(browser, name: str):
     context = browser.new_context(viewport={"width": 390, "height": 844})
     page = context.new_page()
-    response = page.goto(f"{ORIGIN}/?page=login", wait_until="networkidle")
+    response = page.goto(f"{ORIGIN}/?page=login", wait_until="domcontentloaded")
     assert response is not None and response.status == 200, "Login page failed to load"
     expect(page.locator(".login-card")).to_be_visible()
     expect(page.locator("#loginUsername")).to_have_attribute("autocomplete", "username")
