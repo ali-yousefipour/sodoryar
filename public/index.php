@@ -573,7 +573,7 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
                 if ((int)$reportData['summary']['qty']>10000) {
                     throw new RuntimeException('تعداد فاکتورهای این خروجی بیش از ۱۰٬۰۰۰ مورد است؛ برای دریافت فایل کامل، بازه تاریخ یا فیلترها را محدود کنید.');
                 }
-                $rows=array_map(static fn($r)=>[display_financial_reference($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':'کارتخوان',display_financial_reference($r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
+                $rows=array_map(static fn($r)=>[display_financial_reference($r['invoice_number']),jalali_datetime($r['invoice_date'] ?: $r['created_at'],true),fa_digits($r['national_code']),$r['customer'],$r['operator_name'],$r['payment_type']==='cash'?'نقدی':($r['payment_type']==='pos'?'کارتخوان':'ترکیبی'),display_financial_reference($r['pos_ref']),money_toman($r['total_amount'])],$reportData['rows']);
                 export_excel_xlsx('sodoryar-invoices',['شماره فاکتور','تاریخ','کد ملی','نام راننده','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],$rows);
             } else {
                 // Fetch one extra record to detect and refuse a silently truncated export.
@@ -788,8 +788,13 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <?php elseif($page==='reports'): ?>
 <h1>گزارش‌گیری پیشرفته</h1><p class="muted">فیلتر براساس تاریخ، کاربر، نوع پرداخت، شماره فاکتور و کد ملی راننده</p>
 <?php render_report_filters('reports',$reportFilter); $reportData=invoice_report($tenant,$reportFilter); ?>
-<div class="stats"><article class="stat"><span>تعداد فاکتورهای این گزارش</span><b><?=money($reportData['summary']['qty'])?></b></article><article class="stat"><span>مجموع مبالغ این گزارش</span><b><?=money($reportData['summary']['total'])?></b><small>تومان</small></article></div>
-<div class="card"><h2>نتایج گزارش (۲۰۰ مورد آخر)</h2><?php render_table(['شماره فاکتور','تاریخ','کد ملی','مشتری','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],array_map(static fn($r)=>['invoice_number'=>$r['invoice_number'],'created_at'=>$r['invoice_date'] ?: $r['created_at'],'national_code'=>$r['national_code'],'customer'=>$r['customer'],'operator_name'=>$r['operator_name'],'payment_type'=>$r['payment_type']==='cash'?'نقدی':'کارتخوان','pos_ref'=>$r['pos_ref'],'total_amount'=>$r['total_amount']],$reportData['rows']),['total_amount']); ?></div>
+<div class="stats"><article class="stat"><span>تعداد فاکتورهای این گزارش</span><b><?=money($reportData['summary']['qty'])?></b></article><article class="stat"><span>مجموع مبالغ این گزارش</span><b><?=money($reportData['summary']['total'])?></b><small>تومان</small></article>
+<?php if(isset($reportData['summary']['cash_paid'])): ?>
+<article class="stat"><span>دریافتی نقدی</span><b><?=money($reportData['summary']['cash_paid'])?></b><small>تومان</small></article>
+<article class="stat"><span>دریافتی کارتخوان</span><b><?=money($reportData['summary']['pos_paid'])?></b><small>تومان</small></article>
+<article class="stat"><span>تعداد تراکنش‌ها</span><b><?=money($reportData['summary']['transaction_count'])?></b></article>
+<?php endif; ?></div>
+<div class="card"><h2>نتایج گزارش (۲۰۰ مورد آخر)</h2><?php render_table(['شماره فاکتور','تاریخ','کد ملی','مشتری','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],array_map(static fn($r)=>['invoice_number'=>$r['invoice_number'],'created_at'=>$r['invoice_date'] ?: $r['created_at'],'national_code'=>$r['national_code'],'customer'=>$r['customer'],'operator_name'=>$r['operator_name'],'payment_type'=>$r['payment_type']==='cash'?'نقدی':($r['payment_type']==='pos'?'کارتخوان':'ترکیبی'),'pos_ref'=>$r['pos_ref'],'total_amount'=>$r['total_amount']],$reportData['rows']),['total_amount']); ?></div>
 <?php elseif($page==='receipt'): ?>
 <?php
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
@@ -842,7 +847,11 @@ function render_invoices(int $tenant, int $limit): void {
     echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
     foreach($rows as $r) {
         $voided=$r['voided_at']!==null;
-        echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.($r['payment_type']==='cash'?'نقدی':'کارتخوان').'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        $actualPayments=get_invoice_payment_rows($tenant,(int)$r['id']);
+        $methods=array_unique(array_column($actualPayments,'payment_method'));
+        $payLabel=count($methods)>1?'ترکیبی':(($methods[0]??$r['payment_type'])==='cash'?'نقدی':'کارتخوان');
+        $payLabel.=count($actualPayments)>1?' ('.fa_digits((string)count($actualPayments)).' تراکنش)':'';
+        echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
         if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
             if (can('invoices.payment_edit')) {
