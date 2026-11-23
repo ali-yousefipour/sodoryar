@@ -677,6 +677,10 @@ if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSI
     $tenant = tenant_id();
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
+if ($page==='driver_account' && ($_GET['export']??'')==='excel' && $tenant) {
+    try { export_driver_account((int)$tenant,(int)($_GET['id']??0)); }
+    catch(Throwable $ex) { error_log('Sodoryar driver account export: '.$ex->getCode()); $error=public_operation_error($ex); }
+}
 if ($page==='invoice_manager' && ($_GET['export']??'')==='excel' && $tenant) {
     try { export_invoice_management((int)$tenant); }
     catch (Throwable $ex) {
