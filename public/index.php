@@ -16,6 +16,7 @@ require __DIR__ . '/_private/src/service_rates.php';
 require __DIR__ . '/_private/src/finance_presets.php';
 require __DIR__ . '/_private/src/finance_presets_ui.php';
 require __DIR__ . '/_private/src/user_preferences.php';
+require __DIR__ . '/_private/src/payment_receipt.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -32,7 +33,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -737,8 +738,8 @@ if ($page==='invoice_manager') require_permission('invoices.view');
 if ($page==='cashbox') require_permission('cashbox.view');
 if ($page==='periods') require_permission('periods.manage');
 if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
-if ($page==='receipt') require_permission('invoices.view');
-if ($page==='receipt') require_permission('invoices.print');
+if ($page==='receipt'||$page==='payment_receipt') require_permission('invoices.view');
+if ($page==='receipt'||$page==='payment_receipt') require_permission('invoices.print');
 if ($page === 'reports' || $page==='finance_center') require_permission('reports.view');
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
@@ -1042,6 +1043,8 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <?php if (!$paymentReport['rows']): ?><tr><td colspan="6">تراکنشی در این بازه وجود ندارد.</td></tr><?php endif; ?></tbody></table></div></section>
 <?php else: ?><div class="alert">گزارش ریز تراکنش‌ها پس از اجرای میگرشن ۰۱۶ فعال می‌شود.</div><?php endif; ?>
 <div class="card"><h2>نتایج گزارش (۲۰۰ مورد آخر)</h2><?php render_table(['شماره فاکتور','تاریخ','کد ملی','مشتری','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],array_map(static fn($r)=>['invoice_number'=>$r['invoice_number'],'created_at'=>$r['invoice_date'] ?: $r['created_at'],'national_code'=>$r['national_code'],'customer'=>$r['customer'],'operator_name'=>$r['operator_name'],'payment_type'=>$r['payment_type']==='cash'?'نقدی':($r['payment_type']==='pos'?'کارتخوان':'ترکیبی'),'pos_ref'=>$r['pos_ref'],'total_amount'=>$r['total_amount']],$reportData['rows']),['total_amount']); ?></div>
+<?php elseif($page==='payment_receipt'): ?>
+<?php render_individual_payment_receipt((int)$tenant,(int)($_GET['id']??0)); ?>
 <?php elseif($page==='receipt'): ?>
 <?php
 $invoice=query('SELECT i.*,c.first_name,c.last_name,c.national_code FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id WHERE i.id=? AND i.company_id=?',[(int)($_GET['id']??0),$tenant])->fetch();
@@ -1071,9 +1074,9 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='total'): ?><h2>جمع کل: <?=money_toman($invoice['total_amount'])?></h2><p class="receipt-amount-words">مبلغ به حروف: <?=e(toman_in_words($invoice['total_amount']))?></p>
 <?php elseif($section==='payment'): ?>
 <?php $paymentSummary=invoice_payment_totals((int)$tenant,(int)$invoice['id'],(int)$invoice['total_amount']); ?>
-<h3>جزئیات پرداخت</h3><table><thead><tr><th>روش پرداخت</th><th>مبلغ</th></tr></thead><tbody>
-<?php foreach($paymentSummary['payments'] as $pay): ?><tr><td><?=$pay['payment_method']==='cash'?'نقدی':'کارتخوان'?><?php if($pay['tracking_number']): ?> — <?=e(display_financial_reference($pay['tracking_number']))?><?php endif; ?></td><td><?=money_toman($pay['amount'])?></td></tr><?php endforeach; ?>
-<?php if (!$paymentSummary['payments'] && !invoice_payment_ledger_ready()): ?><tr><td><?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?></td><td><?=money_toman($invoice['total_amount'])?></td></tr><?php elseif (!$paymentSummary['payments']): ?><tr><td colspan="2">هنوز مبلغی دریافت نشده است.</td></tr><?php endif; ?>
+<h3>جزئیات پرداخت</h3><table><thead><tr><th>روش پرداخت</th><th>مبلغ</th><th>رسید</th></tr></thead><tbody>
+<?php foreach($paymentSummary['payments'] as $pay): ?><tr><td><?=$pay['payment_method']==='cash'?'نقدی':'کارتخوان'?><?php if($pay['tracking_number']): ?> — <?=e(display_financial_reference($pay['tracking_number']))?><?php endif; ?></td><td><?=money_toman($pay['amount'])?></td><td><a href="?page=payment_receipt&amp;id=<?=e($pay['id'])?>">چاپ رسید</a></td></tr><?php endforeach; ?>
+<?php if (!$paymentSummary['payments'] && !invoice_payment_ledger_ready()): ?><tr><td><?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?></td><td><?=money_toman($invoice['total_amount'])?></td></tr><?php elseif (!$paymentSummary['payments']): ?><tr><td colspan="3">هنوز مبلغی دریافت نشده است.</td></tr><?php endif; ?>
 </tbody></table><p>جمع دریافتی: <?=money_toman(invoice_payment_ledger_ready()?$paymentSummary['paid']:(int)$invoice['total_amount'])?></p><p>مانده: <?=money_toman(invoice_payment_ledger_ready()?$paymentSummary['remaining']:0)?></p>
 <p class="receipt-payment-note">شماره پیگیری ثبت‌شده، به‌تنهایی تأیید بانکی تراکنش نیست.</p>
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
