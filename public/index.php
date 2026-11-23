@@ -495,6 +495,7 @@ try {
             if ($extras && !invoice_extensions_ready()) throw new RuntimeException('برای ثبت آیتم اضافی، ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
             db()->beginTransaction();
             try {
+                accounting_assert_write_open($tenant,$invoiceDate);
                 $customer=register_missing_driver($tenant,$national,(array)($_POST['new_driver']??[]),true);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
                 $items=[];
@@ -540,6 +541,7 @@ try {
                 'reference'=>$_POST['reference']??'']];
             db()->beginTransaction();
             try {
+                accounting_assert_write_open($tenant,date('Y-m-d'));
                 $invoice=query('SELECT id,total_amount,user_id FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
                 if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 require_document_owner((int)$invoice['user_id']);
@@ -567,12 +569,13 @@ try {
                 || mb_strlen($reason)<5 || mb_strlen($reason)>500) throw new RuntimeException('روش پرداخت و دلیل اصلاح (۵ تا ۵۰۰ کاراکتر) الزامی است.');
             db()->beginTransaction();
             try {
-                $invoice=query('SELECT id,payment_type,pos_ref,total_amount,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                $invoice=query('SELECT id,payment_type,pos_ref,total_amount,user_id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 require_document_owner((int)$invoice['user_id']);
                 if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
+                accounting_assert_write_open($tenant,$invoice['financial_date']);
                 if (invoice_payment_ledger_ready()) {
                     cashbox_assert_payments_mutable($tenant,(int)$id);
                     $active=get_invoice_payment_rows($tenant,(int)$id);
@@ -601,13 +604,14 @@ try {
             }
             db()->beginTransaction();
             try {
-                $invoice=query('SELECT id,total_amount,user_id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                $invoice=query('SELECT id,total_amount,user_id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 require_document_owner((int)$invoice['user_id']);
                 if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
                 $replacement=invoice_payment_rows((array)($_POST['payments']??[]),(int)$invoice['total_amount']);
+                accounting_assert_write_open($tenant,$invoice['financial_date']);
                 cashbox_assert_payments_mutable($tenant,(int)$id);
                 $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
                 if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
@@ -639,8 +643,9 @@ try {
             db()->beginTransaction();
             try {
                 // Lock the tenant's invoice while recording its void and audit trail.
-                $locked=query('SELECT id FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
+                $locked=query('SELECT id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$locked) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+                accounting_assert_write_open($tenant,$locked['financial_date']);
                 query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
                 audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
                 db()->commit();
