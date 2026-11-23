@@ -208,6 +208,7 @@ function permission_catalog(): array {
         'cashbox.adjust'=>'ثبت ورود و خروج وجه صندوق', 'cashbox.close'=>'درخواست تسویه صندوق',
         'cashbox.manage'=>'مدیریت صندوق‌ها', 'cashbox.approve'=>'تأیید تسویه صندوق',
         'periods.manage'=>'بستن و قفل دوره‌های مالی',
+        'finance.reconcile'=>'ثبت بررسی و رفع مغایرت مالی',
         'bills.soft_delete'=>'انتقال فیش به سطل زباله',
         'bills.restore'=>'بازیابی فیش حذف‌شده',
         'bills.permanent_delete'=>'حذف دائمی فیش مجاز',
@@ -247,7 +248,7 @@ function require_document_owner(int $ownerId): void {
 /** Permissions only for company managers; never delegate these to operators. */
 function operator_permission_assignable(string $permission): bool {
     return array_key_exists($permission,permission_catalog())
-        && !in_array($permission,['users.manage','roles.manage','cashbox.manage','cashbox.approve','periods.manage'],true);
+        && !in_array($permission,['users.manage','roles.manage','cashbox.manage','cashbox.approve','periods.manage','finance.reconcile'],true);
 }
 function permission_groups(): array {
     $names=[

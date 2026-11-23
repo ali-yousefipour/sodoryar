@@ -17,6 +17,7 @@ require __DIR__ . '/_private/src/finance_presets.php';
 require __DIR__ . '/_private/src/finance_presets_ui.php';
 require __DIR__ . '/_private/src/user_preferences.php';
 require __DIR__ . '/_private/src/payment_receipt.php';
+require __DIR__ . '/_private/src/financial_issue_reviews.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -711,6 +712,13 @@ try {
             }
             redirect('invoices','فاکتور با حفظ سوابق مالی باطل شد.');
         }
+        if ($page==='reports' && $action==='financial_issue_review') {
+            financial_issue_review_submit(tenant_id(),(int)user()['id'],
+                (string)($_POST['issue_key']??''),(string)($_POST['status']??''),
+                trim((string)($_POST['note']??'')),(string)($_POST['date_from']??''),
+                (string)($_POST['date_to']??''));
+            redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
+        }
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -1026,11 +1034,25 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 
 <?php if(invoice_payment_ledger_ready()): ?>
 <?php $controlIssues=financial_control_exceptions((int)$tenant,$reportFilter); ?>
+<?php $issueReviews=financial_issue_latest_reviews((int)$tenant,$controlIssues); ?>
 <section class="card"><div class="heading"><div><h2>کنترل مغایرت‌های مالی</h2>
 <p class="muted">موارد نیازمند بررسی داخلی؛ این فهرست به‌معنای تأیید یا رد بانکی تراکنش نیست. در صورت انتخاب‌نکردن بازه، ۳۰ روز اخیر بررسی می‌شود.</p></div></div>
-<div class="table-wrap"><table><thead><tr><th>نوع مغایرت</th><th>شماره فاکتور</th><th>جزئیات</th></tr></thead><tbody>
-<?php foreach($controlIssues as $issue): ?><tr><td><?=e($issue['kind'])?></td><td><?=e(display_financial_reference($issue['invoice']))?></td><td><?=e($issue['detail'])?></td></tr><?php endforeach; ?>
-<?php if (!$controlIssues): ?><tr><td colspan="3">در بازه بررسی‌شده مغایرتی از انواع تحت پوشش شناسایی نشد.</td></tr><?php endif; ?>
+<div class="table-wrap"><table><thead><tr><th>نوع مغایرت</th><th>شماره فاکتور</th><th>جزئیات</th><th>رسیدگی</th></tr></thead><tbody>
+<?php foreach($controlIssues as $issue): ?>
+<?php $issueKey=financial_issue_fingerprint((int)$tenant,$issue);$issueReview=$issueReviews[$issueKey]??null; ?>
+<tr><td><?=e($issue['kind'])?></td><td><?=e(display_financial_reference($issue['invoice']))?></td><td><?=e($issue['detail'])?></td>
+<td><?php if($issueReview): ?><p><?=e(['investigating'=>'در حال بررسی','resolved'=>'ثبت بررسی و رفع','reopened'=>'بازگشایی‌شده'][$issueReview['status']]??'نامشخص')?></p><small><?=e($issueReview['note'])?></small><?php else: ?>بررسی‌نشده<?php endif; ?>
+<?php if(can('finance.reconcile') && financial_issue_reviews_ready()): ?>
+<details><summary>ثبت نتیجه بررسی</summary><form method="post" class="stack"><?=csrf_field()?>
+<input type="hidden" name="action" value="financial_issue_review">
+<input type="hidden" name="issue_key" value="<?=e($issueKey)?>">
+<input type="hidden" name="date_from" value="<?=e($reportFilter['date_from'])?>">
+<input type="hidden" name="date_to" value="<?=e($reportFilter['date_to'])?>">
+<label>وضعیت<select name="status"><option value="investigating">در حال بررسی</option><option value="resolved">رفع‌شده، با ثبت مستندات</option><option value="reopened">بازگشایی</option></select></label>
+<label>شرح و مستندات بررسی<textarea name="note" minlength="5" maxlength="500" required></textarea></label>
+<button type="submit">ثبت نتیجه</button></form></details>
+<?php endif; ?></td></tr><?php endforeach; ?>
+<?php if (!$controlIssues): ?><tr><td colspan="4">در بازه بررسی‌شده مغایرتی از انواع تحت پوشش شناسایی نشد.</td></tr><?php endif; ?>
 </tbody></table></div></section>
 <?php endif; ?>
 <?php $paymentReport=invoice_payment_report((int)$tenant,$reportFilter); ?>
