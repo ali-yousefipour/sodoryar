@@ -48,3 +48,42 @@ document.addEventListener('DOMContentLoaded',()=>{
     items().forEach(el=>el.querySelector('input').setCustomValidity(''));
   });
 });
+
+// Display-column preferences are separate from the Excel export layout.
+document.addEventListener('DOMContentLoaded',()=>{
+  const section=document.querySelector('.manager-results');
+  const table=section?.querySelector('.table-wrap table');
+  if(!table)return;
+  const headings=[...table.querySelectorAll('thead th')];
+  const key='sodoryar.invoice-manager.table-columns.v1';
+  const control=document.createElement('details');
+  control.className='manager-table-columns';
+  const summary=document.createElement('summary');summary.textContent='تنظیم ستون‌های جدول';
+  const fields=document.createElement('div');fields.className='manager-table-column-options';
+  const store=[];
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(key)||'null');}catch(_){}
+  const apply=()=>{
+    const visible=store.map(x=>x.checked);
+    const count=visible.filter(Boolean).length;
+    if(count===0){store[0].checked=true;visible[0]=true;}
+    headings.forEach((th,index)=>{th.hidden=!visible[index];});
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      const tds=[...tr.children];
+      if(tds.length!==headings.length)return;
+      tds.forEach((td,index)=>td.hidden=!visible[index]);
+    });
+    try{localStorage.setItem(key,JSON.stringify(visible));}catch(_){}
+  };
+  headings.forEach((th,index)=>{
+    const label=document.createElement('label');
+    const checkbox=document.createElement('input');checkbox.type='checkbox';
+    checkbox.checked=Array.isArray(saved)&&typeof saved[index]==='boolean'?saved[index]:true;
+    checkbox.addEventListener('change',apply);
+    store.push(checkbox);label.append(checkbox,document.createTextNode(' '+th.textContent.trim()));fields.append(label);
+  });
+  const reset=document.createElement('button');reset.type='button';reset.className='secondary small';reset.textContent='نمایش همه ستون‌ها';
+  reset.addEventListener('click',()=>{store.forEach(c=>c.checked=true);apply();});
+  control.append(summary,fields,reset);
+  section.querySelector('.table-wrap').before(control);
+  apply();
+});
