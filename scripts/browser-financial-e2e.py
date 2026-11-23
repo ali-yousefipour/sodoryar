@@ -39,7 +39,14 @@ def log_in(browser, name: str):
     expect(page.locator("#loginPassword")).to_have_attribute("autocomplete", "current-password")
     assert page.locator('input[name="csrf"]').count() == 1, "Login CSRF field missing"
     stylesheet = page.locator('link[href*="login-experience.css"]')
-    assert stylesheet.count() == 1, "Login redesign CSS was not loaded"
+    assert stylesheet.count() == 1, "Login redesign CSS link is missing"
+    css_path = stylesheet.get_attribute("href")
+    assert css_path and css_path.startswith("assets/login-experience.css?v="), (
+        "Login CSS must use a versioned URL"
+    )
+    css_response = page.request.get(f"{ORIGIN}/{css_path}", timeout=15000)
+    assert css_response.status == 200, "Login CSS is missing from the host"
+    assert b".login-layout" in css_response.body(), "Login CSS payload is incorrect"
     assert page.locator(".login-card").evaluate(
         "(el) => getComputedStyle(el).backgroundColor"
     ) != "rgba(0, 0, 0, 0)", "Login card styling is missing"
