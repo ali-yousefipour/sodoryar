@@ -198,6 +198,33 @@ def main() -> None:
         media = re.findall(rb"/MediaBox\s*\[\s*0\s+0\s+([0-9.]+)", receipt_pdf)
         assert media and 585 < float(media[0]) < 605, "Default invoice receipt did not print on A4"
         (OUTPUT / "invoice-a4.pdf").write_bytes(receipt_pdf)
+        # Issue a partially collected invoice and settle the remainder later.
+        manager_a.goto(f"{ORIGIN}/?page=invoices")
+        manager_a.locator("#invoiceDriverNational").fill("1234567890")
+        expect(manager_a.locator("#invoiceDriverStatus")).to_contain_text("CI Driver", timeout=12000)
+        manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
+        manager_a.locator("#invoiceAllowPartial").check()
+        manager_a.locator('input[name="payments[0][amount]"]').fill("15000")
+        expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
+        manager_a.locator(".invoice-submit").click()
+        manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
+        partial_id = re.search(r"[?&]id=(\\d+)", manager_a.url)
+        assert partial_id, "Partially paid invoice did not produce a receipt"
+        expect(manager_a.locator(".receipt")).to_contain_text("۳۰٬۰۰۰")
+        manager_a.goto(f"{ORIGIN}/?page=invoices")
+        collect_button=manager_a.locator(f'[data-dialog-open="invoiceCollect{partial_id.group(1)}"]')
+        expect(collect_button).to_be_visible()
+        collect_button.click()
+        collect_form=manager_a.locator(f'#invoiceCollect{partial_id.group(1)} form')
+        collect_form.locator('[name="amount"]').fill("30000")
+        collect_form.locator('button[type="submit"]').click()
+        manager_a.wait_for_load_state("domcontentloaded")
+        manager_a.goto(f"{ORIGIN}/?page=receipt&id={partial_id.group(1)}")
+        expect(manager_a.locator(".receipt")).to_contain_text("جمع دریافتی")
+        expect(manager_a.locator(".receipt")).to_contain_text("۴۵٬۰۰۰")
+        assert "مانده: ۰" in manager_a.locator(".receipt").inner_text(), (
+            "Follow-up receipt did not fully settle invoice"
+        )
         manager_a.goto(f"{ORIGIN}/?page=invoice_manager")
         expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
         expect(manager_a.locator(".manager-results")).to_contain_text("CI E2E Custom Service")
