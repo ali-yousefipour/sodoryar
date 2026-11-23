@@ -21,7 +21,7 @@ function sodoryar_global_search(int $tenant,string $needle): array {
             ];
         }
     }
-    if (can('customers.view') && mb_strlen($q)>=5 && database_table_exists('global_drivers')) {
+    if (can('customers.view') && mb_strlen($q)>=5 && (bool)query("SHOW TABLES LIKE 'global_drivers'")->fetchColumn()) {
         $vehicles=query('SELECT c.national_code,c.first_name,c.last_name,g.vehicle_plate
             FROM customers c JOIN global_drivers g ON g.national_code=c.national_code
             WHERE c.company_id=? AND g.vehicle_plate LIKE ?

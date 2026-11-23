@@ -121,7 +121,7 @@ if ($page==='global_search') {
     }
     $_SESSION['global_search_count']=(int)($_SESSION['global_search_count']??0)+1;
     if (is_super() && empty($_SESSION['selected_company'])) {
-        echo json_encode(['customers'=>[],'invoices'=>[],'payments'=>[],'services'=>[]],JSON_UNESCAPED_UNICODE); exit;
+        echo json_encode(['customers'=>[],'invoices'=>[],'payments'=>[],'vehicles'=>[],'services'=>[]],JSON_UNESCAPED_UNICODE); exit;
     }
     try {
         echo json_encode(sodoryar_global_search(tenant_id(),$q),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);

@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const input=document.getElementById('globalSearchInput');
   const results=document.getElementById('globalSearchResults');
   if(!dialog||!input||!results)return;
-  const names={customers:'تاکسیرانان',invoices:'فاکتورها',payments:'دریافت‌ها',services:'خدمات'};
+  const names={customers:'تاکسیرانان',invoices:'فاکتورها',payments:'دریافت‌ها',vehicles:'خودروها و پلاک',services:'خدمات'};
   const normalize=s=>String(s).replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776))
     .replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)).trim();
   let timer=null,controller=null;
