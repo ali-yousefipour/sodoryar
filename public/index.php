@@ -807,7 +807,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
-<?php endif; ?><script src="assets/app.js?v=<?=e((string)filemtime(__DIR__.'/assets/app.js'))?>" defer></script><script src="assets/table-experience.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/table-experience.js'),0,16))?>" defer></script><script src="assets/report-progress.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/report-progress.js'),0,16))?>" defer></script></body></html>
+<?php endif; ?><?php if ($page==='login'): ?><script src="assets/login-ui.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-ui.js'),0,16))?>" defer></script><?php endif; ?><script src="assets/app.js?v=<?=e((string)filemtime(__DIR__.'/assets/app.js'))?>" defer></script><script src="assets/table-experience.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/table-experience.js'),0,16))?>" defer></script><script src="assets/report-progress.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/report-progress.js'),0,16))?>" defer></script></body></html>
 <?php
 function render_invoices(int $tenant, int $limit): void {
     require_permission('invoices.view');
