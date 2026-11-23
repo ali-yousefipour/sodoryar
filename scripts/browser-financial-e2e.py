@@ -198,6 +198,18 @@ def main() -> None:
         media = re.findall(rb"/MediaBox\s*\[\s*0\s+0\s+([0-9.]+)", receipt_pdf)
         assert media and 585 < float(media[0]) < 605, "Default invoice receipt did not print on A4"
         (OUTPUT / "invoice-a4.pdf").write_bytes(receipt_pdf)
+        manager_a.goto(f"{ORIGIN}/?page=invoice_manager")
+        expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
+        expect(manager_a.locator(".manager-results")).to_contain_text("CI-INVOICE")
+        assert manager_a.locator(".manager-results tbody tr").count() > 0, (
+            "Invoice manager did not show the newly issued invoice"
+        )
+        manager_a.locator('.manager-filters [name="q"]').fill("does-not-exist-ci")
+        manager_a.locator('.manager-filters button[type="submit"]').click()
+        expect(manager_a.locator(".manager-results")).to_contain_text("فاکتوری با این فیلترها پیدا نشد.")
+        manager_a.goto(f"{ORIGIN}/?page=invoice_manager&method=mixed")
+        expect(manager_a.locator(".manager-results tbody")).to_contain_text("ترکیبی")
+
 
         manager_a.goto(f"{ORIGIN}/?page=bills")
         form = manager_a.locator("form[data-once-submit]").first
