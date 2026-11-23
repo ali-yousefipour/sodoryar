@@ -19,6 +19,7 @@ require __DIR__ . '/_private/src/user_preferences.php';
 require __DIR__ . '/_private/src/payment_receipt.php';
 require __DIR__ . '/_private/src/financial_issue_reviews.php';
 require __DIR__ . '/_private/src/dashboard_finance.php';
+require __DIR__ . '/_private/src/finance_schema_health.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -35,7 +36,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -745,7 +746,7 @@ if ($page === 'customers') require_permission('customers.view');
 if ($page==='driver_account') { require_permission('customers.view'); require_permission('invoices.view'); }
 if ($page==='invoice_manager') require_permission('invoices.view');
 if ($page==='cashbox') require_permission('cashbox.view');
-if ($page==='periods') require_permission('periods.manage');
+if ($page==='periods'||$page==='finance_health') require_permission('periods.manage');
 if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page==='receipt'||$page==='payment_receipt') require_permission('invoices.view');
 if ($page==='receipt'||$page==='payment_receipt') require_permission('invoices.print');
@@ -898,6 +899,7 @@ if ($tenant) {
     if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
     if (can('cashbox.view')) $navItems[]=['cashbox','صندوق و تسویه روزانه','commissions','عملیات روزانه'];
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
+    if (can('periods.manage')) $navItems[]=['finance_health','سلامت ساختار مالی','settings','تنظیمات و پیکربندی'];
     if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات و صدور'];
     if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها و نظارت'];
     if (can('reports.view')) $navItems[]=['finance_center','مرکز گزارش‌های تخصصی','reports','گزارش‌ها و نظارت'];
@@ -1122,6 +1124,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
 <?php render_accounting_periods((int)$tenant); ?>
+<?php elseif($page==='finance_health'): ?>
+<?php render_finance_schema_health((int)$tenant); ?>
 <?php elseif(in_array($page,['commissions','templates','settings','activity','profile','roles','bills','pos'],true)): ?>
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
