@@ -14,6 +14,7 @@ require dirname(__DIR__).'/src/bootstrap.php';
 require dirname(__DIR__).'/src/localization.php';
 require dirname(__DIR__).'/src/modules.php';
 require dirname(__DIR__).'/src/reporting.php';
+require dirname(__DIR__).'/src/invoice_payments.php';
 
 function integration_assert(bool $result,string $message): void {
     if (!$result) throw new RuntimeException($message);
@@ -223,4 +224,29 @@ $unconfirmed=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bi
     [$billB,$companyB])->fetch();
 integration_assert(!bill_can_permanently_delete($unconfirmed),'Bank/POS bill must not be permanently deleted');
 
-echo "PASS: clean schema and migrations 009-015 twice; tenant and own-only reports; invoice-date commission totals; forbidden cross-company inserts; bills; roles; deletion policy.\n";
+// Apply after legacy fixtures: verify idempotent historical backfill and real payment rows.
+$paymentMigration=$root.'/database/migrations/016_invoice_payments.sql';
+foreach(range(1,2) as $pass) apply_sql_fixture($paymentMigration);
+integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=? AND invoice_id=?',[$companyA,$invoiceA])->fetchColumn()===1,
+    'Legacy invoice backfill must not duplicate on repeated migration.');
+$expected=invoice_payment_rows([
+    ['method'=>'cash','amount'=>'۵۰۰٬۰۰۰'],
+    ['method'=>'pos','amount'=>'1,000,000','tracking'=>'۱۲۳'],
+],1500000);
+integration_assert(count($expected)===2 && $expected[0]['amount']===500000 && $expected[1]['tracking']==='123',
+    'Persian/Arabic payment amount or tracking normalization failed.');
+$invalidRejected=false;
+try { invoice_payment_rows([['method'=>'cash','amount'=>'-1']],100); }
+catch (RuntimeException $ex) { $invalidRejected=true; }
+integration_assert($invalidRejected,'Negative payments accepted.');
+$multiInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
+    [$companyA,'CI-MULTI',$customerA,$userA,1500000,'cash','2026-11-22']);
+create_invoice_payment_rows($companyA,$multiInvoice,$userA,$expected);
+$totals=invoice_payment_totals($companyA,$multiInvoice,1500000);
+integration_assert($totals['paid']===1500000 && $totals['remaining']===0 && count($totals['payments'])===2,
+    'Multiple transactions were not persisted accurately.');
+$foreignPaymentRejected=false;
+try {create_invoice_payment_rows($companyB,$multiInvoice,$userB,[['method'=>'cash','amount'=>1,'tracking'=>'','reference'=>'']]);}
+catch (PDOException $ex) {if($ex->getCode()!=='23000')throw $ex;$foreignPaymentRejected=true;}
+integration_assert($foreignPaymentRejected,'Cross-tenant invoice payment was accepted.');
+echo "PASS: migration 016 idempotency, legacy backfill, Persian amounts, multiple payments, tenant isolation.\\n";
