@@ -604,9 +604,21 @@ $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant
 if (in_array($page,['reports','activity'],true) && $tenant) {
     try {
         $reportFilter=report_filters();
-        if (($_GET['export']??'')==='excel') {
+        if (in_array((string)($_GET['export']??''),['excel','payments'],true)) {
             require_permission($page==='reports' ? 'reports.export' : 'activity.export');
-            if ($page==='reports') {
+            if ($page==='reports' && ($_GET['export']??'')==='payments') {
+                if (!invoice_payment_ledger_ready()) throw new RuntimeException('ابتدا میگرشن ۰۱۶ را اجرا کنید.');
+                $transactions=invoice_payment_report((int)$tenant,$reportFilter,10001);
+                if ((int)$transactions['summary']['transaction_count']>10000) throw new RuntimeException('تعداد تراکنش‌ها بیش از ۱۰٬۰۰۰ است؛ فیلترهای گزارش را محدود کنید.');
+                $rows=array_map(static fn($p)=>[
+                    display_financial_reference($p['invoice_number']),jalali_datetime($p['paid_at'],true),
+                    fa_digits($p['national_code']),$p['customer'],$p['operator_name'],
+                    $p['payment_method']==='cash'?'نقدی':'کارتخوان',
+                    display_financial_reference($p['tracking_number']??''),display_financial_reference($p['reference_number']??''),
+                    money_toman($p['amount'])
+                ],$transactions['rows']);
+                export_excel_xlsx('sodoryar-invoice-payments',['شماره فاکتور','زمان دریافت','کد ملی','نام راننده','اپراتور','روش دریافت','پیگیری','مرجع','مبلغ'],$rows);
+            } elseif ($page==='reports') {
                 $reportData=invoice_report($tenant,$reportFilter,10000);
                 if ((int)$reportData['summary']['qty']>10000) {
                     throw new RuntimeException('تعداد فاکتورهای این خروجی بیش از ۱۰٬۰۰۰ مورد است؛ برای دریافت فایل کامل، بازه تاریخ یا فیلترها را محدود کنید.');
@@ -833,6 +845,15 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <article class="stat"><span>دریافتی کارتخوان</span><b><?=money($reportData['summary']['pos_paid'])?></b><small>تومان</small></article>
 <article class="stat"><span>تعداد تراکنش‌ها</span><b><?=money($reportData['summary']['transaction_count'])?></b></article>
 <?php endif; ?></div>
+<?php $paymentReport=invoice_payment_report((int)$tenant,$reportFilter); ?>
+<?php if(invoice_payment_ledger_ready()): ?>
+<section class="card"><div class="heading"><div><h2>ریز تراکنش‌های دریافت</h2><p class="muted">مبنای این جدول زمان واقعی دریافت است؛ برای جلوگیری از دوباره‌شماری، هر تراکنش به‌صورت مستقل محاسبه می‌شود.</p></div></div>
+<div class="stats"><article class="stat"><span>تعداد تراکنش‌ها</span><b><?=money($paymentReport['summary']['transaction_count'])?></b></article><article class="stat"><span>نقدی</span><b><?=money($paymentReport['summary']['cash_paid'])?></b><small>تومان</small></article><article class="stat"><span>کارتخوان</span><b><?=money($paymentReport['summary']['pos_paid'])?></b><small>تومان</small></article></div>
+<?php if(can('reports.export')): ?><a class="button-link" href="?page=reports&amp;export=payments&amp;<?=e(http_build_query(array_filter($reportFilter,static fn($v)=>$v!=='')))?>">خروجی اکسل ریز تراکنش‌ها</a><?php endif; ?>
+<div class="table-wrap"><table><thead><tr><th>شماره فاکتور</th><th>زمان دریافت</th><th>روش</th><th>مبلغ</th><th>کد پیگیری</th><th>اپراتور</th></tr></thead><tbody>
+<?php foreach($paymentReport['rows'] as $transaction): ?><tr><td><?=e(display_financial_reference($transaction['invoice_number']))?></td><td><?=e(jalali_datetime($transaction['paid_at'],true))?></td><td><?=$transaction['payment_method']==='cash'?'نقدی':'کارتخوان'?></td><td><?=money_toman($transaction['amount'])?></td><td><?=e(display_financial_reference($transaction['tracking_number']??''))?></td><td><?=e($transaction['operator_name'])?></td></tr><?php endforeach; ?>
+<?php if (!$paymentReport['rows']): ?><tr><td colspan="6">تراکنشی در این بازه وجود ندارد.</td></tr><?php endif; ?></tbody></table></div></section>
+<?php else: ?><div class="alert">گزارش ریز تراکنش‌ها پس از اجرای میگرشن ۰۱۶ فعال می‌شود.</div><?php endif; ?>
 <div class="card"><h2>نتایج گزارش (۲۰۰ مورد آخر)</h2><?php render_table(['شماره فاکتور','تاریخ','کد ملی','مشتری','اپراتور','نوع پرداخت','کد پیگیری','مبلغ'],array_map(static fn($r)=>['invoice_number'=>$r['invoice_number'],'created_at'=>$r['invoice_date'] ?: $r['created_at'],'national_code'=>$r['national_code'],'customer'=>$r['customer'],'operator_name'=>$r['operator_name'],'payment_type'=>$r['payment_type']==='cash'?'نقدی':($r['payment_type']==='pos'?'کارتخوان':'ترکیبی'),'pos_ref'=>$r['pos_ref'],'total_amount'=>$r['total_amount']],$reportData['rows']),['total_amount']); ?></div>
 <?php elseif($page==='receipt'): ?>
 <?php
