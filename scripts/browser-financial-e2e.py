@@ -265,6 +265,9 @@ def main() -> None:
                 f"Settings redesign lost the {field} field"
             )
         expect(settings_form.locator('button[type="submit"]')).to_be_visible()
+        assert manager_a.locator(".settings-savebar").evaluate(
+            "(el) => getComputedStyle(el).position"
+        ) == "static", "Mobile settings save bar obscures editable fields"
         manager_a.screenshot(path=str(OUTPUT / "settings-mobile.png"), full_page=True)
         assert manager_a.locator("#primaryNav .nav-link.active").count() == 1, (
             "Categorized sidebar lost the active route"
