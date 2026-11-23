@@ -349,8 +349,8 @@ def main() -> None:
         # Every route must render without PHP errors or viewport-wide overflow.
         for route in (
             "dashboard", "users", "roles", "customers", "services", "invoices",
-            "reports", "bills", "pos", "commissions", "templates", "settings",
-            "activity", "profile",
+            "reports", "finance_center", "cashbox", "periods", "bills", "pos",
+            "commissions", "templates", "settings", "activity", "profile",
         ):
             response = manager_a.goto(f"{ORIGIN}/?page={route}", wait_until="domcontentloaded")
             status = response.status if response else 0
@@ -419,7 +419,7 @@ def main() -> None:
         # desktop widths, not just the isolated component fixture.
         for width in (320, 768, 1440):
             manager_a.set_viewport_size({"width": width, "height": 900})
-            for route in ("dashboard", "invoices", "bills", "templates", "reports", "settings"):
+            for route in ("dashboard", "invoices", "bills", "templates", "reports", "finance_center", "cashbox", "periods", "settings"):
                 response = manager_a.goto(f"{ORIGIN}/?page={route}", wait_until="domcontentloaded")
                 status = response.status if response else 0
                 if status != 200:
