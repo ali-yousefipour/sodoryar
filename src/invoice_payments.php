@@ -7,8 +7,12 @@ function invoice_payment_ledger_ready(): bool {
 }
 function invoice_payment_amount(mixed $value): int {
     if (!is_string($value) && !is_int($value)) throw new RuntimeException('مبلغ پرداخت نامعتبر است.');
-    $digits=ascii_digits((string)$value);
-    $digits=str_replace([',','٬','،',' ','\xc2\xa0'], '',$digits);
+    $input=trim(ascii_digits((string)$value));
+    $input=str_replace(['٬','،'],',',$input);
+    if (!preg_match('/^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)$/D',$input)) {
+        throw new RuntimeException('جداکننده‌های سه‌رقمی مبلغ پرداخت نامعتبر است.');
+    }
+    $digits=str_replace(',', '',$input);
     if (!preg_match('/^[0-9]{1,19}$/D',$digits) || (float)$digits > PHP_INT_MAX) {
         throw new RuntimeException('مبلغ پرداخت باید عدد صحیح و معتبر باشد.');
     }
