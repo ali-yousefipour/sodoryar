@@ -6,6 +6,7 @@ require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/invoice_payments.php';
+require __DIR__ . '/_private/src/invoice_management.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -22,7 +23,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','invoice_manager','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -592,6 +593,7 @@ if ($page === 'services') require_permission('services.view');
 if ($page === 'templates' || $page === 'settings') require_admin();
 if ($permission=module_page_permission($page)) require_permission($permission);
 if ($page === 'customers') require_permission('customers.view');
+if ($page==='invoice_manager') require_permission('invoices.view');
 if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page==='receipt') require_permission('invoices.view');
 if ($page==='receipt') require_permission('invoices.print');
@@ -725,7 +727,8 @@ if (is_super() && !$tenant) $navItems[]=['companies','مدیریت شرکت‌ه
 if ($tenant) {
     if (can('customers.view')) $navItems[]=['customers','تاکسیرانان','drivers','عملیات و صدور'];
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
-    if (can('invoices.view') || can('invoices.create')) $navItems[]=['invoices','صدور و مدیریت فاکتورها','invoices','عملیات و صدور'];
+    if (can('invoices.create')) $navItems[]=['invoices','صدور فاکتور جدید','invoices','عملیات روزانه'];
+    if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
     if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات و صدور'];
     if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها و نظارت'];
     if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها و نظارت'];
@@ -781,8 +784,10 @@ foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): $a
 <?php [$todayJy,$todayJm]=gregorian_to_jalali((int)date('Y'),(int)date('n'),(int)date('j')); $jalaliMonthStart=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$todayJy,$todayJm)); $period=query('SELECT COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=CURRENT_DATE() THEN 1 ELSE 0 END),0) today_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))>=? THEN 1 ELSE 0 END),0) month_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=CURRENT_DATE() THEN total_amount ELSE 0 END),0) today_total,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))>=? THEN total_amount ELSE 0 END),0) month_total FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice,array_merge([$jalaliMonthStart,$jalaliMonthStart,$tenant],$dashboardScopeParams))->fetch(); ?>
 <div class="stats"><article class="stat"><span>خدمات ثبت‌شده امروز</span><b><?=money($period['today_count'])?></b></article><article class="stat"><span>خدمات ماه جاری</span><b><?=money($period['month_count'])?></b></article><article class="stat"><span>فروش امروز</span><b><?=money($period['today_total'])?></b><small>تومان</small></article><article class="stat"><span>فروش ماه جاری</span><b><?=money($period['month_total'])?></b><small>تومان</small></article></div>
 <div class="dashboard-secondary"><div class="card"><h2>عملکرد کاربران در ماه شمسی جاری</h2><?php $rankingVoid=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':''; $ranking=query('SELECT u.full_name,COUNT(i.id) invoice_count,COALESCE(SUM(i.total_amount),0) total FROM users u LEFT JOIN invoices i ON i.user_id=u.id AND i.company_id=u.company_id AND COALESCE(i.invoice_date, DATE(i.created_at))>=?'.$rankingVoid.' WHERE u.company_id=? AND u.is_active=1 AND u.role=?'.($dashboardOwn?' AND u.id=?':'').' GROUP BY u.id,u.full_name ORDER BY invoice_count DESC,total DESC LIMIT 8',array_merge([$jalaliMonthStart,$tenant,'operator'],$dashboardScopeParams))->fetchAll(); ?><div class="ranking-chart"><?php if (!$ranking): ?><p class="muted">هنوز اپراتور فعالی برای نمایش عملکرد وجود ندارد.</p><?php endif; ?><?php $max=max(1,...array_map(static fn($r)=>(int)$r['invoice_count'],$ranking)); foreach($ranking as $row): ?><div class="ranking-row"><span><?=e($row['full_name'])?></span><div class="ranking-track"><progress max="<?=e((int)$max)?>" value="<?=e((int)$row['invoice_count'])?>" aria-label="تعداد فاکتورهای <?=e($row['full_name'])?>"></progress></div><b><?=money($row['invoice_count'])?></b></div><?php endforeach; ?></div></div><div class="card"><h2>شاخص‌های جاری</h2><dl class="metrics-list"><div><dt>رانندگان در پرونده شرکت</dt><dd><?=money($stats['customers'])?></dd></div><div><dt>خدمات فعال</dt><dd><?=money($stats['services'])?></dd></div><div><dt>کل فاکتورهای ثبت‌شده</dt><dd><?=money($stats['invoices'])?></dd></div><div><dt>مجموع مبالغ ثبت‌شده</dt><dd><?=money_toman($stats['revenue'])?></dd></div></dl></div></div>
-<?php if(can('invoices.view')): ?><div class="card"><div class="heading"><h2>آخرین فاکتورها</h2><a href="?page=invoices">مشاهده همه</a></div><?php render_invoices($tenant,8); ?></div><?php endif; ?>
+<?php if(can('invoices.view')): ?><div class="card"><div class="heading"><h2>آخرین فاکتورها</h2><a href="?page=invoice_manager">مشاهده همه</a></div><?php render_invoices($tenant,8); ?></div><?php endif; ?>
 <?php endif; ?>
+<?php elseif($page==='invoice_manager'): ?>
+<?php render_invoice_management((int)$tenant); ?>
 <?php elseif($page==='users'): ?>
 <h1>کاربران شرکت</h1><p class="muted">مدیر شرکت به همه بخش‌های شرکت خود دسترسی دارد؛ مجوزهای اپراتورها جداگانه تنظیم می‌شوند.</p>
 <?php if(company_roles_ready()): ?><div class="card"><h2>انتساب نقش سفارشی</h2><p class="muted">هر اپراتور می‌تواند یک نقش سفارشی فعال داشته باشد. مجوزهای نقش با مجوزهای مستقیم کاربر ترکیب می‌شوند.</p><div class="table-wrap"><table><thead><tr><th>اپراتور</th><th>نقش فعلی</th><th>نقش جدید</th><th>اعمال</th></tr></thead><tbody>
