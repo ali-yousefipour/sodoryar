@@ -78,3 +78,13 @@ body:has(.login-wrap){background:var(--sd-paper);color:var(--sd-ink)}
 .manager-quick-filters{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}
 .manager-quick-filters .button-link{min-height:36px;display:inline-flex;align-items:center;padding:6px 12px;font-size:12px}
 @media(max-width:650px){.manager-quick-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.manager-quick-filters .button-link{justify-content:center;text-align:center}}
+
+.manager-export-config>summary{cursor:pointer;font-weight:850;color:var(--sd-deep);font-size:14px}
+.manager-export-config>form{margin-top:13px;display:grid;gap:12px}
+.manager-export-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.manager-export-column{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--sd-border);padding:6px 10px;border-radius:10px;background:#fbfaff}
+.manager-export-column label{display:flex;align-items:center;gap:8px;margin:0;flex:1}
+.manager-export-move{display:flex;gap:3px}
+.manager-export-move button{min-height:30px!important;min-width:31px;padding:3px!important}
+@media(max-width:900px){.manager-export-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:580px){.manager-export-columns{grid-template-columns:1fr}}
