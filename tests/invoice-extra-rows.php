@@ -7,7 +7,7 @@ $rows=normalize_invoice_extra_rows(['خدمت','','خدمت دوم'],['۱۲٬۳�
 if ($rows!==[['title'=>'خدمت','price'=>12345],['title'=>'خدمت دوم','price'=>100000]]) {
     throw new RuntimeException('Localized extra line normalization is incorrect.');
 }
-$mixed=normalize_invoice_extra_rows(['ورودی چندزبانه'],['۱۲٬۳۴۵6۷۸']);
+$mixed=normalize_invoice_extra_rows(['ورودی چندزبانه'],['۱۲٬۳۴۵٬6۷۸']);
 if ($mixed!==[['title'=>'ورودی چندزبانه','price'=>12345678]]) {
     throw new RuntimeException('Mixed Persian and Latin digits in an invoice item must parse.');
 }
