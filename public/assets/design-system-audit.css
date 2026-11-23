@@ -88,3 +88,10 @@ body:has(.login-wrap){background:var(--sd-paper);color:var(--sd-ink)}
 .manager-export-move button{min-height:30px!important;min-width:31px;padding:3px!important}
 @media(max-width:900px){.manager-export-columns{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:580px){.manager-export-columns{grid-template-columns:1fr}}
+
+.manager-table-columns{margin:10px 0 14px;border:1px solid var(--sd-border);border-radius:12px;background:#fbfaff;padding:10px 13px}
+.manager-table-columns summary{cursor:pointer;font-weight:800;color:var(--sd-deep)}
+.manager-table-column-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px 0}
+.manager-table-column-options label{display:flex;align-items:center;gap:6px}
+.manager-results th[hidden],.manager-results td[hidden]{display:none!important}
+@media(max-width:800px){.manager-table-column-options{grid-template-columns:repeat(2,minmax(0,1fr))}}
