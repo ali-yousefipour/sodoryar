@@ -572,6 +572,7 @@ try {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
                 if (invoice_payment_ledger_ready()) {
+                    cashbox_assert_payments_mutable($tenant,(int)$id);
                     $active=get_invoice_payment_rows($tenant,(int)$id);
                     if (count($active)!==1 || (int)$active[0]['amount']!==(int)$invoice['total_amount']) {
                         throw new RuntimeException('برای اصلاح چندتراکنشی از عملیات تخصصی مالی استفاده کنید؛ جایگزینی یکباره مجاز نیست.');
@@ -605,6 +606,7 @@ try {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
                 $replacement=invoice_payment_rows((array)($_POST['payments']??[]),(int)$invoice['total_amount']);
+                cashbox_assert_payments_mutable($tenant,(int)$id);
                 $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
                 if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
                 $oldIds=array_map(static fn($p)=>(int)$p['id'],$oldPayments);
