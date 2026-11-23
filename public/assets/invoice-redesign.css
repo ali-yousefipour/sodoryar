@@ -201,3 +201,19 @@
 .invoice-driver-dialog .invoice-driver-line-field>select{background:#fff}
 .invoice-driver-dialog .invoice-driver-line-help{color:#81788c;font-size:11px;line-height:1.6}
 .invoice-driver-dialog [data-driver-mobile]{direction:ltr;text-align:right;unicode-bidi:plaintext}
+
+/* Invoice multi-transaction payment editor */
+.invoice-multipayment{display:grid;gap:1rem}
+.payment-mode-group{display:flex;gap:.65rem;flex-wrap:wrap}
+.payment-mode-group button[aria-pressed="true"]{background:var(--primary,#156b79);color:#fff;border-color:transparent}
+.invoice-payment-rows{display:grid;gap:.8rem}
+.invoice-payment-row{display:grid;grid-template-columns:minmax(125px,1fr) minmax(160px,1fr) minmax(200px,1.5fr) auto;gap:.8rem;align-items:end;padding:1rem;border:1px solid var(--border,#d4dde0);border-radius:12px;background:var(--surface,#fff)}
+.invoice-payment-row label{display:grid;gap:.3rem;min-width:0}
+.invoice-payment-row input,.invoice-payment-row select{width:100%;min-width:0;font:inherit}
+.payment-pos-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+.payment-pos-fields[hidden]{display:none}
+.invoice-payment-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.6rem;background:var(--surface-alt,#f4f7f8);border-radius:12px;padding:.8rem}
+.invoice-payment-summary span{display:grid;gap:.25rem}
+.invoice-payment-error{color:#b42318;font-weight:600}
+@media(max-width:900px){.invoice-payment-row{grid-template-columns:repeat(2,minmax(0,1fr))}.payment-pos-fields{grid-column:1/-1}.invoice-payment-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.invoice-payment-row{grid-template-columns:1fr}.payment-pos-fields{grid-column:auto;grid-template-columns:1fr}.invoice-payment-summary{grid-template-columns:1fr 1fr}.payment-mode-group{display:grid;grid-template-columns:1fr}.payment-mode-group button{width:100%}}
