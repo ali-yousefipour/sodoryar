@@ -251,6 +251,22 @@ def main() -> None:
             if width > viewport + 2:
                 manager_a.screenshot(path=str(OUTPUT / f"route-{route}-overflow.png"), full_page=True)
                 raise AssertionError(f"{route} overflows 390px viewport ({width}px > {viewport}px)")
+        # IAM permission categories should stay compact and keyboard-expandable.
+        manager_a.goto(f"{ORIGIN}/?page=roles", wait_until="domcontentloaded")
+        permission_groups = manager_a.locator(".permission-matrix").first.locator(
+            "details.permission-group"
+        )
+        assert permission_groups.count() >= 2, "IAM permission categories missing"
+        expect(permission_groups.first).to_have_attribute("open", "")
+        second_permission = permission_groups.nth(1)
+        assert not second_permission.evaluate("(el) => el.open"), (
+            "Secondary IAM permission groups must be collapsed on mobile"
+        )
+        second_permission.locator("summary").click()
+        assert second_permission.evaluate("(el) => el.open"), (
+            "IAM permissions must expand on keyboard or pointer activation"
+        )
+        expect(second_permission.locator('input[type="checkbox"]').first).to_be_visible()
         # The categorized settings page must render every original editable
         # field inside one CSRF-protected form, without exposing new routes.
         manager_a.goto(f"{ORIGIN}/?page=settings", wait_until="domcontentloaded")
