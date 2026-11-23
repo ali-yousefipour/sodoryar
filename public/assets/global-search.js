@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelector('[data-global-search-open]')?.addEventListener('click',open);
   dialog.querySelector('[data-global-search-close]')?.addEventListener('click',()=>dialog.close());
   document.addEventListener('keydown',event=>{
+    if(event.key==='Escape' && dialog.open){event.preventDefault();dialog.close();return;}
     if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'&&!event.altKey&&!event.isComposing){
       event.preventDefault();if(!dialog.open)open();else input.focus();
     }
