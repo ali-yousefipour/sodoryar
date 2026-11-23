@@ -468,9 +468,11 @@ try {
                 }
                 if (count($items)!==count($selected)) throw new RuntimeException('یک یا چند خدمت معتبر نیست.');
                 $total = sum_invoice_line_amounts(array_merge($items,$extras));
-                $paymentRows=invoice_payment_rows((array)($_POST['payments']??[]),$total);
+                $allowPartial=isset($_POST['allow_partial']) && (string)$_POST['allow_partial']==='1';
+                $paymentRows=invoice_payment_rows((array)($_POST['payments']??[]),$total,$allowPartial);
+                if ($allowPartial && !invoice_payment_ledger_ready()) throw new RuntimeException('صدور فاکتور با مانده پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
                 if (!invoice_payment_ledger_ready() && count($paymentRows)>1) throw new RuntimeException('ثبت چندتراکنشی پس از اجرای میگرشن ۰۱۶ فعال می‌شود.');
-                $payment=$paymentRows[0]['method'];
+                $payment=$paymentRows[0]['method']??'cash';
                 $ref=count($paymentRows)===1?$paymentRows[0]['tracking']:null;
                 $number = date('YmdHis') . '-' . bin2hex(random_bytes(4));
                 query('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,pos_ref,invoice_date) VALUES(?,?,?,?,?,?,?,?)',[$tenant,$number,$customer,user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate]);
@@ -486,6 +488,38 @@ try {
                 }
                 redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+        }
+        if ($page==='invoices' && $action==='collect_balance') {
+            require_permission('invoices.payment_edit');
+            $tenant=tenant_id();
+            if (!invoice_followup_ready()) throw new RuntimeException('ثبت دریافت بعدی نیازمند اجرای میگرشن ۰۱۷ است.');
+            $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
+            $nonce=(string)($_POST['collect_nonce']??'');
+            $expected=(string)($_SESSION['invoice_collect_nonces'][$id]??'');
+            if (!$id || $expected==='' || !hash_equals($expected,$nonce)) {
+                throw new RuntimeException('درخواست دریافت تکراری یا منقضی است؛ صفحه را تازه‌سازی کنید.');
+            }
+            $raw=[['method'=>$_POST['payment_method']??'','amount'=>$_POST['amount']??'',
+                'terminal'=>$_POST['terminal']??'','tracking'=>$_POST['tracking']??'',
+                'reference'=>$_POST['reference']??'']];
+            db()->beginTransaction();
+            try {
+                $invoice=query('SELECT id,total_amount,user_id FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
+                if (!$invoice) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
+                require_document_owner((int)$invoice['user_id']);
+                if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE company_id=? AND invoice_id=?',[$tenant,$id])->fetch()) {
+                    throw new RuntimeException('دریافت برای فاکتور باطل‌شده مجاز نیست.');
+                }
+                $summary=invoice_payment_totals($tenant,$id,(int)$invoice['total_amount']);
+                $remaining=(int)$invoice['total_amount']-(int)$summary['paid'];
+                if ($remaining<=0) throw new RuntimeException('مانده قابل وصول برای این فاکتور وجود ندارد.');
+                $rows=invoice_payment_rows($raw,$remaining,true);
+                $paymentId=invoice_followup_record($tenant,$id,(int)user()['id'],$rows[0],hash('sha256',$nonce));
+                audit('invoice.payment.collect',json_encode(['invoice_id'=>$id,'payment_id'=>$paymentId,'amount'=>$rows[0]['amount']],JSON_THROW_ON_ERROR));
+                db()->commit();
+                unset($_SESSION['invoice_collect_nonces'][$id]);
+            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+            redirect('invoices','دریافت جدید ثبت شد و مانده فاکتور به‌روزرسانی شد.');
         }
         if ($page==='invoices' && $action==='edit') {
             require_permission('invoices.payment_edit'); $tenant=tenant_id();
@@ -844,7 +878,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <div class="invoice-panel-heading"><span class="invoice-step">۴</span><div><h2>جزئیات پرداخت فاکتور</h2><p>یک پرداخت یا چند تراکنش نقدی و کارتخوان</p></div></div>
 <div class="payment-mode-group" role="group" aria-label="نوع پرداخت"><button type="button" class="secondary" data-payment-mode="cash" aria-pressed="true">نقدی</button><button type="button" class="secondary" data-payment-mode="pos" aria-pressed="false">کارتخوان</button><button type="button" class="secondary" data-payment-mode="multi" aria-pressed="false">ترکیبی / چندتراکنشی</button></div>
 <select id="invoiceTerminalOptions" hidden aria-hidden="true"><option value="">بدون انتخاب دستگاه</option><?php foreach(query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll() as $terminal): ?><option value="<?=e($terminal['id'])?>"><?=e($terminal['brand'])?> (<?=e(fa_digits($terminal['id']))?>)</option><?php endforeach; ?></select>
-<div id="invoicePaymentRows" class="invoice-payment-rows"></div><button type="button" class="secondary" id="invoiceAddPayment" hidden>+ افزودن پرداخت</button>
+<div id="invoicePaymentRows" class="invoice-payment-rows"></div><button type="button" class="secondary" id="invoiceAddPayment" hidden>+ افزودن پرداخت</button><label class="choice"><input type="checkbox" name="allow_partial" value="1" id="invoiceAllowPartial"> صدور فاکتور با مانده بدهی (پرداخت جزئی)</label><label class="choice"><input type="checkbox" id="invoiceNoInitialPayment"> صدور بدون دریافت اولیه</label>
 <div class="invoice-payment-summary" aria-live="polite"><span>مبلغ فاکتور: <strong data-payable-total>۰</strong></span><span>جمع دریافتی: <strong data-payment-paid>۰</strong></span><span>مانده: <strong data-payment-remaining>۰</strong></span><span>تعداد تراکنش: <strong data-payment-count>۱</strong></span></div><p id="invoicePaymentError" class="invoice-payment-error" role="alert" hidden></p></section>
 <div class="invoice-form-footer"><p>قبل از ثبت، تاریخ، خدمات و جمع پرداخت‌ها را بررسی کنید.</p><button type="submit" class="invoice-submit">ثبت و صدور فاکتور</button></div></form></div>
 <?php endif; ?><?php if(can('invoices.view')): ?><div class="card invoice-history"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div><?php endif; ?>
@@ -898,8 +932,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php $paymentSummary=invoice_payment_totals((int)$tenant,(int)$invoice['id'],(int)$invoice['total_amount']); ?>
 <h3>جزئیات پرداخت</h3><table><thead><tr><th>روش پرداخت</th><th>مبلغ</th></tr></thead><tbody>
 <?php foreach($paymentSummary['payments'] as $pay): ?><tr><td><?=$pay['payment_method']==='cash'?'نقدی':'کارتخوان'?><?php if($pay['tracking_number']): ?> — <?=e(display_financial_reference($pay['tracking_number']))?><?php endif; ?></td><td><?=money_toman($pay['amount'])?></td></tr><?php endforeach; ?>
-<?php if (!$paymentSummary['payments']): ?><tr><td><?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?></td><td><?=money_toman($invoice['total_amount'])?></td></tr><?php endif; ?>
-</tbody></table><p>جمع دریافتی: <?=money_toman($paymentSummary['payments']?$paymentSummary['paid']:(int)$invoice['total_amount'])?></p><p>مانده: <?=money_toman($paymentSummary['payments']?$paymentSummary['remaining']:0)?></p>
+<?php if (!$paymentSummary['payments'] && !invoice_payment_ledger_ready()): ?><tr><td><?=$invoice['payment_type']==='cash'?'نقدی':'کارتخوان'?></td><td><?=money_toman($invoice['total_amount'])?></td></tr><?php elseif (!$paymentSummary['payments']): ?><tr><td colspan="2">هنوز مبلغی دریافت نشده است.</td></tr><?php endif; ?>
+</tbody></table><p>جمع دریافتی: <?=money_toman(invoice_payment_ledger_ready()?$paymentSummary['paid']:(int)$invoice['total_amount'])?></p><p>مانده: <?=money_toman(invoice_payment_ledger_ready()?$paymentSummary['remaining']:0)?></p>
 <p class="receipt-payment-note">شماره پیگیری ثبت‌شده، به‌تنهایی تأیید بانکی تراکنش نیست.</p>
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
@@ -921,9 +955,14 @@ function render_invoices(int $tenant, int $limit): void {
         $voided=$r['voided_at']!==null;
         $actualPayments=get_invoice_payment_rows($tenant,(int)$r['id']);
         $methods=array_unique(array_column($actualPayments,'payment_method'));
+        $paidAmount=array_sum(array_map(static fn($payment)=>(int)$payment['amount'],$actualPayments));
+        $balance=max(0,(int)$r['total_amount']-$paidAmount);
         $payLabel=count($methods)>1?'ترکیبی':(($methods[0]??$r['payment_type'])==='cash'?'نقدی':'کارتخوان');
         $payLabel.=count($actualPayments)>1?' ('.fa_digits((string)count($actualPayments)).' تراکنش)':'';
         echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        if (can('invoices.payment_edit') && !$voided && invoice_followup_ready() && $balance>0) {
+            render_invoice_collect_dialog($tenant,(int)$r['id'],$balance);
+        }
         if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
             if (can('invoices.payment_edit') && invoice_payment_ledger_ready() && $actualPayments) {
@@ -976,4 +1015,30 @@ function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $t
          '<p class="muted" data-edit-summary></p><p class="invoice-payment-error" data-edit-error hidden></p>'.
          '<label>دلیل اصلاح <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'.
          '<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اصلاحات</button></div></form></dialog>';
+}
+
+/** Collect an additional amount without replacing or changing previous payment records. */
+function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance): void {
+    static $terminals=[];
+    if (!isset($terminals[$tenant])) {
+        $terminals[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
+    }
+    $id='invoiceCollect'.$invoiceId;
+    $nonce=$_SESSION['invoice_collect_nonces'][$invoiceId]??=bin2hex(random_bytes(32));
+    echo ' <button type="button" class="small secondary" data-dialog-open="'.e($id).'">دریافت مانده</button>';
+    echo '<dialog class="app-dialog" id="'.e($id).'"><form method="post" class="stack">'.csrf_field()
+        .'<input type="hidden" name="action" value="collect_balance"><input type="hidden" name="invoice_id" value="'.(int)$invoiceId.'">'
+        .'<input type="hidden" name="collect_nonce" value="'.e($nonce).'"><h2>ثبت دریافت جدید</h2>'
+        .'<p>مانده قابل دریافت: <strong>'.money_toman($balance).'</strong></p>'
+        .'<label>مبلغ دریافت (تومان)<input name="amount" type="text" inputmode="numeric" data-money-input required maxlength="22"></label>'
+        .'<label>روش پرداخت<select name="payment_method"><option value="cash">نقدی</option><option value="pos">کارتخوان</option></select></label>'
+        .'<label>دستگاه کارتخوان (در صورت استفاده)<select name="terminal"><option value="">بدون انتخاب دستگاه</option>';
+    foreach ($terminals[$tenant] as $terminal) {
+        echo '<option value="'.(int)$terminal['id'].'">'.e($terminal['brand']).'</option>';
+    }
+    echo '</select></label><label>شماره پیگیری کارتخوان<input name="tracking" maxlength="120"></label>'
+        .'<label>شماره مرجع<input name="reference" maxlength="120"></label>'
+        .'<p class="muted">دریافت جدید مستقل از پرداخت‌های قبلی ثبت می‌شود و مبلغ آن نباید از مانده بیشتر باشد.</p>'
+        .'<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button>'
+        .'<button type="submit">ثبت دریافت</button></div></form></dialog>';
 }
