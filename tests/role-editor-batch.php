@@ -15,4 +15,9 @@ if (!str_contains($section,"SELECT role_id,permission_key FROM company_role_perm
 if (str_contains($section,"SELECT permission_key FROM company_role_permissions WHERE role_id=? AND company_id=?")) {
     throw new RuntimeException('Per-role IAM permission query must not recur.');
 }
+if (substr_count($section, '<details class="permission-group"') !== 2
+    || substr_count($section, '<summary><?=e($group)?></summary>') !== 2
+    || substr_count($section, '</div></details><?php endforeach; ?></div></fieldset>') !== 2) {
+    throw new RuntimeException('Company role permission groups must remain accessible collapsible sections in both forms.');
+}
 echo "Role editor batch grant query contract passed\n";
