@@ -165,35 +165,38 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
         $money=['amount'];break;
     case 'receipts_mixed':
         [$sql,$params]=finance_invoice_scope($tenant,$f);
-        $rows=$execute('SELECT i.invoice_number,CONCAT(c.first_name,\' \',c.last_name) customer,
-            i.total_amount invoice_total,COALESCE(pay.cash,0) cash,COALESCE(pay.pos,0) pos,
-            COALESCE(pay.cash,0)+COALESCE(pay.pos,0) collected'
-            .$sql.' JOIN (
+        $payJoin=' JOIN (
                 SELECT company_id,invoice_id,
                 SUM(CASE WHEN payment_method=\'cash\' THEN amount ELSE 0 END) cash,
                 SUM(CASE WHEN payment_method=\'pos\' THEN amount ELSE 0 END) pos
-                FROM invoice_payments WHERE voided_at IS NULL GROUP BY company_id,invoice_id
-            ) pay ON pay.company_id=i.company_id AND pay.invoice_id=i.id
-            AND pay.cash>0 AND pay.pos>0
-            ORDER BY i.id DESC',$params);
+                FROM invoice_payments WHERE company_id='.(int)$tenant.' AND voided_at IS NULL
+                GROUP BY company_id,invoice_id
+            ) pay ON pay.company_id=i.company_id AND pay.invoice_id=i.id';
+        $sql=str_replace(' WHERE i.company_id=?',$payJoin.' WHERE i.company_id=? AND pay.cash>0 AND pay.pos>0',$sql);
+        $rows=$execute('SELECT i.invoice_number,CONCAT(c.first_name,\' \',c.last_name) customer,
+            i.total_amount invoice_total,COALESCE(pay.cash,0) cash,COALESCE(pay.pos,0) pos,
+            COALESCE(pay.cash,0)+COALESCE(pay.pos,0) collected'
+            .$sql.' ORDER BY i.id DESC',$params);
         $headers=['invoice_number'=>'شماره فاکتور','customer'=>'تاکسیران','invoice_total'=>'مبلغ فاکتور',
           'cash'=>'نقدی','pos'=>'کارتخوان','collected'=>'کل دریافتی'];
         $money=['invoice_total','cash','pos','collected'];break;
     case 'pos_terminals':
         [$sql,$params]=finance_receipt_scope($tenant,$f,'pos');
+        $sql=str_replace(' WHERE p.company_id=?',' LEFT JOIN pos_settings ps
+             ON ps.id=p.terminal_id AND ps.company_id=p.company_id WHERE p.company_id=?',$sql);
         $rows=$execute('SELECT COALESCE(ps.brand,\'دستگاه نامشخص\') terminal,
               COUNT(*) receipt_count,COALESCE(SUM(p.amount),0) amount'
-              .$sql.' LEFT JOIN pos_settings ps ON ps.id=p.terminal_id AND ps.company_id=p.company_id
-              GROUP BY p.terminal_id,ps.brand ORDER BY amount DESC',$params);
+              .$sql.' GROUP BY p.terminal_id,ps.brand ORDER BY amount DESC',$params);
         $headers=['terminal'=>'دستگاه کارتخوان','receipt_count'=>'تعداد تراکنش','amount'=>'مبلغ'];$money=['amount'];break;
     case 'operator_performance':
         [$sql,$params]=finance_receipt_scope($tenant,$f);
+        $sql=str_replace(' WHERE p.company_id=?',' LEFT JOIN users u ON u.id=p.created_by
+            AND (u.company_id=p.company_id OR u.role=\'superadmin\') WHERE p.company_id=?',$sql);
         $rows=$execute('SELECT COALESCE(u.full_name,\'نامشخص\') operator_name,
             COUNT(*) receipt_count,
             COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash,
             COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos'
-            .$sql.' LEFT JOIN users u ON u.id=p.created_by AND (u.company_id=p.company_id OR u.role=\'superadmin\')
-            GROUP BY p.created_by,u.full_name ORDER BY (cash+pos) DESC',$params);
+            .$sql.' GROUP BY p.created_by,u.full_name ORDER BY (cash+pos) DESC',$params);
         $headers=['operator_name'=>'اپراتور دریافت‌کننده','receipt_count'=>'تعداد تراکنش','cash'=>'نقدی','pos'=>'کارتخوان'];
         $money=['cash','pos'];break;
     case 'debtors':
