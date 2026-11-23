@@ -90,7 +90,7 @@ function invoice_payment_report(int $tenant,array $filter,int $limit=200): array
 function financial_control_exceptions(int $tenant,array $filter,int $limit=100): array {
     if (!invoice_payment_ledger_ready()) return [];
     $limit=max(1,min(200,$limit));
-    $dateFrom=$filter['date_from']!==''?$filter['date_from']:'2026-01-01';
+    $dateFrom=$filter['date_from']!==''?$filter['date_from']:(new DateTimeImmutable('today'))->modify('-30 days')->format('Y-m-d');
     $dateTo=$filter['date_to']!==''?$filter['date_to']:(new DateTimeImmutable('today'))->format('Y-m-d');
     $toExclusive=(new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
