@@ -88,3 +88,26 @@
 .ranking-track progress::-moz-progress-bar {
   border-radius:100px; background:linear-gradient(90deg,#7156c9,#55c9b9);
 }
+
+/* Group IAM permissions into accessible, space-efficient disclosure sections. */
+.permission-matrix details.permission-group{padding:0;overflow:hidden}
+.permission-matrix details.permission-group>summary{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:13px 14px;cursor:pointer;color:#303c6a;font-weight:850;font-size:13px;
+  line-height:1.75;list-style:none;user-select:none
+}
+.permission-matrix details.permission-group>summary::-webkit-details-marker{display:none}
+.permission-matrix details.permission-group>summary::after{
+  content:'+';font-size:20px;line-height:1;color:#6d5999;flex:none
+}
+.permission-matrix details.permission-group[open]>summary::after{content:'−'}
+.permission-matrix details.permission-group[open]>summary{
+  background:#f1eff9;border-bottom:1px solid #e3e7f0
+}
+.permission-matrix details.permission-group>.choices{padding:10px 12px 12px}
+.permission-matrix details.permission-group>summary:focus-visible{outline:3px solid #8a70bf;outline-offset:-3px}
+@media(max-width:600px){
+ .permission-matrix .permission-groups{gap:8px}
+ .permission-matrix details.permission-group>summary{min-height:46px}
+}
+@media print{.permission-matrix details.permission-group>.choices{display:grid}}
