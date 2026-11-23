@@ -4,9 +4,9 @@ declare(strict_types=1);
 /** All cash-shift writes are isolated within one company and database transaction. */
 function cashbox_ready(): bool {
     static $ready=null;
-    if($ready===null) $ready=database_table_exists('cash_registers')
-        && database_table_exists('cash_shifts')
-        && database_table_exists('cash_shift_adjustments')
+    if($ready===null) $ready=(bool)query("SHOW TABLES LIKE 'cash_registers'")->fetchColumn()
+        && (bool)query("SHOW TABLES LIKE 'cash_shifts'")->fetchColumn()
+        && (bool)query("SHOW TABLES LIKE 'cash_shift_adjustments'")->fetchColumn()
         && invoice_payment_ledger_ready()
         && (bool)query("SHOW COLUMNS FROM invoice_payments LIKE 'cash_shift_id'")->fetch();
     return $ready;
