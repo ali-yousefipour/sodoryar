@@ -1,6 +1,15 @@
 <?php
 declare(strict_types=1);
 
+/** Ordered allowed columns from saved authenticated tenant-user preferences; default all. */
+function finance_preset_visible_columns(int $tenant,string $type,array $headers): array {
+    $saved=user_preferences_all($tenant,(int)user()['id'])['report_columns'][$type]??null;
+    if(!is_array($saved)||!$saved)return $headers;
+    $result=[];
+    foreach($saved as $key)if(is_string($key)&&array_key_exists($key,$headers))$result[$key]=$headers[$key];
+    return $result?:$headers;
+}
+
 function finance_preset_format_value(string $key,mixed $value,array $money,bool $excel=false): string|int {
     if($value===null || $value==='')return '';
     if(in_array($key,$money,true)){
@@ -30,8 +39,9 @@ function finance_preset_export(int $tenant,array $f): never {
     require_permission('reports.export');
     $result=finance_preset_data($tenant,$f,true);
     if(!$result['headers'])throw new RuntimeException($result['message']?:'این گزارش در دسترس نیست.');
-    $keys=array_keys($result['headers']);
-    $columns=array_values($result['headers']);
+    $visibleHeaders=finance_preset_visible_columns($tenant,$f['type'],$result['headers']);
+    $keys=array_keys($visibleHeaders);
+    $columns=array_values($visibleHeaders);
     $numericIndexes=[];
     foreach($keys as $index=>$key)if(in_array($key,$result['money'],true) || in_array($key,['invoice_count','receipt_count','item_count'],true))$numericIndexes[]=$index;
     $rows=[];
@@ -98,16 +108,22 @@ function render_finance_presets(int $tenant): void {
     }
     if($result['message'])echo '<p class="muted">'.e($result['message']).'</p>';
     if(!$result['headers']){echo '</section>';return;}
-    echo '<div class="table-wrap"><table><thead><tr>';
-    foreach($result['headers'] as $title)echo '<th>'.e($title).'</th>';
+    $visibleHeaders=finance_preset_visible_columns($tenant,$f['type'],$result['headers']);
+    echo '<details class="report-column-controls"><summary>انتخاب و ترتیب ستون‌های گزارش</summary><div class="report-column-options" data-report-columns="'.e($f['type']).'">';
+    foreach($result['headers'] as $key=>$title){
+        echo '<label class="choice"><input type="checkbox" value="'.e($key).'"'.(isset($visibleHeaders[$key])?' checked':'').'>'.e($title).'</label>';
+    }
+    echo '<p class="muted">ستون‌های انتخابی برای حساب شما ذخیره و در خروجی Excel نیز اعمال می‌شوند. ترتیب را با حرکت گزینه‌ها تغییر دهید.</p></div></details>';
+    echo '<div class="table-wrap"><table data-report-table="'.e($f['type']).'"><thead><tr>';
+    foreach($visibleHeaders as $title)echo '<th>'.e($title).'</th>';
     echo '</tr></thead><tbody>';
     foreach($result['rows'] as $record){
         echo '<tr>';
-        foreach($result['headers'] as $key=>$title)
+        foreach($visibleHeaders as $key=>$title)
             echo '<td>'.finance_preset_format_value($key,$record[$key]??null,$result['money']).'</td>';
         echo '</tr>';
     }
-    if(!$result['rows'])echo '<tr><td colspan="'.count($result['headers']).'">رکوردی مطابق فیلترهای انتخابی پیدا نشد.</td></tr>';
+    if(!$result['rows'])echo '<tr><td colspan="'.count($visibleHeaders).'">رکوردی مطابق فیلترهای انتخابی پیدا نشد.</td></tr>';
     echo '</tbody></table></div>';
     $page=$f['page'];
     if($page>1){
