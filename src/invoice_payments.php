@@ -27,10 +27,13 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
         if (!in_array($method,['cash','pos'],true)) throw new RuntimeException('روش پرداخت نامعتبر است.');
         $amount=invoice_payment_amount($entry['amount']??'');
         if ($amount>$total-$sum) throw new RuntimeException('مجموع تراکنش‌ها بیشتر از مبلغ فاکتور است.');
+        $terminalValue=trim(ascii_digits((string)($entry['terminal']??'')));
+        if ($terminalValue!=='' && !preg_match('/^[1-9][0-9]{0,18}$/D',$terminalValue)) throw new RuntimeException('شناسه کارتخوان نامعتبر است.');
+        $terminal=$method==='pos' && $terminalValue!==''?(int)$terminalValue:null;
         $tracking=trim(ascii_digits((string)($entry['tracking']??'')));
         $reference=trim(ascii_digits((string)($entry['reference']??'')));
         if (mb_strlen($tracking)>120 || mb_strlen($reference)>120) throw new RuntimeException('شناسه پیگیری یا مرجع طولانی است.');
-        $rows[]=['method'=>$method,'amount'=>$amount,'tracking'=>$method==='pos'?$tracking:'','reference'=>$method==='pos'?$reference:''];
+        $rows[]=['method'=>$method,'amount'=>$amount,'tracking'=>$method==='pos'?$tracking:'','reference'=>$method==='pos'?$reference:'','terminal'=>$terminal];
         $sum+=$amount;
     }
     if (!$allowPartial && $sum!==$total) {
@@ -40,13 +43,17 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
 }
 function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,array $rows): void {
     foreach ($rows as $row) {
-        query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,tracking_number,reference_number,paid_at,created_by) VALUES (?,?,?,?,?,?,NOW(),?)',
-            [$tenant,$invoiceId,$row['method'],$row['amount'],$row['tracking']?:null,$row['reference']?:null,$creator]);
+        $terminal=$row['terminal']??null;
+        if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
+            throw new RuntimeException('کارتخوان انتخاب‌شده معتبر یا متعلق به این شرکت نیست.');
+        }
+        query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by) VALUES (?,?,?,?,?,?,?,NOW(),?)',
+            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator]);
     }
 }
 function get_invoice_payment_rows(int $tenant,int $invoiceId): array {
     if (!invoice_payment_ledger_ready()) return [];
-    return query('SELECT id,payment_method,amount,tracking_number,reference_number,paid_at FROM invoice_payments WHERE company_id=? AND invoice_id=? AND voided_at IS NULL ORDER BY id',
+    return query('SELECT id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at FROM invoice_payments WHERE company_id=? AND invoice_id=? AND voided_at IS NULL ORDER BY id',
         [$tenant,$invoiceId])->fetchAll();
 }
 function invoice_payment_totals(int $tenant,int $invoiceId,int $total): array {
