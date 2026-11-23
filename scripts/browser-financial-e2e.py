@@ -114,6 +114,11 @@ def main() -> None:
 
         manager_a.goto(f"{ORIGIN}/?page=invoices")
         expect(manager_a.locator("#invoiceCreateForm")).to_be_visible()
+        scroll_hints = manager_a.locator(".sd-table-scroll-hint")
+        assert scroll_hints.count() > 0, "Wide invoice table has no scroll guidance"
+        assert any(scroll_hints.nth(i).is_visible() for i in range(scroll_hints.count())), (
+            "Mobile invoice table hides columns without a horizontal scroll hint"
+        )
         manager_a.screenshot(path=str(OUTPUT / "invoices-mobile.png"), full_page=True)
         viewport_width = manager_a.evaluate("window.innerWidth")
         page_width = manager_a.evaluate("document.documentElement.scrollWidth")
