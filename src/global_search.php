@@ -5,13 +5,14 @@ declare(strict_types=1);
 function sodoryar_global_search(int $tenant,string $needle): array {
     $q=mb_substr(trim(ascii_digits($needle)),0,80);
     $result=['customers'=>[],'invoices'=>[],'payments'=>[],'services'=>[]];
-    if (mb_strlen($q)<3 || (preg_match('/^[0-9]+$/D',$q) && mb_strlen($q)<6)) return $result;
+    if (mb_strlen($q)<3 || preg_match('/[%_\\\\]/u',$q)
+        || (preg_match('/^[0-9]+$/D',$q) && mb_strlen($q)<6)) return $result;
     $prefix=$q.'%';
     $contains='%'.$q.'%';
     if (can('customers.view')) {
         $rows=query('SELECT national_code,first_name,last_name FROM customers
-            WHERE company_id=? AND (national_code LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
-            ORDER BY id DESC LIMIT 6',[$tenant,$prefix,$contains,$contains])->fetchAll();
+            WHERE company_id=? AND (national_code LIKE ? OR mobile LIKE ? OR first_name LIKE ? OR last_name LIKE ?)
+            ORDER BY id DESC LIMIT 6',[$tenant,$prefix,$prefix,$contains,$contains])->fetchAll();
         foreach($rows as $row) {
             $result['customers'][]=[
                 'title'=>$row['first_name'].' '.$row['last_name'],
