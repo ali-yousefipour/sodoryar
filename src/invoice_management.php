@@ -104,7 +104,7 @@ function invoice_management_data(int $tenant,array $f): array {
         ' c.first_name,c.last_name,c.national_code,c.mobile,COALESCE(u.full_name,\'—\') operator_name,'.
         ' ('.$paidExpr.') paid_amount,('.$cashCount.') cash_count,('.$posCount.') pos_count,'.
         ' ('.$voidExpr.') is_void,'.
-        ' (SELECT GROUP_CONCAT(DISTINCT it.service_title ORDER BY it.service_title SEPARATOR \u0027، \u0027) FROM invoice_items it WHERE it.company_id=i.company_id AND it.invoice_id=i.id) services'.
+        ' (SELECT GROUP_CONCAT(DISTINCT it.service_title ORDER BY it.service_title SEPARATOR 0xD88C20) FROM invoice_items it WHERE it.company_id=i.company_id AND it.invoice_id=i.id) services'.
         $source.' ORDER BY '.$order.' LIMIT '.(int)$f['size'].' OFFSET '.(int)$offset,$params)->fetchAll();
     return ['summary'=>$summary,'rows'=>$rows,'has_ledger'=>$hasLedger,'page_count'=>max(1,(int)ceil(((int)$summary['invoice_count'])/$f['size']))];
 }
