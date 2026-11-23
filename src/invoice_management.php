@@ -119,24 +119,39 @@ function export_invoice_management(int $tenant): never {
     if ((int)$result['summary']['invoice_count']>10000) {
         throw new RuntimeException('بیش از ۱۰٬۰۰۰ فاکتور با این فیلترها یافت شد؛ بازه را محدود کنید.');
     }
-    $heads=['ردیف','شماره فاکتور','تاریخ شمسی','مشتری','کد ملی','موبایل','شرح خدمات','مبلغ فاکتور (تومان)','دریافتی (تومان)','مانده (تومان)','روش پرداخت','صادرکننده','وضعیت'];
+    $headMap=[
+        'row'=>'ردیف','number'=>'شماره فاکتور','date'=>'تاریخ شمسی','customer'=>'مشتری',
+        'national'=>'کد ملی','mobile'=>'موبایل','services'=>'شرح خدمات',
+        'amount'=>'مبلغ فاکتور (تومان)','paid'=>'دریافتی (تومان)',
+        'remaining'=>'مانده (تومان)','method'=>'روش پرداخت','operator'=>'صادرکننده','status'=>'وضعیت'
+    ];
+    $columnsRaw=$_GET['columns']??'';
+    if (!is_string($columnsRaw) || strlen($columnsRaw)>300) throw new RuntimeException('تنظیمات ستون‌های خروجی معتبر نیست.');
+    $selected=$columnsRaw===''?array_keys($headMap):array_values(array_unique(explode(',',$columnsRaw)));
+    if (!$selected || count($selected)>count($headMap)) throw new RuntimeException('حداقل یک ستون خروجی باید انتخاب شود.');
+    foreach($selected as $column) if (!array_key_exists($column,$headMap)) throw new RuntimeException('ستون خروجی ناشناخته است.');
+    $heads=array_map(static fn($key)=>$headMap[$key],$selected);
     $rows=[];
     foreach($result['rows'] as $i=>$item) {
         $cash=(int)$item['cash_count'];$pos=(int)$item['pos_count'];
         $method=$cash>0 && $pos>0?'ترکیبی':($pos>0?'کارتخوان':'نقدی');
         $amount=(int)$item['total_amount'];$paid=(int)$item['paid_amount'];
         $void=(bool)$item['is_void'];
-        $rows[]=[
-            $i+1,display_financial_reference($item['invoice_number']),
-            jalali_datetime($item['invoice_date']?:$item['created_at'],true),
-            $item['first_name'].' '.$item['last_name'],fa_digits($item['national_code']),
-            fa_digits((string)$item['mobile']),(string)$item['services'],
-            $amount,$paid,max(0,$amount-$paid),
-            $method,$item['operator_name'],
-            $void?'باطل‌شده':($paid>=$amount?'تسویه‌شده':'دارای مانده')
+        $record=[
+            'row'=>$i+1,'number'=>display_financial_reference($item['invoice_number']),
+            'date'=>jalali_datetime($item['invoice_date']?:$item['created_at'],true),
+            'customer'=>$item['first_name'].' '.$item['last_name'],
+            'national'=>fa_digits((string)$item['national_code']),
+            'mobile'=>fa_digits((string)$item['mobile']),'services'=>(string)$item['services'],
+            'amount'=>$amount,'paid'=>$paid,'remaining'=>max(0,$amount-$paid),
+            'method'=>$method,'operator'=>$item['operator_name'],
+            'status'=>$void?'باطل‌شده':($paid>=$amount?'تسویه‌شده':'دارای مانده')
         ];
+        $rows[]=array_map(static fn($key)=>$record[$key],$selected);
     }
-    export_excel_xlsx('sodoryar-invoice-management',$heads,$rows,[0,7,8,9]);
+    $numericColumns=[];
+    foreach($selected as $index=>$column) if (in_array($column,['row','amount','paid','remaining'],true)) $numericColumns[]=$index;
+    export_excel_xlsx('sodoryar-invoice-management',$heads,$rows,$numericColumns);
 }
 
 function render_invoice_management(int $tenant): void {
