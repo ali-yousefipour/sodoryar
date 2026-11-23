@@ -56,6 +56,30 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     return ['summary'=>$total,'rows'=>$rows];
 }
 
+/**
+ * Cash/POS receipts are independent ledger events. Dates use actual paid_at,
+ * not invoice issue date; no join ever multiplies invoice sales totals.
+ */
+function invoice_payment_report(int $tenant,array $filter,int $limit=200): array {
+    if (!database_table_exists('invoice_payments')) return [
+        'summary'=>['transaction_count'=>0,'cash_paid'=>0,'pos_paid'=>0],
+        'rows'=>[]
+    ];
+    $sql=' FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role=\'superadmin\') WHERE p.company_id=? AND p.voided_at IS NULL';
+    $params=[$tenant];
+    if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
+    if (document_scope()==='own') {$sql.=' AND i.user_id=?';$params[]=(int)user()['id'];}
+    if ($filter['date_from']!=='') {$sql.=' AND DATE(p.paid_at)>=?';$params[]=$filter['date_from'];}
+    if ($filter['date_to']!=='') {$sql.=' AND DATE(p.paid_at)<=?';$params[]=$filter['date_to'];}
+    if ($filter['national_code']!=='') {$sql.=' AND c.national_code LIKE ?';$params[]=$filter['national_code'].'%';}
+    if ($filter['invoice_number']!=='') {$sql.=' AND i.invoice_number LIKE ?';$params[]='%'.$filter['invoice_number'].'%';}
+    if ($filter['payment_type']!=='') {$sql.=' AND p.payment_method=?';$params[]=$filter['payment_type'];}
+    if ($filter['user_id']!=='') {$sql.=' AND i.user_id=?';$params[]=(int)$filter['user_id'];}
+    $summary=query('SELECT COUNT(p.id) transaction_count, COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid'.$sql,$params)->fetch();
+    $rows=query('SELECT p.id,p.payment_method,p.amount,p.tracking_number,p.reference_number,p.paid_at,p.terminal_id,i.invoice_number,i.id invoice_id,c.national_code,CONCAT(c.first_name,\' \',c.last_name) customer,COALESCE(u.full_name,\'—\') operator_name'.$sql.' ORDER BY p.paid_at DESC,p.id DESC LIMIT '.(int)$limit,$params)->fetchAll();
+    return ['summary'=>$summary,'rows'=>$rows];
+}
+
 function activity_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id AND (u.company_id=l.company_id OR u.role=\'superadmin\') WHERE l.company_id=?';
     $params=[$tenant];
