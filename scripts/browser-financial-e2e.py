@@ -177,7 +177,11 @@ def main() -> None:
             "Custom invoice item was not included in the browser total"
         )
         manager_a.locator('[data-payment-mode="multi"]').click()
-        manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]').fill("۲۰۰۰۰")
+        payment_amount = manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]')
+        payment_amount.fill("1,5")
+        manager_a.locator(".invoice-submit").click()
+        expect(manager_a.locator("#invoicePaymentError")).to_be_visible()
+        payment_amount.fill("۲۰۰۰۰")
         manager_a.locator("#invoiceAddPayment").click()
         manager_a.locator('#invoiceCreateForm').locator('select[name="payments[1][method]"]').select_option("pos")
         manager_a.locator('#invoiceCreateForm').locator('input[name="payments[1][tracking]"]').fill("CI-INVOICE-POS-2026")
