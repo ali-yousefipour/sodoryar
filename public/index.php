@@ -12,6 +12,7 @@ require __DIR__ . '/_private/src/cashbox.php';
 require __DIR__ . '/_private/src/cashbox_page.php';
 require __DIR__ . '/_private/src/driver_account.php';
 require __DIR__ . '/_private/src/accounting_periods.php';
+require __DIR__ . '/_private/src/service_rates.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -456,8 +457,15 @@ try {
             require_admin(); $title = trim((string)($_POST['title'] ?? ''));
             $price = parse_money_input($_POST['price'] ?? null);
             if ($title==='' || mb_strlen($title)>200 || $price===false) throw new RuntimeException('عنوان و مبلغ معتبر وارد کنید.');
-            query('INSERT INTO services(company_id,title,price) VALUES(?,?,?)',[tenant_id(),$title,$price]);
-            audit('service.create',$title); redirect('services','خدمت ثبت شد.');
+            $tenant=tenant_id();
+            db()->beginTransaction();
+            try {
+                query('INSERT INTO services(company_id,title,price) VALUES(?,?,?)',[$tenant,$title,$price]);
+                register_initial_service_rate($tenant,(int)db()->lastInsertId(),(int)user()['id'],$title,$price);
+                audit('service.create',$title);
+                db()->commit();
+            } catch(Throwable $ex) {db()->rollBack();throw $ex;}
+            redirect('services','خدمت ثبت شد.');
         }
         if ($page === 'services' && $action === 'update') {
             require_admin(); $tenant=tenant_id();
@@ -466,9 +474,14 @@ try {
             $price=parse_money_input($_POST['price']??null);
             $active=isset($_POST['is_active'])?1:0;
             if (!$id || $title==='' || mb_strlen($title)>200 || $price===false) throw new RuntimeException('مشخصات خدمت معتبر نیست.');
-            if (!query('SELECT id FROM services WHERE id=? AND company_id=?',[$id,$tenant])->fetch()) throw new RuntimeException('خدمت به این شرکت تعلق ندارد.');
-            query('UPDATE services SET title=?,price=?,is_active=? WHERE id=? AND company_id=?',[$title,$price,$active,$id,$tenant]);
-            audit('service.update',(string)$id); redirect('services','مشخصات و وضعیت خدمت به‌روزرسانی شد.');
+            db()->beginTransaction();
+            try {
+                update_service_with_rates($tenant,(int)$id,$title,(int)$price,$active,
+                    trim((string)($_POST['effective_from']??'')),trim((string)($_POST['change_reason']??'')),(int)user()['id']);
+                audit('service.update',(string)$id);
+                db()->commit();
+            } catch(Throwable $ex) {db()->rollBack();throw $ex;}
+            redirect('services','مشخصات و وضعیت خدمت به‌روزرسانی شد.');
         }
         if ($page === 'invoices' && $action === 'add') {
             require_permission('invoices.create');
@@ -499,10 +512,7 @@ try {
                 $customer=register_missing_driver($tenant,$national,(array)($_POST['new_driver']??[]),true);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
                 $items=[];
-                if ($selected) {
-                    $marks = implode(',',array_fill(0,count($selected),'?'));
-                    $items = query("SELECT id,title,price FROM services WHERE company_id=? AND is_active=1 AND id IN ($marks)",array_merge([$tenant],$selected))->fetchAll();
-                }
+                if ($selected) $items=effective_service_rows($tenant,$invoiceDate,$selected);
                 if (count($items)!==count($selected)) throw new RuntimeException('یک یا چند خدمت معتبر نیست.');
                 $total = sum_invoice_line_amounts(array_merge($items,$extras));
                 $allowPartial=isset($_POST['allow_partial']) && (string)$_POST['allow_partial']==='1';
@@ -938,7 +948,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <div class="invoice-date-wrap"><label id="invoiceDateLabel">تاریخ فاکتور <span class="invoice-required" aria-hidden="true">*</span></label><div class="jalali-field invoice-date-picker" role="group" aria-labelledby="invoiceDateLabel"><input type="hidden" name="invoice_date" value="<?=e((new DateTimeImmutable('now',new DateTimeZone('Asia/Tehran')))->format('Y-m-d'))?>" data-jalali-iso required><button type="button" class="secondary jalali-picker-button" data-jalali-open aria-label="انتخاب تاریخ فاکتور از تقویم شمسی"></button><button type="button" class="secondary invoice-date-today" data-jalali-today>امروز</button></div><small class="invoice-help">پیش‌فرض: امروز، قابل تغییر از تقویم شمسی</small></div>
 
 </div></section><dialog id="invoiceDriverCreate" class="app-dialog invoice-driver-dialog" data-driver-manual aria-labelledby="invoiceDriverDialogTitle"><div class="invoice-driver-dialog-heading"><h2 id="invoiceDriverDialogTitle">ثبت راننده جدید</h2><p>این کد ملی در بانک مرکزی رانندگان موجود نیست. مشخصات را کامل کنید؛ اطلاعات هنگام ثبت نهایی فاکتور ذخیره می‌شود.</p></div><p class="invoice-driver-code">کد ملی: <strong data-driver-new-national></strong></p><div class="form-grid"><label>نام <span class="invoice-required">*</span><input name="new_driver[first_name]" maxlength="100" data-driver-required autocomplete="off"></label><label>نام خانوادگی <span class="invoice-required">*</span><input name="new_driver[last_name]" maxlength="100" data-driver-required autocomplete="off"></label><label>شماره همراه <span class="invoice-required" aria-hidden="true">*</span><input name="new_driver[mobile]" type="tel" maxlength="15" inputmode="tel" autocomplete="tel" placeholder="۰۹۱۲۳۴۵۶۷۸۹" data-driver-required data-driver-mobile></label><div class="invoice-driver-line-field"><label for="invoiceDriverLineSearch">خط فعالیت <small>(اختیاری)</small></label><input id="invoiceDriverLineSearch" type="search" data-driver-line-search placeholder="جستجوی نام خط…" autocomplete="off" aria-controls="invoiceDriverLineSelect"><select id="invoiceDriverLineSelect" name="new_driver[line_area]" data-driver-line-select aria-label="انتخاب خط فعالیت"><option value="">بدون انتخاب خط</option><?php foreach($invoiceDriverLines as $lineName): ?><option value="<?=e((string)$lineName)?>"><?=e((string)$lineName)?></option><?php endforeach; ?></select><small class="invoice-driver-line-help">فهرست از بانک مرکزی رانندگان دریافت شده است.</small></div></div><div class="dialog-actions"><button class="secondary" type="button" data-driver-dialog-cancel>انصراف</button><button type="button" data-driver-dialog-confirm>تأیید اطلاعات راننده</button></div></dialog>
-<fieldset class="invoice-services invoice-panel" data-invoice-services><legend><span class="invoice-step">۲</span> انتخاب خدمات ارائه‌شده</legend><div class="invoice-service-toolbar"><label for="invoiceServiceSearch" class="invoice-search-label">جستجوی خدمت<input id="invoiceServiceSearch" type="search" placeholder="بخشی از عنوان خدمت را بنویسید…" autocomplete="off" aria-controls="invoiceServiceList" aria-describedby="invoiceServiceCount" data-service-search></label><button type="button" class="secondary invoice-clear-search" data-service-clear hidden>پاک کردن جستجو</button></div><div class="invoice-service-summary"><div class="invoice-service-meta"><span id="invoiceServiceCount" role="status" aria-live="polite" data-service-count></span><strong data-service-selected>۰ خدمت انتخاب شده</strong></div><div class="invoice-total-box" role="status" aria-live="polite" aria-atomic="true"><span>جمع مبلغ خدمات انتخاب‌شده</span><div class="invoice-total-amount"><strong data-service-total>۰</strong><span>تومان</span></div></div></div><div id="invoiceServiceList" class="invoice-service-list"><?php foreach(query('SELECT * FROM services WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll() as $r): ?><label class="invoice-service-option" data-service-option data-service-title="<?=e($r['title'])?>"><input type="checkbox" name="service_ids[]" value="<?=e($r['id'])?>" data-service-price="<?=e($r['price'])?>"><span class="invoice-service-title"><?=e($r['title'])?></span><strong class="invoice-service-price"><?=money($r['price'])?> <small>تومان</small></strong></label><?php endforeach; ?></div><p class="invoice-service-empty" data-service-empty hidden>خدمتی با این عبارت پیدا نشد. عبارت دیگری جستجو کنید.</p><p class="muted invoice-service-help">با Tab بین جستجو و خدمات جابه‌جا شوید و با Space خدمت را انتخاب کنید. انتخاب‌ها با جستجو حذف نمی‌شوند.</p></fieldset>
+<fieldset class="invoice-services invoice-panel" data-invoice-services><legend><span class="invoice-step">۲</span> انتخاب خدمات ارائه‌شده</legend><div class="invoice-service-toolbar"><label for="invoiceServiceSearch" class="invoice-search-label">جستجوی خدمت<input id="invoiceServiceSearch" type="search" placeholder="بخشی از عنوان خدمت را بنویسید…" autocomplete="off" aria-controls="invoiceServiceList" aria-describedby="invoiceServiceCount" data-service-search></label><button type="button" class="secondary invoice-clear-search" data-service-clear hidden>پاک کردن جستجو</button></div><div class="invoice-service-summary"><div class="invoice-service-meta"><span id="invoiceServiceCount" role="status" aria-live="polite" data-service-count></span><strong data-service-selected>۰ خدمت انتخاب شده</strong></div><div class="invoice-total-box" role="status" aria-live="polite" aria-atomic="true"><span>جمع مبلغ خدمات انتخاب‌شده</span><div class="invoice-total-amount"><strong data-service-total>۰</strong><span>تومان</span></div></div></div><div id="invoiceServiceList" class="invoice-service-list"><?php foreach(effective_service_rows((int)$tenant,date('Y-m-d')) as $r): ?><label class="invoice-service-option" data-service-option data-service-title="<?=e($r['title'])?>"><input type="checkbox" name="service_ids[]" value="<?=e($r['id'])?>" data-service-price="<?=e($r['price'])?>"><span class="invoice-service-title"><?=e($r['title'])?></span><strong class="invoice-service-price"><?=money($r['price'])?> <small>تومان</small></strong></label><?php endforeach; ?></div><p class="invoice-service-empty" data-service-empty hidden>خدمتی با این عبارت پیدا نشد. عبارت دیگری جستجو کنید.</p><p class="muted invoice-service-help">با Tab بین جستجو و خدمات جابه‌جا شوید و با Space خدمت را انتخاب کنید. انتخاب‌ها با جستجو حذف نمی‌شوند.</p></fieldset>
 <fieldset class="invoice-panel invoice-extras"><legend><span class="invoice-step">۳</span> خدمات موردی (اختیاری)</legend><p class="muted">برای خدمات موردی، عنوان و مبلغ را وارد کنید؛ این آیتم‌ها به تعرفه‌های ثابت شرکت افزوده نمی‌شوند.</p><div id="extraInvoiceItems" class="stack"></div><button class="secondary" type="button" data-add-invoice-item>+ افزودن آیتم دیگر</button></fieldset>
 <section class="invoice-panel invoice-multipayment" id="invoicePaymentPanel">
 <div class="invoice-panel-heading"><span class="invoice-step">۴</span><div><h2>جزئیات پرداخت فاکتور</h2><p>یک پرداخت یا چند تراکنش نقدی و کارتخوان</p></div></div>
