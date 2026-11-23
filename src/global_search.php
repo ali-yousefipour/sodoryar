@@ -5,7 +5,7 @@ declare(strict_types=1);
 function sodoryar_global_search(int $tenant,string $needle): array {
     $q=mb_substr(trim(ascii_digits($needle)),0,80);
     $result=['customers'=>[],'invoices'=>[],'payments'=>[],'services'=>[]];
-    if (mb_strlen($q)<3 || preg_match('/[%_\\\\]/u',$q)
+    if (mb_strlen($q)<3 || str_contains($q,'%') || str_contains($q,'_') || str_contains($q,chr(92))
         || (preg_match('/^[0-9]+$/D',$q) && mb_strlen($q)<6)) return $result;
     $prefix=$q.'%';
     $contains='%'.$q.'%';
