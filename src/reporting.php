@@ -33,10 +33,27 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     if ($filter['date_to']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))<=?'; $params[]=$filter['date_to']; }
     if ($filter['national_code']!=='') { $sql.=' AND c.national_code LIKE ?'; $params[]=$filter['national_code'].'%'; }
     if ($filter['invoice_number']!=='') { $sql.=' AND i.invoice_number LIKE ?'; $params[]='%'.$filter['invoice_number'].'%'; }
-    if ($filter['payment_type']!=='') { $sql.=' AND i.payment_type=?'; $params[]=$filter['payment_type']; }
+    $ledger=database_table_exists('invoice_payments');
+    if ($filter['payment_type']!=='') {
+        $sql.=$ledger?' AND EXISTS (SELECT 1 FROM invoice_payments pm WHERE pm.company_id=i.company_id AND pm.invoice_id=i.id AND pm.voided_at IS NULL AND pm.payment_method=?)':' AND i.payment_type=?';
+        $params[]=$filter['payment_type'];
+    }
     if ($filter['user_id']!=='') { $sql.=' AND i.user_id=?'; $params[]=(int)$filter['user_id']; }
     $total=query('SELECT COUNT(*) qty,COALESCE(SUM(i.total_amount),0) total '.$sql,$params)->fetch();
     $rows=query('SELECT i.id,i.invoice_number,COALESCE(i.invoice_date, DATE(i.created_at)) AS invoice_date,i.created_at,i.payment_type,i.pos_ref,i.total_amount,c.national_code,CONCAT(c.first_name,\' \',c.last_name) customer,COALESCE(u.full_name,\'—\') operator_name '.$sql.' ORDER BY i.id DESC LIMIT '.(int)$limit,$params)->fetchAll();
+    if ($ledger) {
+        $paySql='SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid, COUNT(p.id) transaction_count FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role=\'superadmin\') WHERE p.voided_at IS NULL AND i.company_id=?';
+        // Apply the exact invoice filters, including tenant and document scope, before payment aggregation.
+        $sourceSql='SELECT i.id,i.company_id '.$sql;
+        $aggregate=query('SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid,COUNT(p.id) transaction_count FROM ('.$sourceSql.') matched JOIN invoice_payments p ON p.invoice_id=matched.id AND p.company_id=matched.company_id AND p.voided_at IS NULL',$params)->fetch();
+        $total=array_merge($total,$aggregate);
+        foreach($rows as &$row) {
+            $parts=query('SELECT payment_method,COUNT(*) qty,SUM(amount) amount FROM invoice_payments WHERE company_id=? AND invoice_id=? AND voided_at IS NULL GROUP BY payment_method',[$tenant,$row['id']])->fetchAll();
+            if(count($parts)>1) $row['payment_type']='mixed';
+            elseif($parts) $row['payment_type']=$parts[0]['payment_method'];
+        }
+        unset($row);
+    }
     return ['summary'=>$total,'rows'=>$rows];
 }
 
