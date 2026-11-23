@@ -143,6 +143,16 @@ def main() -> None:
         expect(extra_price).to_have_value("۱٬۲۳۴٬۵۶۷")
         extra_price.fill("1,5")
         expect(extra_price).to_have_attribute("aria-invalid", "true")
+        expect(extra_price).to_have_value("۱,۵")
+        expect(manager_a.locator(".money-input-error").first).to_be_visible()
+        extra_price.fill("999999999999999")
+        expect(extra_price).to_have_attribute("aria-invalid", "true")
+        assert not re.search(r"[0-9٠-٩]", extra_price.input_value()), (
+            "Over-limit monetary input must not display Latin or Arabic numerals"
+        )
+        extra_price.fill("۱۲۳٬45۶")
+        expect(extra_price).to_have_value("۱۲۳٬۴۵۶")
+        expect(extra_price).not_to_have_attribute("aria-invalid", "true")
         extra_price.fill("1")
         extra_price.press("End")
         extra_price.type(",5")
