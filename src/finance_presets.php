@@ -200,7 +200,7 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
             COUNT(*) receipt_count,
             COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash,
             COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos'
-            .$sql.' GROUP BY p.created_by,u.full_name ORDER BY (cash+pos) DESC',$params);
+            .$sql.' GROUP BY p.created_by,u.full_name ORDER BY SUM(p.amount) DESC',$params);
         $headers=['operator_name'=>'اپراتور دریافت‌کننده','receipt_count'=>'تعداد تراکنش','cash'=>'نقدی','pos'=>'کارتخوان'];
         $money=['cash','pos'];break;
     case 'debtors':
