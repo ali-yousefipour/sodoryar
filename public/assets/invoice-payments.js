@@ -116,3 +116,63 @@ document.addEventListener('DOMContentLoaded',()=>{
   observer.observe(document.getElementById('extraInvoiceItems'),{childList:true});
   reset('cash');
 });
+
+// Audit-preserving correction of an existing invoice's full payment allocation.
+document.addEventListener('DOMContentLoaded',()=>{
+  const ascii=s=>String(s??'').replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632));
+  const raw=s=>ascii(s).replace(/[٬,،\s]/g,'');
+  const valid=s=>/^\d+$/.test(raw(s)) && BigInt(raw(s))>0n;
+  const display=n=>new Intl.NumberFormat('fa-IR').format(n);
+  document.querySelectorAll('form.invoice-payment-replace').forEach(form=>{
+    const list=form.querySelector('[data-edit-payment-list]');
+    const prototype=list.querySelector('[data-edit-payment-row]')?.cloneNode(true);
+    const note=form.querySelector('[data-edit-summary]');
+    const error=form.querySelector('[data-edit-error]');
+    const expected=BigInt(form.dataset.paymentTotal||'0');
+    const renumber=()=>{
+      list.querySelectorAll('[data-edit-payment-row]').forEach((row,i)=>{
+        row.querySelectorAll('[name]').forEach(input=>{input.name=input.name.replace(/payments\[\d+\]/,`payments[${i}]`);});
+      });
+    };
+    const recalc=()=>{
+      let sum=0n,invalid=false;
+      list.querySelectorAll('[data-edit-payment-row]').forEach(row=>{
+        const input=row.querySelector('input[name$="[amount]"]');
+        const number=raw(input.value);
+        if(valid(input.value))sum+=BigInt(number);
+        else invalid=true;
+        row.querySelector('.payment-pos-fields').hidden=row.querySelector('select[name$="[method]"]').value!=='pos';
+      });
+      note.textContent=`جمع پرداخت‌ها: ${display(sum)} تومان | مانده: ${display(expected-sum)} تومان`;
+      return !invalid && sum===expected && list.children.length>0;
+    };
+    form.querySelector('[data-edit-add]').addEventListener('click',()=>{
+      if(!prototype||list.children.length>=50)return;
+      const clone=prototype.cloneNode(true);
+      clone.querySelectorAll('input').forEach(input=>input.value='');
+      clone.querySelectorAll('select').forEach(select=>select.selectedIndex=0);
+      const difference=expected-[...list.querySelectorAll('input[name$="[amount]"]')].reduce((sum,input)=>sum+(valid(input.value)?BigInt(raw(input.value)):0n),0n);
+      clone.querySelector('input[name$="[amount]"]').value=difference>0n?display(difference):'';
+      list.append(clone);renumber();recalc();
+    });
+    list.addEventListener('click',event=>{
+      if(!event.target.closest('[data-edit-remove]'))return;
+      event.target.closest('[data-edit-payment-row]').remove();renumber();recalc();
+    });
+    list.addEventListener('input',()=>{error.hidden=true;recalc();});
+    list.addEventListener('change',recalc);
+    list.addEventListener('focusout',event=>{
+      if(!event.target.matches('input[name$="[amount]"]'))return;
+      if(valid(event.target.value))event.target.value=display(BigInt(raw(event.target.value)));
+    });
+    form.addEventListener('submit',event=>{
+      if(!recalc()){
+        event.preventDefault();error.textContent='جمع پرداخت‌ها باید دقیقاً با مبلغ فاکتور برابر باشد و همه مبالغ مثبت باشند.';error.hidden=false;
+        return;
+      }
+      list.querySelectorAll('input[name$="[amount]"]').forEach(input=>input.value=raw(input.value));
+      const submit=form.querySelector('button[type="submit"]');if(submit)submit.disabled=true;
+    },true);
+    recalc();
+  });
+});
