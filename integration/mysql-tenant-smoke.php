@@ -16,6 +16,7 @@ require dirname(__DIR__).'/src/modules.php';
 require dirname(__DIR__).'/src/reporting.php';
 require dirname(__DIR__).'/src/invoice_payments.php';
 require dirname(__DIR__).'/src/cashbox.php';
+require dirname(__DIR__).'/src/driver_account.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -280,6 +281,18 @@ query('INSERT INTO user_role_assignments(user_id,company_id,role_id) VALUES(?,?,
 $effective=effective_operator_permissions($userA,$companyA);
 integration_assert(in_array('invoices.view',$effective,true),'Company role grant missing');
 integration_assert(!in_array('roles.manage',$effective,true),'Manager permission inherited by operator');
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+$driverFinance=driver_account_data($companyA,$customerA);
+integration_assert((int)$driverFinance['summary']['invoices']>=2,
+    'Driver statement failed to retrieve tenant-owned invoices');
+integration_assert((int)$driverFinance['summary']['invoiced']===(int)$driverFinance['receipts']['paid'],
+    'Driver account double-counted payments or lost transactions');
+$otherTenantAccountRejected=false;
+try {driver_account_data($companyA,$customerB);}
+catch(RuntimeException $expected){$otherTenantAccountRejected=true;}
+integration_assert($otherTenantAccountRejected,'Cross-company driver financial profile was accessible');
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+
 
 query('UPDATE bill_payments SET deleted_at=CURRENT_TIMESTAMP,deleted_by=? WHERE id=? AND company_id=?',[$userA,$billA,$companyA]);
 $deleted=query('SELECT deleted_at,paid_method,ref_code,response_code FROM bill_payments WHERE id=? AND company_id=?',
