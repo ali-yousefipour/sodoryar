@@ -950,16 +950,28 @@ function render_invoices(int $tenant, int $limit): void {
     $voidJoin=database_table_exists('invoice_voids')?' LEFT JOIN invoice_voids v ON v.invoice_id=i.id AND v.company_id=i.company_id':'';
     $own=document_scope()==='own';
     $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.pos_ref,i.invoice_date,i.created_at,c.first_name,c.last_name,'.$voidColumn.' FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id'.$voidJoin.' WHERE i.company_id=?'.($own?' AND i.user_id=?':'').' ORDER BY i.id DESC LIMIT '.(int)$limit,$own?[$tenant,user()['id']]:[$tenant])->fetchAll();
-    echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
+    $paymentsByInvoice=[];
+    $ledger=invoice_payment_ledger_ready();
+    if ($ledger && $rows) {
+        $invoiceIds=array_map(static fn($invoice)=>(int)$invoice['id'],$rows);
+        $placeholders=implode(',',array_fill(0,count($invoiceIds),'?'));
+        $paymentRows=query('SELECT id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at
+            FROM invoice_payments WHERE company_id=? AND voided_at IS NULL AND invoice_id IN ('.$placeholders.')
+            ORDER BY invoice_id,id',array_merge([$tenant],$invoiceIds))->fetchAll();
+        foreach ($paymentRows as $paymentRow) {
+            $paymentsByInvoice[(int)$paymentRow['invoice_id']][]=$paymentRow;
+        }
+    }
+    echo '<div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاکسیران</th><th>مبلغ</th><th>پرداخت</th><th>مانده</th><th>تاریخ</th><th>وضعیت</th><th>جزئیات</th></tr></thead><tbody>';
     foreach($rows as $r) {
         $voided=$r['voided_at']!==null;
-        $actualPayments=get_invoice_payment_rows($tenant,(int)$r['id']);
+        $actualPayments=$paymentsByInvoice[(int)$r['id']]??[];
         $methods=array_unique(array_column($actualPayments,'payment_method'));
         $paidAmount=array_sum(array_map(static fn($payment)=>(int)$payment['amount'],$actualPayments));
-        $balance=max(0,(int)$r['total_amount']-$paidAmount);
+        $balance=$ledger?max(0,(int)$r['total_amount']-$paidAmount):0;
         $payLabel=count($methods)>1?'ترکیبی':(($methods[0]??$r['payment_type'])==='cash'?'نقدی':'کارتخوان');
         $payLabel.=count($actualPayments)>1?' ('.fa_digits((string)count($actualPayments)).' تراکنش)':'';
-        echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.money_toman($voided?0:$balance).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
         if (can('invoices.payment_edit') && !$voided && invoice_followup_ready() && $balance>0) {
             render_invoice_collect_dialog($tenant,(int)$r['id'],$balance);
         }
