@@ -13,6 +13,8 @@ require __DIR__ . '/_private/src/cashbox_page.php';
 require __DIR__ . '/_private/src/driver_account.php';
 require __DIR__ . '/_private/src/accounting_periods.php';
 require __DIR__ . '/_private/src/service_rates.php';
+require __DIR__ . '/_private/src/finance_presets.php';
+require __DIR__ . '/_private/src/finance_presets_ui.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -29,7 +31,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','services','service_rate_history','invoices','invoice_manager','cashbox','periods','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -712,12 +714,16 @@ if ($page==='periods') require_permission('periods.manage');
 if ($page==='invoices' && !can('invoices.view') && !can('invoices.create')) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page==='receipt') require_permission('invoices.view');
 if ($page==='receipt') require_permission('invoices.print');
-if ($page === 'reports') require_permission('reports.view');
+if ($page === 'reports' || $page==='finance_center') require_permission('reports.view');
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
+if ($page==='finance_center' && ($_GET['preset_export']??'')==='excel' && $tenant) {
+    try { finance_preset_export((int)$tenant,finance_preset_input($_GET)); }
+    catch(Throwable $ex) {error_log('Sodoryar finance center export: '.$ex->getCode());$error=public_operation_error($ex);}
+}
 if ($page==='driver_account' && ($_GET['export']??'')==='excel' && $tenant) {
     try { export_driver_account((int)$tenant,(int)($_GET['id']??0)); }
     catch(Throwable $ex) { error_log('Sodoryar driver account export: '.$ex->getCode()); $error=public_operation_error($ex); }
@@ -859,6 +865,7 @@ if ($tenant) {
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
     if (can('bills.view')) $navItems[]=['bills','فیش‌ها و قبوض','invoices','عملیات و صدور'];
     if (can('reports.view')) $navItems[]=['reports','گزارش مالی','reports','گزارش‌ها و نظارت'];
+    if (can('reports.view')) $navItems[]=['finance_center','مرکز گزارش‌های تخصصی','reports','گزارش‌ها و نظارت'];
     if (can('commissions.view')) $navItems[]=['commissions','پورسانت','commissions','گزارش‌ها و نظارت'];
     if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها و نظارت'];
     if (user()['role']!=='operator') {
@@ -979,6 +986,8 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <div class="invoice-payment-summary" aria-live="polite"><span>مبلغ فاکتور: <strong data-payable-total>۰</strong></span><span>جمع دریافتی: <strong data-payment-paid>۰</strong></span><span>مانده: <strong data-payment-remaining>۰</strong></span><span>تعداد تراکنش: <strong data-payment-count>۱</strong></span></div><p id="invoicePaymentError" class="invoice-payment-error" role="alert" hidden></p></section>
 <div class="invoice-form-footer"><p>قبل از ثبت، تاریخ، خدمات و جمع پرداخت‌ها را بررسی کنید.</p><button type="submit" class="invoice-submit">ثبت و صدور فاکتور</button></div></form></div>
 <?php endif; ?><?php if(can('invoices.view')): ?><div class="card invoice-history"><h2>آخرین فاکتورها</h2><?php render_invoices($tenant,50); ?></div><?php endif; ?>
+<?php elseif($page==='finance_center'): ?>
+<?php render_finance_presets((int)$tenant); ?>
 <?php elseif($page==='reports'): ?>
 <h1>گزارش‌گیری پیشرفته</h1><p class="muted">فیلتر براساس تاریخ، کاربر، نوع پرداخت، شماره فاکتور و کد ملی راننده</p>
 <?php render_report_filters('reports',$reportFilter); $reportData=invoice_report($tenant,$reportFilter); ?>
