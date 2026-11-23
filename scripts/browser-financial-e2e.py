@@ -196,6 +196,23 @@ def main() -> None:
         expect(manager_b.get_by_text("فاکتور پیدا نشد.")).to_be_visible()
         assert manager_b.locator(".receipt").count() == 0, "Foreign invoice receipt accessible by ID"
 
+        # Audit menu destinations and responsive disclosure before walking routes.
+        manager_a.goto(f"{ORIGIN}/?page=invoices", wait_until="domcontentloaded")
+        links = manager_a.locator("#primaryNav a.nav-link")
+        assert links.count() >= 10, "Company manager navigation is incomplete"
+        destinations = links.evaluate_all(
+            "(els) => els.map(el => el.getAttribute('href'))"
+        )
+        assert len(destinations) == len(set(destinations)), "Duplicate sidebar destinations"
+        expect(manager_a.locator("#primaryNav .nav-link.active")).to_have_count(1)
+        mobile_menu = manager_a.locator("[data-sidebar-toggle]")
+        mobile_menu.click()
+        expect(mobile_menu).to_have_attribute("aria-expanded", "true")
+        expect(manager_a.locator("#primaryNav")).to_have_class(
+            re.compile("nav-open")
+        )
+        mobile_menu.click()
+        expect(mobile_menu).to_have_attribute("aria-expanded", "false")
         # Authenticated navigation audit across all company-management modules.
         # Every route must render without PHP errors or viewport-wide overflow.
         for route in (
