@@ -29,6 +29,36 @@
   };
   window.sodoryarPrefs={get,save};
   document.addEventListener('DOMContentLoaded',async()=>{
+    const columns=document.querySelector('[data-report-columns]');
+    if(columns){
+      const prefs=await get(),report=columns.dataset.reportColumns;
+      const apply=async()=>{
+        const values=[...columns.querySelectorAll('input[type="checkbox"]:checked')].map(input=>input.value);
+        if(values.length===0){
+          const first=columns.querySelector('input[type="checkbox"]');
+          if(first)first.checked=true;
+          return;
+        }
+        const previous=prefs.report_columns && typeof prefs.report_columns==='object'?prefs.report_columns:{};
+        const next={...previous,[report]:values};
+        const saved=await save('report_columns',next);
+        if(saved)location.reload();
+      };
+      columns.addEventListener('change',()=>apply());
+      columns.addEventListener('click',event=>{
+        const control=event.target.closest('[data-report-col-up],[data-report-col-down]');
+        if(!control)return;
+        const row=control.closest('.report-column-option');
+        if(!row)return;
+        if(control.matches('[data-report-col-up]')&&row.previousElementSibling){
+          row.parentElement.insertBefore(row,row.previousElementSibling);
+          apply();
+        }else if(control.matches('[data-report-col-down]')&&row.nextElementSibling){
+          row.parentElement.insertBefore(row.nextElementSibling,row);
+          apply();
+        }
+      });
+    }
     const favorite=document.querySelector('[data-finance-favorite]');
     const report=favorite?.dataset.financeFavorite;
     if(favorite && report){
