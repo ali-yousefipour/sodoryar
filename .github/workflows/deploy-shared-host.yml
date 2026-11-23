@@ -271,7 +271,7 @@ jobs:
           set net:timeout 60
           set net:reconnect-interval-base 2
           mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
-          mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
+          mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
           bye
           EOF
 
