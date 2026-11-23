@@ -82,6 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
       toolbar.append(searchBox,statusBox,count,limitBox);
     }else toolbar.append(searchBox,count,limitBox);
     wrap.parentNode.insertBefore(toolbar,wrap);
+    // Wide tables are horizontally scrollable. Surface the affordance instead
+    // of silently hiding financial/action columns on narrow screens.
+    const scrollHint=document.createElement('p');
+    scrollHint.className='sd-table-scroll-hint';
+    scrollHint.id=wrap.id+'-scroll-hint';
+    scrollHint.textContent='برای مشاهده ستون‌های بیشتر، جدول را افقی جابه‌جا کنید.';
+    scrollHint.hidden=true;
+    wrap.insertAdjacentElement('afterend',scrollHint);
+    wrap.setAttribute('aria-describedby',scrollHint.id);
+    const refreshScrollHint=()=>{
+      scrollHint.hidden=wrap.scrollWidth<=wrap.clientWidth+2;
+    };
+    if(typeof ResizeObserver!=='undefined'){
+      const tableResizeObserver=new ResizeObserver(refreshScrollHint);
+      tableResizeObserver.observe(wrap);
+      tableResizeObserver.observe(table);
+    }
+    window.addEventListener('resize',refreshScrollHint,{passive:true});
+    requestAnimationFrame(refreshScrollHint);
     const pager=document.createElement('div');
     pager.className='sd-table-pager';
     const prev=document.createElement('button');prev.type='button';prev.className='secondary small';prev.textContent='قبلی';
