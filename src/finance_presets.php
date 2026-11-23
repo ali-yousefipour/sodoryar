@@ -122,6 +122,7 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
     $type=$f['type'];
     $headers=[];$money=[];$rows=[];$message='';
     $limit=$export?10000:200;
+    $offset=$export?0:(($f['page']-1)*$limit);
     [$invoiceSql,$invoiceArgs]=finance_invoice_scope($tenant,$f);
     if(in_array($type,['receipts_daily','receipts_cash','receipts_pos','receipts_mixed','pos_terminals',
       'operator_performance','cashbox_performance','debtors','invoice_balances',
@@ -129,15 +130,18 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
       'approved_cashboxes','period_balances','management_summary'],true) && !invoice_payment_ledger_ready()){
         return ['headers'=>[],'rows'=>[],'money'=>[],'message'=>'گزارش دریافت‌ها نیازمند نصب ساختار دفتر پرداخت (مهاجرت ۰۱۶) است.','total'=>0];
     }
-    $execute=static function(string $sql,array $args)use($limit):array{
-        return query($sql.' LIMIT '.(int)($limit+1),$args)->fetchAll();
+    $execute=static function(string $sql,array $args)use($limit,$offset):array{
+        return query($sql.' LIMIT '.(int)($limit+1).' OFFSET '.(int)$offset,$args)->fetchAll();
     };
     switch($type) {
     case 'sales_daily':
     case 'sales_monthly':
-        $daily=$execute('SELECT COALESCE(i.invoice_date,DATE(i.created_at)) report_date,
+        $dailySql='SELECT COALESCE(i.invoice_date,DATE(i.created_at)) report_date,
              COUNT(*) invoice_count,COALESCE(SUM(i.total_amount),0) amount'.$invoiceSql.'
-             GROUP BY report_date ORDER BY report_date DESC',$invoiceArgs);
+             GROUP BY report_date ORDER BY report_date DESC';
+        $daily=$type==='sales_monthly'
+            ? query($dailySql.' LIMIT 400',$invoiceArgs)->fetchAll()
+            : $execute($dailySql,$invoiceArgs);
         if($type==='sales_monthly'){
             $aggregated=[];
             foreach($daily as $day){
@@ -148,7 +152,7 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
                 $aggregated[$key]['invoice_count']+=(int)$day['invoice_count'];
                 $aggregated[$key]['amount']+=(int)$day['amount'];
             }
-            $rows=array_values($aggregated);
+            $rows=array_slice(array_values($aggregated),$offset,$limit+1);
         }else{$rows=array_map(static fn($r)=>[
             'period'=>$r['report_date'],'invoice_count'=>(int)$r['invoice_count'],'amount'=>(int)$r['amount']],$daily);}
         $headers=['period'=>'دوره','invoice_count'=>'تعداد فاکتور','amount'=>'فروش'];$money=['amount'];
@@ -331,9 +335,11 @@ function finance_preset_data(int $tenant,array $f,bool $export=false): array {
     default:throw new RuntimeException('گزارش تعریف‌نشده است.');
     }
     $total=count($rows);
-    if($total>$limit){
+    $hasMore=$total>$limit;
+    if($hasMore){
+        if($export) throw new RuntimeException('گزارش بیشتر از ۱۰٬۰۰۰ ردیف است؛ بازه را محدود کنید تا خروجی کامل باشد.');
         $rows=array_slice($rows,0,$limit);
-        $message=trim($message.' سقف این گزارش '.fa_digits((string)$limit).' ردیف است؛ برای نتایج بیشتر بازه را محدود کنید.');
     }
-    return compact('headers','rows','money','message','total');
+    return ['headers'=>$headers,'rows'=>$rows,'money'=>$money,'message'=>$message,
+      'total'=>count($rows),'has_more'=>$hasMore];
 }
