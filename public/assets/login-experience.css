@@ -60,3 +60,38 @@ body:has(.login-wrap){background:#f1f4f6;color:#1e3039}
 @media(max-width:340px){.captcha-grid{grid-template-columns:1fr}.captcha-question{min-height:48px}}
 @media(prefers-reduced-motion:reduce){.login-wrap *, .login-wrap *::before,.login-wrap *::after{transition:none!important;animation:none!important}}
 @media(forced-colors:active){.login-layout,.login-card,.login-showcase,.captcha-fieldset{border:1px solid CanvasText}.login-showcase-brand b,.login-showcase h2{color:CanvasText}}
+
+/* Login uses exactly the same brand, type scale and form controls as the workspace. */
+body:has(.login-wrap){font-family:Vazirmatn,Tahoma,Arial,sans-serif;color:#29263f;background:#f5f5fa}
+.login-wrap{font-family:inherit;background:radial-gradient(circle at 90% 10%,#e7e0fa,transparent 37%),radial-gradient(circle at 9% 91%,#dcf1ec,transparent 37%),#f5f5fa}
+.login-layout{border-color:#e1dfeb;box-shadow:0 27px 80px #30284f20,0 3px 16px #30284f09}
+.login-showcase{
+  background:radial-gradient(ellipse at 4% 94%,#278b8052,transparent 48%),
+    linear-gradient(145deg,#56439b 0%,#30284f 63%,#24384f 100%);
+}
+.login-showcase-brand small{font-size:12px;color:#e1dcf2}
+.login-eyebrow{color:#dbf9f1;background:#ffffff19}
+.login-showcase-content>p{font-size:14px;color:#e4dff0}
+.login-features span{font-size:13px}
+.login-card{color:#29263f}
+.login-pill{color:#4f3e89;border-color:#dfd7f2;background:#f4f0fc}
+.login-pill::before{background:#6b56ac}
+.login-card h1{font-size:clamp(26px,2.6vw,33px);color:#30284f}
+.login-card>p.muted{font-size:13px;color:#68677a}
+.login-form label,.login-field>label{font-size:13px;color:#393550;line-height:1.9}
+.login-form .login-input-wrap input{
+  font-family:inherit;font-size:14px;min-height:52px;
+  border-color:#d9d5e5;background:#faf9fc;color:#30284f;
+}
+.login-form .login-input-wrap input:focus{
+  outline:3px solid #dbd2f4;border-color:#7e68b8;box-shadow:none;
+}
+.login-password-toggle{font-family:inherit;font-size:12px;color:#56439b}
+.login-password-toggle:hover{color:#3c2b7b;background:#f5f1fc}
+.captcha-fieldset{background:#fbfaff;border-color:#e2dceb}
+.captcha-fieldset legend{color:#433672;font-size:13px}
+.captcha-question{background:linear-gradient(120deg,#f0eafb,#ecf3f5);border-color:#cab9e9;color:#4b397f}
+.login-form .captcha-answer-label input:focus{outline:3px solid #dbd2f4;border-color:#7e68b8}
+.login-submit{background:#56439b;box-shadow:0 9px 23px #45347b32;font-size:15px}
+.login-submit:hover{background:#42317f;box-shadow:0 11px 25px #45347b3d}
+.login-security-note span{color:#6a58a0}
