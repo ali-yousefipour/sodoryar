@@ -15,6 +15,7 @@ require dirname(__DIR__).'/src/localization.php';
 require dirname(__DIR__).'/src/modules.php';
 require dirname(__DIR__).'/src/reporting.php';
 require dirname(__DIR__).'/src/invoice_payments.php';
+require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
     if (!$result) throw new RuntimeException($message);
@@ -260,6 +261,22 @@ integration_assert((int)$paymentSummary['summary']['transaction_count']===2
     && (int)$paymentSummary['summary']['pos_paid']===1000000
     && count($paymentSummary['rows'])===2,
     'Cash/POS receipt report did not preserve both transactions without double counting.');
+// Management query uses exactly one invoice row even if two receipts exist.
+$managerFilters=invoice_management_filters(['q'=>'CI-MULTI','method'=>'mixed','status'=>'valid','size'=>'20']);
+$managerResult=invoice_management_data($companyA,$managerFilters);
+integration_assert((int)$managerResult['summary']['invoice_count']===1
+    && (int)$managerResult['summary']['invoiced']===1500000
+    && (int)$managerResult['summary']['received']===1500000
+    && (int)$managerResult['summary']['cash_total']===500000
+    && (int)$managerResult['summary']['pos_total']===1000000
+    && count($managerResult['rows'])===1,
+    'Invoice manager duplicated a mixed-payment invoice or aggregated payments incorrectly.');
+$foreignManager=invoice_management_data($companyB,$managerFilters);
+integration_assert((int)$foreignManager['summary']['invoice_count']===0,'Management search leaked another tenant invoice.');
+$badManagerFilter=false;
+try {invoice_management_filters(['sort'=>'id; DROP TABLE invoices']);}
+catch(RuntimeException $ex) {$badManagerFilter=true;}
+integration_assert(invoice_management_filters(['sort'=>'id; DROP TABLE invoices'])['sort']==='date','Untrusted sorting SQL was not rejected.');
 $foreignPaymentRejected=false;
 try {create_invoice_payment_rows($companyB,$multiInvoice,$userB,[['method'=>'cash','amount'=>1,'tracking'=>'','reference'=>'']]);}
 catch (PDOException $ex) {if($ex->getCode()!=='23000')throw $ex;$foreignPaymentRejected=true;}
