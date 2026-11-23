@@ -138,6 +138,10 @@ def main() -> None:
         expect(extra_price).to_have_value("۱٬۲۳۴٬۵۶۷")
         extra_price.fill("1,5")
         expect(extra_price).to_have_attribute("aria-invalid", "true")
+        extra_price.fill("1")
+        extra_price.press("End")
+        extra_price.type(",5")
+        expect(extra_price).to_have_attribute("aria-invalid", "true")
         extra_price.fill("۲۵۰۰۰")
         assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
             "Custom invoice item was not included in the browser total"
