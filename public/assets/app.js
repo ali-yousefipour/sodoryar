@@ -270,6 +270,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       // Invalid amounts stay visible as an error until the user corrects them.
       let hasInvalidAmount=false;
       extraItems?.querySelectorAll('input[name="extra_price[]"]').forEach(field=>{
+        if(field.validity.customError){hasInvalidAmount=true;return;}
         const raw=String(field.value).trim().replace(/[۰-۹]/g,d=>String(d.charCodeAt(0)-1776))
           .replace(/[٠-٩]/g,d=>String(d.charCodeAt(0)-1632));
         const valid=raw==='' || /^[0-9]+$/.test(raw)
