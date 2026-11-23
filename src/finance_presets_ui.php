@@ -54,7 +54,7 @@ function render_finance_presets(int $tenant): void {
     echo '<section class="card financial-report-workspace"><h2>مرکز گزارش‌های تخصصی و مدیریتی</h2>'
         .'<p class="muted">گزارش‌ها مستقل از فاکتورها و دفتر واقعی دریافت‌ها محاسبه می‌شوند؛ تاریخ فروش و تاریخ وصول دو مبنای متفاوت دارند.</p>';
     echo '<form method="get" class="form-grid finance-preset-form">'
-        .'<input type="hidden" name="page" value="reports"><label>نوع گزارش<select name="report_type">';
+        .'<input type="hidden" name="page" value="finance_center"><label>نوع گزارش<select name="report_type">';
     foreach($catalog as $slug=>$title){
         echo '<option value="'.e($slug).'"'.($slug===$f['type']?' selected':'').'>'.e($title).'</option>';
     }
@@ -87,7 +87,7 @@ function render_finance_presets(int $tenant): void {
       .'<button type="submit">ساخت گزارش</button></form>';
     $result=finance_preset_data($tenant,$f);
     $queryParams=[
-        'page'=>'reports','report_type'=>$f['type'],'date_from'=>$f['from'],'date_to'=>$f['to'],
+        'page'=>'finance_center','report_type'=>$f['type'],'date_from'=>$f['from'],'date_to'=>$f['to'],
         'user_id'=>$f['user']??'','terminal_id'=>$f['terminal']??'',
         'payment_type'=>$f['method'],'service'=>$f['service'],
         'amount_min'=>$f['min']??'','amount_max'=>$f['max']??'',
