@@ -208,7 +208,7 @@ def main() -> None:
         expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
         manager_a.locator(".invoice-submit").click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
-        partial_id = re.search(r"[?&]id=(\\d+)", manager_a.url)
+        partial_id = re.search(r"[?&]id=(\d+)", manager_a.url)
         assert partial_id, "Partially paid invoice did not produce a receipt"
         expect(manager_a.locator(".receipt")).to_contain_text("۳۰٬۰۰۰")
         manager_a.goto(f"{ORIGIN}/?page=invoices")
