@@ -195,6 +195,29 @@ def main() -> None:
             if width > viewport + 2:
                 manager_a.screenshot(path=str(OUTPUT / f"route-{route}-overflow.png"), full_page=True)
                 raise AssertionError(f"{route} overflows 390px viewport ({width}px > {viewport}px)")
+        # The categorized settings page must render every original editable
+        # field inside one CSRF-protected form, without exposing new routes.
+        manager_a.goto(f"{ORIGIN}/?page=settings", wait_until="domcontentloaded")
+        expect(manager_a.locator(".settings-workspace")).to_be_visible()
+        expect(manager_a.locator(".settings-index-link")).to_have_count(3)
+        for section in ("settings-company", "settings-commission", "settings-invoice"):
+            expect(manager_a.locator(f"#{section}")).to_be_visible()
+        settings_form = manager_a.locator(".settings-form")
+        expect(settings_form.locator('input[name="csrf"]')).to_have_count(1)
+        for field in (
+            "company_name", "company_phone", "company_website", "company_address",
+            "commission_enabled", "commission_type", "commission_rate",
+            "commission_period", "commission_limit", "commission_over_limit_rate",
+            "currency", "invoice_footer",
+        ):
+            assert settings_form.locator(f'[name="{field}"]').count() == 1, (
+                f"Settings redesign lost the {field} field"
+            )
+        expect(settings_form.locator('button[type="submit"]')).to_be_visible()
+        manager_a.screenshot(path=str(OUTPUT / "settings-mobile.png"), full_page=True)
+        assert manager_a.locator("#primaryNav .nav-link.active").count() == 1, (
+            "Categorized sidebar lost the active route"
+        )
         # Verify the real authenticated workflow at compact mobile, tablet and
         # desktop widths, not just the isolated component fixture.
         for width in (320, 768, 1440):
