@@ -167,7 +167,12 @@ function render_invoice_management(int $tenant): void {
     }
     $data=invoice_management_data($tenant,$f);
     $sum=$data['summary'];$rows=$data['rows'];
-    $url=static fn(array $patch=[])=>'?'.http_build_query(array_merge(['page'=>'invoice_manager'],array_filter($f,static fn($v)=>$v!==''),$patch));
+    $url=static fn(array $patch=[])=>'?'.http_build_query(array_merge(
+        ['page'=>'invoice_manager'],
+        array_filter(array_diff_key($f,['page'=>true]),static fn($v)=>$v!==''),
+        ['p'=>$f['page']],
+        $patch
+    ));
     echo '<section class="manager-heading"><div><h1>مدیریت و گزارش فاکتورها</h1><p class="muted">جستجوی یکپارچه اسناد، ریز دریافت‌ها، وضعیت تسویه و چاپ مجدد</p></div>';
     if (can('invoices.create')) echo '<a class="button-link" href="?page=invoices">+ صدور فاکتور</a>';
     echo '</section>';
