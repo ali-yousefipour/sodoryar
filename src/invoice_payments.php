@@ -13,7 +13,11 @@ function invoice_payment_amount(mixed $value): int {
         throw new RuntimeException('جداکننده‌های سه‌رقمی مبلغ پرداخت نامعتبر است.');
     }
     $digits=str_replace(',', '',$input);
-    if (!preg_match('/^[0-9]{1,19}$/D',$digits) || (float)$digits > PHP_INT_MAX) {
+    $digits=ltrim($digits,'0');
+    $max=(string)PHP_INT_MAX;
+    if ($digits==='' || !preg_match('/^[0-9]+$/D',$digits)
+        || strlen($digits)>strlen($max)
+        || (strlen($digits)===strlen($max) && strcmp($digits,$max)>0)) {
         throw new RuntimeException('مبلغ پرداخت باید عدد صحیح و معتبر باشد.');
     }
     $amount=(int)$digits;
