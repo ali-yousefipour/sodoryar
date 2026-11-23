@@ -314,6 +314,14 @@ document.addEventListener('DOMContentLoaded',()=>{
     unit.textContent=field.dataset.currency||'تومان';
     unit.setAttribute('aria-hidden','true');
     shell.append(unit);
+    // Error is attached to the monetary field, not hidden in a distant total.
+    const message=document.createElement('small');
+    message.className='money-input-error';
+    message.id='money-error-'+Math.random().toString(36).slice(2);
+    message.setAttribute('role','status');
+    message.hidden=true;
+    field.dataset.moneyErrorId=message.id;
+    shell.insertAdjacentElement('afterend',message);
   };
   const formatMoneyField=(field,keepCaret=false,inputEvent=null)=>{
     if(field.dataset.moneyComposing==='1')return;
@@ -334,14 +342,37 @@ document.addEventListener('DOMContentLoaded',()=>{
     const digits=moneyDigits(normalized);
     const inRange=digits.length<=15 && (digits==='' || BigInt(digits)<=100000000000n);
     if((!acceptable&&!autoGroup)||!inRange){
-      field.setCustomValidity('مبلغ را با ارقام صحیح، حداکثر صد میلیارد تومان و بدون اعشار یا جداکننده نامعتبر وارد کنید.');
+      // Never leave a mixed Persian/Latin monetary value on screen.
+      // An over-limit amount is NOT silently truncated into a different price.
+      const localized=previous.replace(/[0-9]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[Number(ch)])
+        .replace(/[٠-٩]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[ch.charCodeAt(0)-1632]);
+      if(!inRange && field.dataset.moneyLastValid!==undefined){
+        field.value=field.dataset.moneyLastValid;
+      }else if(field.value!==localized){
+        field.value=localized;
+      }
+      field.setCustomValidity(!inRange
+        ?'مبلغ بیشتر از سقف مجاز صد میلیارد تومان است؛ رقم‌های اضافی را حذف کنید.'
+        :'مبلغ را بدون اعشار و با جداکننده‌های صحیح سه‌رقمی وارد کنید.');
       field.setAttribute('aria-invalid','true');
+      if(field.dataset.moneyErrorId){
+        const notice=document.getElementById(field.dataset.moneyErrorId);
+        if(notice){notice.textContent=field.validationMessage;notice.hidden=false;}
+        field.setAttribute('aria-describedby',field.dataset.moneyErrorId);
+      }
       return;
     }
     field.setCustomValidity('');
     field.removeAttribute('aria-invalid');
+    field.removeAttribute('aria-describedby');
+    if(field.dataset.moneyErrorId){
+      const notice=document.getElementById(field.dataset.moneyErrorId);
+      if(notice){notice.hidden=true;notice.textContent='';}
+    }
     const before=keepCaret?moneyDigits(previous.slice(0,field.selectionStart??previous.length)).length:0;
-    const formatted=digits?persianMoney.format(BigInt(digits)):'';
+    const formatted=digits?persianMoney.format(BigInt(digits))
+      .replace(/[0-9]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[Number(ch)])
+      .replace(/[٠-٩]/g,ch=>'۰۱۲۳۴۵۶۷۸۹'[ch.charCodeAt(0)-1632]):'';
     if(previous!==formatted)field.value=formatted;
     field.dataset.moneyLastValid=formatted;
     if(keepCaret&&document.activeElement===field){
