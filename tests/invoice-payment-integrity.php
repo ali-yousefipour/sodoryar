@@ -24,4 +24,11 @@ expect_payment_rejection([
 ],200);
 expect_payment_rejection([['method'=>'pos','amount'=>'100','terminal'=>'9999999999999999999']],100);
 expect_payment_rejection([['method'=>'cash','amount'=>'101']],100);
+$partial=invoice_payment_rows([['method'=>'cash','amount'=>'۱٬۰۰۰٬۰۰۰']],5000000,true);
+if ((int)$partial[0]['amount']!==1000000 || invoice_payment_rows([],5000000,true)!==[]) {
+    throw new RuntimeException('Partial or zero-initial invoice payment normalization failed.');
+}
+expect_payment_rejection([['method'=>'cash','amount'=>'۱٬۰۰۰٬۰۰۰']],5000000);
+expect_payment_rejection([['method'=>'cash','amount'=>'۶٬۰۰۰٬۰۰۰']],5000000);
+
 echo "Invoice POS reference and terminal validation passed\n";
