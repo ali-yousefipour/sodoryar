@@ -65,8 +65,8 @@
 .app-shell .sidebar .nav-link{font-size:13px;font-weight:750;line-height:1.85}
 .app-shell .sidebar .nav-section-label{font-size:11px;line-height:1.9;font-weight:800}
 .app-shell .topbar .topbar-title strong{font-size:17px;line-height:1.6}
-.app-shell .main-wrap>.content :where(h1){font-size:23px;line-height:1.55;font-weight:900}
-.app-shell .main-wrap>.content :where(h2){font-size:17px;line-height:1.65;font-weight:850}
+.app-shell .main-wrap>.content :where(.heading h1,.card:not(.receipt):not(.invoice-paper)>h1){font-size:23px;line-height:1.55;font-weight:900}
+.app-shell .main-wrap>.content :where(.heading h2,.card:not(.receipt):not(.invoice-paper)>h2){font-size:17px;line-height:1.65;font-weight:850}
 .app-shell .main-wrap>.content :where(form label,fieldset legend){font-size:13px;line-height:1.9;font-weight:750}
 .app-shell .main-wrap>.content :where(input:not([type=checkbox]):not([type=radio]),select,textarea){
   font-family:inherit;font-size:14px;line-height:1.75;color:#2e2b45;
@@ -95,7 +95,7 @@
 .app-shell .main-wrap>.content .invoice-extras .extra-invoice-row{align-items:end}
 .app-shell .main-wrap>.content .invoice-extras :where(input,button){min-height:44px}
 @media(max-width:650px){
-  .app-shell .main-wrap>.content :where(h1){font-size:20px}
-  .app-shell .main-wrap>.content :where(h2){font-size:16px}
+  .app-shell .main-wrap>.content :where(.heading h1,.card:not(.receipt):not(.invoice-paper)>h1){font-size:20px}
+  .app-shell .main-wrap>.content :where(.heading h2,.card:not(.receipt):not(.invoice-paper)>h2){font-size:16px}
   .app-shell .main-wrap>.content .invoice-extras .extra-invoice-row{align-items:stretch}
 }
