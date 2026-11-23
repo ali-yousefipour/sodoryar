@@ -65,6 +65,15 @@ def log_in(browser, name: str):
     page.set_viewport_size({"width": 390, "height": 844})
     if name == "ci_manager_a":
         page.screenshot(path=str(OUTPUT / "login-mobile.png"), full_page=True)
+    # Check password reveal and concealment without changing the actual login.
+    toggle = page.locator("[data-login-password-toggle]")
+    expect(toggle).to_be_visible()
+    toggle.click()
+    expect(page.locator("#loginPassword")).to_have_attribute("type", "text")
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+    toggle.click()
+    expect(page.locator("#loginPassword")).to_have_attribute("type", "password")
+    expect(toggle).to_have_attribute("aria-pressed", "false")
     figures = page.locator("#captchaQuestion span").all_text_contents()
     if len(figures) < 3:
         raise AssertionError("PHP login CAPTCHA did not render")
