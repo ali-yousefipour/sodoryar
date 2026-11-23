@@ -165,6 +165,9 @@ function money_toman(int|string $amount): string {
 function ui_value(mixed $value, string $key=''): string {
     $value=(string)($value??'');
     $key=strtolower($key);
+    if (in_array($key,['details','invoice_number','tracking_number','reference_number','bill_id','ref_code'],true)) {
+        return display_financial_reference($value);
+    }
     if ($key==='period_key' && preg_match('/^1[34]\\d{2}-\\d{2}(?:-\\d{2})?$/',$value)) return fa_digits(str_replace('-','/',$value));
     $dateFields=['created_at','updated_at','deleted_at','archived_at','invoice_date','payment_date','paid_at','issued_at','approved_at','expires_at','due_date','date','timestamp','start_date','end_date','from_date','to_date'];
     if ((in_array($key,$dateFields,true) || preg_match('/(?:_date|_at)$/',$key))

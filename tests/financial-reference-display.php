@@ -12,6 +12,12 @@ foreach ([
         throw new RuntimeException('Financial identifier display mismatch: '.$input);
     }
 }
+foreach (['details','invoice_number','tracking_number','reference_number','bill_id','ref_code'] as $key) {
+    if (ui_value('20261123125218-eeb328b5',$key)!=='20261123125218-eeb328b5'
+        || ui_value('12345',$key)!=='۱۲۳۴۵') {
+        throw new RuntimeException('Shared table renderer corrupted reference field: '.$key);
+    }
+}
 $module=(string)file_get_contents(dirname(__DIR__).'/src/modules.php');
 if (!str_contains($module,"display_financial_reference(\$bill['bill_id'])")
     || !str_contains($module,"display_financial_reference(\$bill['ref_code'])")) {
