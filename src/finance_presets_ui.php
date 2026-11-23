@@ -110,8 +110,12 @@ function render_finance_presets(int $tenant): void {
     if(!$result['headers']){echo '</section>';return;}
     $visibleHeaders=finance_preset_visible_columns($tenant,$f['type'],$result['headers']);
     echo '<details class="report-column-controls"><summary>انتخاب و ترتیب ستون‌های گزارش</summary><div class="report-column-options" data-report-columns="'.e($f['type']).'">';
-    foreach($result['headers'] as $key=>$title){
-        echo '<label class="choice"><input type="checkbox" value="'.e($key).'"'.(isset($visibleHeaders[$key])?' checked':'').'>'.e($title).'</label>';
+    $orderedHeaderKeys=array_unique(array_merge(array_keys($visibleHeaders),array_keys($result['headers'])));
+    foreach($orderedHeaderKeys as $key){
+        $title=$result['headers'][$key];
+        echo '<div class="report-column-option"><label class="choice"><input type="checkbox" value="'.e($key).'"'.(isset($visibleHeaders[$key])?' checked':'').'>'.e($title).'</label>'
+            .'<button type="button" class="secondary small" data-report-col-up aria-label="جابجایی ستون به بالا">↑</button>'
+            .'<button type="button" class="secondary small" data-report-col-down aria-label="جابجایی ستون به پایین">↓</button></div>';
     }
     echo '<p class="muted">ستون‌های انتخابی برای حساب شما ذخیره و در خروجی Excel نیز اعمال می‌شوند. ترتیب را با حرکت گزینه‌ها تغییر دهید.</p></div></details>';
     echo '<div class="table-wrap"><table data-report-table="'.e($f['type']).'"><thead><tr>';
