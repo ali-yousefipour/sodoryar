@@ -83,6 +83,64 @@ function invoice_payment_report(int $tenant,array $filter,int $limit=200): array
     return ['summary'=>$summary,'rows'=>$rows];
 }
 
+/**
+ * Tenant-scoped financial control exceptions.
+ * Never claim a bank settlement is verified: POS entries are operator declarations.
+ */
+function financial_control_exceptions(int $tenant,array $filter,int $limit=100): array {
+    if (!invoice_payment_ledger_ready()) return [];
+    $limit=max(1,min(200,$limit));
+    $dateFrom=$filter['date_from']!==''?$filter['date_from']:'2026-01-01';
+    $dateTo=$filter['date_to']!==''?$filter['date_to']:(new DateTimeImmutable('today'))->format('Y-m-d');
+    $toExclusive=(new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
+    $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
+    $issues=[];
+    $overpaid=query(
+        'SELECT i.id,i.invoice_number,i.total_amount,COALESCE(SUM(p.amount),0) paid
+         FROM invoices i JOIN invoice_payments p ON p.invoice_id=i.id AND p.company_id=i.company_id AND p.voided_at IS NULL
+         WHERE i.company_id=? AND i.invoice_date>=? AND i.invoice_date<?'.$scope.'
+         GROUP BY i.id,i.invoice_number,i.total_amount HAVING paid>i.total_amount
+         ORDER BY i.id DESC LIMIT '.(int)$limit,
+        [$tenant,$dateFrom,$toExclusive]
+    )->fetchAll();
+    foreach ($overpaid as $row) {
+        $issues[]=['kind'=>'دریافت مازاد','invoice'=>$row['invoice_number'],
+            'detail'=>'دریافتی '.money_toman($row['paid']).' در برابر مبلغ فاکتور '.money_toman($row['total_amount'])];
+    }
+    $missingTracking=query(
+        'SELECT i.invoice_number,p.id,p.amount FROM invoice_payments p
+         JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
+         WHERE p.company_id=? AND p.payment_method=\'pos\' AND p.voided_at IS NULL
+           AND (p.tracking_number IS NULL OR p.tracking_number=\'\')
+           AND p.paid_at>=? AND p.paid_at<?'.$scope.'
+         ORDER BY p.id DESC LIMIT '.(int)$limit,
+        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
+    )->fetchAll();
+    foreach ($missingTracking as $row) {
+        $issues[]=['kind'=>'بدون شماره پیگیری کارتخوان','invoice'=>$row['invoice_number'],
+            'detail'=>'شناسه دریافت: '.fa_digits((string)$row['id']).'، مبلغ: '.money_toman($row['amount'])];
+    }
+    $duplicates=query(
+        'SELECT i.invoice_number,p.id,p.tracking_number,p.terminal_id
+         FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
+         JOIN (SELECT company_id,terminal_id,tracking_number
+               FROM invoice_payments WHERE company_id=? AND payment_method=\'pos\' AND voided_at IS NULL
+                 AND tracking_number IS NOT NULL AND tracking_number<>\'\'
+                 AND paid_at>=? AND paid_at<?
+               GROUP BY company_id,terminal_id,tracking_number HAVING COUNT(*)>1) d
+             ON d.company_id=p.company_id AND d.terminal_id <=> p.terminal_id
+             AND d.tracking_number=p.tracking_number
+         WHERE p.company_id=? AND p.voided_at IS NULL'.$scope.'
+         ORDER BY p.id DESC LIMIT '.(int)$limit,
+        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00',$tenant]
+    )->fetchAll();
+    foreach ($duplicates as $row) {
+        $issues[]=['kind'=>'شماره پیگیری تکراری','invoice'=>$row['invoice_number'],
+            'detail'=>'کارتخوان '.fa_digits((string)($row['terminal_id']??'نامشخص')).'، پیگیری '.display_financial_reference($row['tracking_number'])];
+    }
+    return $issues;
+}
+
 function activity_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id AND (u.company_id=l.company_id OR u.role=\'superadmin\') WHERE l.company_id=?';
     $params=[$tenant];
