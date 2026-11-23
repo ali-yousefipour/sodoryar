@@ -293,7 +293,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
     clear.addEventListener('click',()=>{search.value='';updateServices();search.focus();});
     servicePicker.addEventListener('change',event=>{if(event.target.matches('input[type="checkbox"]'))updateServices();});
-    extraItems?.addEventListener('input',updateServices);
+    // The delegated money formatter runs on document after this container
+    // listener; recompute the total once the formatted value is canonical.
+    extraItems?.addEventListener('input',()=>queueMicrotask(updateServices));
     updateServices();
   }
   // Toman inputs accept localized digits and display grouped Persian numbers.
