@@ -67,8 +67,14 @@ function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,arr
         if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
             throw new RuntimeException('کارتخوان انتخاب‌شده معتبر یا متعلق به این شرکت نیست.');
         }
-        query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by) VALUES (?,?,?,?,?,?,?,NOW(),?)',
-            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator]);
+        $cashShift=function_exists('cashbox_active_shift')?cashbox_active_shift($tenant,$creator):null;
+        if ($cashShift!==null) {
+            query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,cash_shift_id) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
+                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$cashShift]);
+        } else {
+            query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by) VALUES (?,?,?,?,?,?,?,NOW(),?)',
+                [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator]);
+        }
     }
 }
 function get_invoice_payment_rows(int $tenant,int $invoiceId): array {
@@ -101,7 +107,13 @@ function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $
             [$tenant,$invoiceId,'pos',$terminal,$row['tracking']])->fetch();
         if ($duplicate) throw new RuntimeException('شماره پیگیری این کارتخوان قبلاً برای فاکتور ثبت شده است.');
     }
-    query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
-        [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key]);
+    $cashShift=function_exists('cashbox_active_shift')?cashbox_active_shift($tenant,$creator):null;
+    if ($cashShift!==null) {
+        query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key,cash_shift_id) VALUES (?,?,?,?,?,?,?,NOW(),?,?,?)',
+            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key,$cashShift]);
+    } else {
+        query('INSERT INTO invoice_payments (company_id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key) VALUES (?,?,?,?,?,?,?,NOW(),?,?)',
+            [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']?:null,$row['reference']?:null,$creator,$key]);
+    }
     return (int)db()->lastInsertId();
 }
