@@ -7,6 +7,7 @@ require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/invoice_payments.php';
 require __DIR__ . '/_private/src/invoice_management.php';
+require __DIR__ . '/_private/src/global_search.php';
 require __DIR__ . '/_private/src/default_services.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
@@ -23,7 +24,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','invoice_manager','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','services','invoices','invoice_manager','reports','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -46,6 +47,35 @@ if ($page==='template_logo') {
     header('Content-Type: '.(str_ends_with($path,'.png')?'image/png':'image/jpeg'));
     header('X-Content-Type-Options: nosniff'); header('Cache-Control: private, no-store');
     readfile($path); exit;
+}
+if ($page==='global_search') {
+    require_login();
+    if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    $q=trim((string)($_GET['q']??''));
+    if (mb_strlen($q)>80) { http_response_code(422); echo '{"error":"عبارت جستجو طولانی است."}'; exit; }
+    $now=time();
+    if ($now-(int)($_SESSION['global_search_started']??0)>=60) {
+        $_SESSION['global_search_started']=$now;
+        $_SESSION['global_search_count']=0;
+    }
+    if ((int)($_SESSION['global_search_count']??0)>=40) {
+        http_response_code(429); header('Retry-After: 60');
+        echo json_encode(['error'=>'تعداد جستجوها زیاد است.'],JSON_UNESCAPED_UNICODE); exit;
+    }
+    $_SESSION['global_search_count']=(int)($_SESSION['global_search_count']??0)+1;
+    if (is_super() && empty($_SESSION['selected_company'])) {
+        echo json_encode(['customers'=>[],'invoices'=>[],'payments'=>[],'services'=>[]],JSON_UNESCAPED_UNICODE); exit;
+    }
+    try {
+        echo json_encode(sodoryar_global_search(tenant_id(),$q),JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+    } catch(Throwable $ex) {
+        error_log('Sodoryar global search: '.$ex->getCode());
+        http_response_code(503);
+        echo json_encode(['error'=>'امکان اجرای جستجو در حال حاضر وجود ندارد.'],JSON_UNESCAPED_UNICODE);
+    }
+    exit;
 }
 if ($page==='driver_lookup') {
     require_login(); tenant_id();
@@ -796,7 +826,12 @@ $navGroup=null;
 <?php if(is_super() && $tenant): ?><form method="post" class="return-global"><?=csrf_field()?><input type="hidden" name="action" value="leave_company"><button class="sidebar-action" type="submit" title="بازگشت به مدیریت کل" aria-label="بازگشت به مدیریت کل"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#back"></use></svg><span>بازگشت به مدیریت کل</span></button></form><?php endif; ?>
 <form method="post" class="logout"><?=csrf_field()?><input type="hidden" name="action" value="logout"><button formaction="?page=logout" class="sidebar-action sidebar-logout" title="خروج از حساب" aria-label="خروج از حساب"><svg class="nav-icon" aria-hidden="true" focusable="false"><use href="assets/sidebar-icons.svg#logout"></use></svg><span>خروج از حساب</span></button></form></div></aside>
 <?php $activeNavLabel='داشبورد'; foreach($navItems as [$navPage,$navLabel]) { if($navPage===$page){$activeNavLabel=$navLabel;break;} } ?>
-<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>صدوریار / <?=e($companyName ?: 'مدیریت کل')?></small><strong><?=e($activeNavLabel)?></strong></div></div><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=my_photo" alt="تصویر پروفایل" width="38" height="38"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
+<div class="main-wrap"><header class="topbar"><div class="topbar-identity"><img class="topbar-brand-icon" src="assets/sodoryar-logo.png" alt="نشان صدوریار" width="43" height="43"><div class="topbar-title"><small>صدوریار / <?=e($companyName ?: 'مدیریت کل')?></small><strong><?=e($activeNavLabel)?></strong></div></div><?php if($tenant): ?><button type="button" class="global-search-trigger secondary" data-global-search-open aria-keyshortcuts="Control+K" title="جستجوی سراسری (Ctrl+K)">جستجوی سراسری <small>Ctrl+K</small></button><?php endif; ?><a class="user-chip" href="?page=profile"><span class="avatar"><?php if(user_photo_table_ready() && query('SELECT 1 FROM user_photos WHERE user_id=?',[user()['id']])->fetchColumn()): ?><img src="?page=my_photo" alt="تصویر پروفایل" width="38" height="38"><?php else: ?><?=e(mb_substr(user()['full_name'],0,1))?><?php endif; ?></span><span><b><?=e(user()['full_name'])?></b><small><?=e(['superadmin'=>'مدیر کل','company_admin'=>'مدیر شرکت','operator'=>'اپراتور'][user()['role']])?></small></span></a></header>
+<?php if($tenant): ?><dialog id="globalSearchDialog" class="app-dialog global-search-dialog" aria-label="جستجوی سراسری">
+<div class="global-search-head"><label for="globalSearchInput">جستجو در رانندگان، فاکتورها، دریافت‌ها و خدمات</label><button type="button" class="secondary" data-global-search-close aria-label="بستن">بستن</button></div>
+<input id="globalSearchInput" type="search" autocomplete="off" placeholder="حداقل ۳ نویسه؛ برای شماره‌ها حداقل ۶ رقم" aria-controls="globalSearchResults">
+<div id="globalSearchResults" class="global-search-results" role="status" aria-live="polite">عبارت مورد نظر را وارد کنید.</div>
+</dialog><?php endif; ?>
 <main class="content" id="mainContent" tabindex="-1">
 <?php if($flash): ?><div class="alert success"><?=e($flash)?></div><?php endif; ?>
 <?php if(isset($error)): ?><div class="alert error"><?=e($error)?></div><?php endif; ?>
@@ -952,7 +987,7 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php render_module($page,(int)$tenant); ?>
 <?php endif; ?>
 </main></div></div>
-<?php endif; ?><?php if ($page==='login'): ?><script src="assets/login-ui.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-ui.js'),0,16))?>" defer></script><?php endif; ?><script src="assets/app.js?v=<?=e((string)filemtime(__DIR__.'/assets/app.js'))?>" defer></script><script src="assets/table-experience.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/table-experience.js'),0,16))?>" defer></script><script src="assets/report-progress.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/report-progress.js'),0,16))?>" defer></script></body></html>
+<?php endif; ?><?php if ($page==='login'): ?><script src="assets/login-ui.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-ui.js'),0,16))?>" defer></script><?php endif; ?><script src="assets/app.js?v=<?=e((string)filemtime(__DIR__.'/assets/app.js'))?>" defer></script><script src="assets/global-search.js?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.js'))?>" defer></script><script src="assets/table-experience.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/table-experience.js'),0,16))?>" defer></script><script src="assets/report-progress.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/report-progress.js'),0,16))?>" defer></script></body></html>
 <?php
 function render_invoices(int $tenant, int $limit): void {
     require_permission('invoices.view');
