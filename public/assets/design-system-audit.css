@@ -1,0 +1,76 @@
+/* Shared Sodoryar design tokens — preserve existing purple corporate identity. */
+:root{
+  --sd-brand:#56439b;--sd-deep:#30284f;--sd-paper:#f5f6fa;
+  --sd-ink:#29253f;--sd-muted:#6d6980;--sd-border:#dfe2eb;
+  --sd-focus:#7059b5;--sd-success:#16836d;--sd-warning:#9c640c;--sd-danger:#ae334e;
+  --sd-control-height:44px;--sd-radius:12px;
+  --primary:var(--sd-brand);--dark:var(--sd-deep);--line:var(--sd-border);
+  --muted:var(--sd-muted)
+}
+body,.login-wrap,.app-shell{font-family:Vazirmatn,Tahoma,sans-serif}
+button,input,select,textarea{font-family:inherit}
+.app-shell>.sidebar{gap:7px;padding-block:12px}
+.sidebar nav#primaryNav{gap:2px;padding-bottom:5px}
+.sidebar nav#primaryNav .nav-link{min-height:40px;max-height:none;padding:5px 9px;margin-bottom:2px;gap:9px;font-size:13px}
+.sidebar nav#primaryNav .nav-link .nav-icon{width:28px;height:28px;min-width:28px;padding:5px}
+.sidebar .nav-section-label{padding:9px 10px 4px;line-height:1.5}
+.app-shell .sidebar .brand{min-height:62px;padding:7px}
+.sidebar-search-field{min-height:40px}
+.sidebar-search-field input[type=search]{min-height:37px}
+.app-shell .sidebar .sidebar-action{min-height:40px}
+@media(min-width:901px){
+ .app-shell.sidebar-is-collapsed>.sidebar nav#primaryNav .nav-link{min-height:40px}
+ .app-shell.sidebar-is-collapsed>.sidebar nav#primaryNav .nav-link .nav-icon{width:28px;height:28px;flex-basis:28px;padding:5px}
+}
+@media(max-width:900px){
+ .sidebar nav#primaryNav .nav-link{min-height:44px}
+}
+.content :is(button,.button-link),.login-card :is(button,input){font-family:inherit}
+.content input:not([type=checkbox]),.content select,.content textarea{min-height:var(--sd-control-height);border-radius:var(--sd-radius)}
+.content :is(input,textarea,select,button,a):focus-visible,
+.login-card :is(input,button):focus-visible{outline:3px solid #9b8bce!important;outline-offset:2px}
+.content .table-wrap th{position:sticky;top:0;z-index:1}
+.app-dialog{overflow-y:auto;max-height:90dvh}
+/* Login uses the exact enterprise color family as the internal sidebar/dashboard. */
+body:has(.login-wrap){background:var(--sd-paper);color:var(--sd-ink)}
+.login-wrap{background:radial-gradient(circle at 85% 15%,#e4dff5 0,transparent 40%),var(--sd-paper)}
+.login-layout{border-color:var(--sd-border);box-shadow:0 24px 75px #30284f22}
+.login-showcase{background:radial-gradient(ellipse at 8% 100%,#7e6db463,transparent 49%),linear-gradient(155deg,#51418e,#30284f 68%,#23203b)}
+.login-eyebrow{color:#f2eaff}
+.login-eyebrow::before{background:#9de6d9;box-shadow:0 0 0 4px #9de6d926}
+.login-showcase-content>p,.login-showcase-brand small{color:#e4dff4}
+.login-features span::before{background:#8c77bd44;color:#ffffff}
+.login-form .login-input-wrap input{background:#fbfaff;color:var(--sd-ink);border-color:var(--sd-border)}
+.login-form .login-input-wrap input:focus{border-color:var(--sd-focus);outline-color:#9b8bce80;box-shadow:0 0 0 4px #9b8bce22}
+.login-card h1{color:var(--sd-deep)}
+.login-card>p.muted{color:var(--sd-muted)}
+.login-form label{color:var(--sd-ink)}
+.login-pill{color:var(--sd-brand);background:#f1eef9;border-color:#dfd8f2}
+.login-pill::before{background:#6f58b2}
+.login-form .captcha-answer-label input:focus{border-color:var(--sd-focus);outline-color:#9b8bce80}
+.login-submit{background:linear-gradient(130deg,#7059b5,#514096);color:#fff}
+.login-submit:hover{background:linear-gradient(130deg,#624ba9,#40317f)}
+.login-password-toggle{color:var(--sd-brand);border-color:var(--sd-border)}
+.login-password-toggle:hover{background:#f0edf8;color:var(--sd-deep)}
+.login-form .login-input-wrap>svg{color:var(--sd-muted)}
+/* Dedicated invoice-management desktop table / mobile scroll surface. */
+.manager-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.manager-heading h1{margin:0;font-size:clamp(20px,2vw,27px);color:var(--sd-deep)}
+.manager-heading p{margin:3px 0 0}
+.content .manager-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
+.manager-filters .form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-items:end}
+.manager-filters label{display:grid;gap:5px}
+.manager-filters .jalali-field{display:flex;gap:4px;flex-wrap:wrap}
+.manager-filters .jalali-field button{font-size:12px}
+.manager-results .heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.manager-results .table-wrap{max-height:min(70dvh,900px);overflow:auto}
+.manager-results table{min-width:1300px}
+.manager-results th{white-space:nowrap}
+.manager-results td{vertical-align:middle}
+.manager-secondary{display:block;color:var(--sd-muted);font-size:11px;direction:ltr;text-align:right}
+.manager-service{max-width:220px;overflow-wrap:anywhere}
+.manager-pagination{display:flex;gap:12px;align-items:center;justify-content:center;padding:17px 0 3px}
+.manager-pagination .button-link{min-height:38px;display:inline-flex;align-items:center;padding:7px 14px}
+@media(max-width:1100px){.manager-filters .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.content .manager-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.manager-filters .form-grid{grid-template-columns:1fr}.manager-heading .button-link{width:100%;text-align:center}}
+@media print{.manager-filters,.manager-pagination,.manager-heading .button-link{display:none!important}}
