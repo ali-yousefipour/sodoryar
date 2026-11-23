@@ -32,8 +32,16 @@ document.addEventListener('DOMContentLoaded',()=>{
       const rates=new Map(json.services.map(item=>[String(item.id),item]));
       for(const option of options){
         const input=option.querySelector('input[type="checkbox"]');
+        if(!input)continue;
         const row=rates.get(input.value);
-        if(!row)continue;
+        if(!row){
+          input.checked=false;
+          input.disabled=true;
+          option.hidden=true;
+          continue;
+        }
+        input.disabled=false;
+        option.hidden=false;
         const amount=String(row.price);
         if(!/^\d+$/.test(amount))throw new Error('invalid amount');
         input.dataset.servicePrice=amount;
