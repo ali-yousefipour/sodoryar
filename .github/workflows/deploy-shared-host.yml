@@ -68,6 +68,10 @@ jobs:
           coverage: none
       - name: Verify migrations and two-company financial isolation
         run: php integration/mysql-tenant-smoke.php
+      - name: Install MariaDB client for isolated backup and recovery verification
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client
+      - name: Verify complete restore and financial checksums on disposable database
+        run: bash scripts/verify-disposable-restore.sh
       - name: Set up Python for isolated financial browser E2E
         uses: actions/setup-python@v5
         with:
