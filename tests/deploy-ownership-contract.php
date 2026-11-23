@@ -62,4 +62,15 @@ if (!str_contains($workflow, 'login-experience.css workspace-refresh.css login-u
     || !str_contains($workflow, "grep -Fq 'class=\"login-layout\"'")) {
     throw new RuntimeException('Release must verify both published login CSS bytes and login HTML references.');
 }
+$verifyPrivate=strpos($workflow,'Verify deployed private PHP files match the triggering commit');
+$verifyPublic=strpos($workflow,'Verify deployed application commit manifest');
+if ($verifyPrivate===false || $verifyPublic===false || !($upload<$verifyPrivate && $verifyPrivate<$verifyPublic)
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/_private')
+    || !str_contains($workflow, 'get "_private/src/modules.php"')
+    || !str_contains($workflow, 'get "_private/src/bootstrap.php"')
+    || !str_contains($workflow, 'get "_private/src/localization.php"')
+    || !str_contains($workflow, 'get "_private/src/reporting.php"')
+    || !str_contains($workflow, 'Private PHP file $file does not match the commit after FTP upload.')) {
+    throw new RuntimeException('Deployment must force and read-back-verify private PHP code before claiming success.');
+}
 echo "Release ownership, FTP transport and migration gate contracts passed\n";
