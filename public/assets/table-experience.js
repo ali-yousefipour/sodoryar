@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollHint.id=wrap.id+'-scroll-hint';
     scrollHint.textContent='برای مشاهده ستون‌های بیشتر، جدول را افقی جابه‌جا کنید.';
     scrollHint.hidden=true;
-    wrap.insertAdjacentElement('beforebegin',scrollHint);
+    toolbar.append(scrollHint);
     wrap.setAttribute('aria-describedby',scrollHint.id);
     const refreshScrollHint=()=>{
       scrollHint.hidden=wrap.scrollWidth<=wrap.clientWidth+2;
