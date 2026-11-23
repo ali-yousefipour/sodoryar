@@ -126,8 +126,13 @@ function export_invoice_management(int $tenant): never {
         'remaining'=>'مانده (تومان)','method'=>'روش پرداخت','operator'=>'صادرکننده','status'=>'وضعیت'
     ];
     $columnsRaw=$_GET['columns']??'';
-    if (!is_string($columnsRaw) || strlen($columnsRaw)>300) throw new RuntimeException('تنظیمات ستون‌های خروجی معتبر نیست.');
-    $selected=$columnsRaw===''?array_keys($headMap):array_values(array_unique(explode(',',$columnsRaw)));
+    if (is_array($columnsRaw)) {
+        if (count($columnsRaw)>count($headMap) || !array_is_list($columnsRaw)) throw new RuntimeException('تنظیم ستون‌های خروجی نامعتبر است.');
+        foreach($columnsRaw as $value) if (!is_string($value)) throw new RuntimeException('ستون خروجی نامعتبر است.');
+        $selected=array_values(array_unique($columnsRaw));
+    } elseif (is_string($columnsRaw) && strlen($columnsRaw)<=300) {
+        $selected=$columnsRaw===''?array_keys($headMap):array_values(array_unique(explode(',',$columnsRaw)));
+    } else throw new RuntimeException('تنظیمات ستون‌های خروجی معتبر نیست.');
     if (!$selected || count($selected)>count($headMap)) throw new RuntimeException('حداقل یک ستون خروجی باید انتخاب شود.');
     foreach($selected as $column) if (!array_key_exists($column,$headMap)) throw new RuntimeException('ستون خروجی ناشناخته است.');
     $heads=array_map(static fn($key)=>$headMap[$key],$selected);
