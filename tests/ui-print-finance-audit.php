@@ -14,7 +14,7 @@ $assert(str_contains($index,"mb_strlen(\$ref)>120"),'POS reference maximum lengt
 $assert(str_contains($app,'sum=0n'),'integer precision in invoice preview');
 $assert(str_contains($app,'BigInt(checkbox.dataset.servicePrice'),'fixed service precision');
 $assert(str_contains($app,"input[name=\"extra_price[]\"]"),'ad-hoc items included in preview');
-$assert(str_contains($app,'extraItems?.addEventListener(\'input\',updateServices)'),'live preview of ad-hoc rows');
+$assert(str_contains($app,'extraItems?.addEventListener(\'input\',()=>queueMicrotask(updateServices))'),'live preview of ad-hoc rows');
 $assert(str_contains($app,"submit.setAttribute('aria-busy','true')"),'duplicate submit feedback');
 $assert(str_contains($app,"titleLabel.textContent='عنوان خدمت موردی'"),'visible label for new service');
 $assert(str_contains($ux,'.invoice-extras .extra-invoice-row'),'responsive financial items');
