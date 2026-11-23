@@ -44,7 +44,10 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     if ($ledger) {
         // Apply the exact invoice filters, including tenant and document scope, before payment aggregation.
         $sourceSql='SELECT i.id,i.company_id '.$sql;
-        $aggregate=query('SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid,COUNT(p.id) transaction_count FROM ('.$sourceSql.') matched JOIN invoice_payments p ON p.invoice_id=matched.id AND p.company_id=matched.company_id AND p.voided_at IS NULL',$params)->fetch();
+        $aggregateSql='SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid,COUNT(p.id) transaction_count FROM ('.$sourceSql.') matched JOIN invoice_payments p ON p.invoice_id=matched.id AND p.company_id=matched.company_id AND p.voided_at IS NULL';
+        $aggregateParams=$params;
+        if ($filter['payment_type']!=='') { $aggregateSql.=' AND p.payment_method=?'; $aggregateParams[]=$filter['payment_type']; }
+        $aggregate=query($aggregateSql,$aggregateParams)->fetch();
         $total=array_merge($total,$aggregate);
         foreach($rows as &$row) {
             $parts=query('SELECT payment_method,COUNT(*) qty,SUM(amount) amount FROM invoice_payments WHERE company_id=? AND invoice_id=? AND voided_at IS NULL GROUP BY payment_method',[$tenant,$row['id']])->fetchAll();
