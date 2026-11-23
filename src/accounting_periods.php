@@ -17,6 +17,13 @@ function assert_accounting_date_open(int $tenant,string $date): void {
       [$tenant,$date,$date])->fetch();
     if($closed) throw new RuntimeException('دوره مالی این سند بسته شده است؛ ثبت یا اصلاح مستقیم مجاز نیست.');
 }
+/** Caller must be inside a write transaction; serialize period closing with invoice posting. */
+function accounting_assert_write_open(int $tenant,string $date): void {
+    if(!accounting_periods_ready()) return;
+    if(!db()->inTransaction()) throw new LogicException('Financial period check requires a transaction.');
+    query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+    assert_accounting_date_open($tenant,$date);
+}
 function accounting_lock_period(int $tenant,int $actor,string $jalaliStart,string $jalaliEnd,string $reason): int {
     if(!accounting_periods_ready()) throw new RuntimeException('برای بستن دوره، ابتدا میگرشن ۰۱۹ را اجرا کنید.');
     require_permission('periods.manage');
