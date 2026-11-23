@@ -18,6 +18,7 @@ require dirname(__DIR__).'/src/invoice_payments.php';
 require dirname(__DIR__).'/src/cashbox.php';
 require dirname(__DIR__).'/src/driver_account.php';
 require dirname(__DIR__).'/src/accounting_periods.php';
+require dirname(__DIR__).'/src/service_rates.php';
 require dirname(__DIR__).'/src/invoice_management.php';
 
 function integration_assert(bool $result,string $message): void {
@@ -158,6 +159,9 @@ integration_assert(cashbox_ready(),'Cash-shift migration did not install');
 apply_sql_fixture($root.'/database/migrations/019_financial_period_locks.sql');
 apply_sql_fixture($root.'/database/migrations/019_financial_period_locks.sql');
 integration_assert(accounting_periods_ready(),'Financial periods migration failed');
+apply_sql_fixture($root.'/database/migrations/020_service_rate_history.sql');
+apply_sql_fixture($root.'/database/migrations/020_service_rate_history.sql');
+integration_assert(service_rates_ready(),'Rate version migration failed');
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
 cashbox_add_register($companyA,'CI Cash Register');
 $registerId=(int)query('SELECT id FROM cash_registers WHERE company_id=? AND name=?',[$companyA,'CI Cash Register'])->fetchColumn();
@@ -210,6 +214,25 @@ try {
 } catch (RuntimeException $expected) { $blockedPeriod=true; }
 finally {if(db()->inTransaction())db()->rollBack();}
 integration_assert($blockedPeriod,'A closed financial date permitted another write');
+$tariffService=insert_fixture('INSERT INTO services(company_id,title,price,is_active) VALUES(?,?,?,1)',
+    [$companyA,'CI Dynamic Service',500]);
+register_initial_service_rate($companyA,$tariffService,$managerA,'CI Dynamic Service',500);
+$futureDate=(new DateTimeImmutable('tomorrow'))->format('Y-m-d');
+[$futureY,$futureM,$futureD]=gregorian_to_jalali((int)substr($futureDate,0,4),(int)substr($futureDate,5,2),(int)substr($futureDate,8,2));
+$futureJalali=sprintf('%04d/%02d/%02d',$futureY,$futureM,$futureD);
+db()->beginTransaction();
+try {
+    update_service_with_rates($companyA,$tariffService,'CI Updated Service',750,1,
+        $futureJalali,'CI future-date tariff adjustment',$managerA);
+    db()->commit();
+} catch(Throwable $ex){db()->rollBack();throw $ex;}
+$todayRows=effective_service_rows($companyA,date('Y-m-d'),[$tariffService]);
+$futureRows=effective_service_rows($companyA,$futureDate,[$tariffService]);
+integration_assert((int)$todayRows[0]['price']===500 && $todayRows[0]['title']==='CI Dynamic Service',
+    'Future tariff revision prematurely changed current invoice pricing');
+integration_assert((int)$futureRows[0]['price']===750 && $futureRows[0]['title']==='CI Updated Service',
+    'Effective-date rate lookup failed');
+
 db()->beginTransaction();
 try {accounting_assert_write_open($companyB,'2026-11-21'); db()->commit();}
 catch(Throwable $ex){db()->rollBack();throw $ex;}
