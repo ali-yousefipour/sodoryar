@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(!form||!host)return;
   const add=document.getElementById('invoiceAddPayment');
   const error=document.getElementById('invoicePaymentError');
+  const allowPartial=form.querySelector('#invoiceAllowPartial');
+  const noInitial=form.querySelector('#invoiceNoInitialPayment');
   const format=new Intl.NumberFormat('fa-IR');
   const ascii=s=>String(s||'').replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776)).replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632));
   const normalized=s=>ascii(s).trim().replace(/[٬،]/g,',');
@@ -30,7 +32,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   const refresh=()=>{
     const due=total();
     if(rows.length===1 && !rows[0].manual){rows[0].amount=String(due);const first=host.querySelector('input[name$="[amount]"]');if(first&&document.activeElement!==first)first.value=due>0n?format.format(due):'';}
-    const paid=totalPaid(), remaining=due-paid;
+    if(noInitial?.checked && allowPartial)allowPartial.checked=true;
+    host.querySelectorAll('input,select').forEach(field=>{field.disabled=!!noInitial?.checked;});
+    const paid=noInitial?.checked?0n:totalPaid(), remaining=due-paid;
     host.querySelectorAll('.invoice-payment-row').forEach((card,index)=>{
       const row=rows[index];if(!row)return;
       const method=card.querySelector('select');if(method.value!==row.method)method.value=row.method;
@@ -101,13 +105,17 @@ document.addEventListener('DOMContentLoaded',()=>{
   form.addEventListener('change',event=>{
     if(event.target.closest('[data-service-option],.extra-invoice-row'))refresh();
   });
+  allowPartial?.addEventListener('change',()=>{if(!allowPartial.checked && noInitial?.checked)noInitial.checked=false;refresh();});
+  noInitial?.addEventListener('change',refresh);
   // Capture submit before the existing once-submit handler.
   form.addEventListener('submit',event=>{
     if(event.defaultPrevented)return;
-    const due=total(),paid=totalPaid();
-    if(due<=0n||rows.length===0||rows.some(r=>amount(r.amount)<=0n)||due!==paid){
+    const due=total(),noInitialPayment=!!noInitial?.checked;
+    const paid=noInitialPayment?0n:totalPaid();
+    const invalid=!noInitialPayment && (rows.length===0||rows.some(r=>amount(r.amount)<=0n));
+    if(due<=0n||invalid||paid>due||(!allowPartial?.checked && due!==paid)){
       event.preventDefault();
-      error.textContent=due!==paid?'جمع پرداخت‌ها باید دقیقاً با مبلغ فاکتور برابر باشد.':'مبلغ هر تراکنش باید بیشتر از صفر باشد.';
+      error.textContent=paid>due?'مبلغ دریافتی نمی‌تواند بیشتر از مبلغ فاکتور باشد.':(!allowPartial?.checked && due!==paid?'جمع پرداخت‌ها باید با مبلغ فاکتور برابر باشد.':'مبلغ هر تراکنش باید بیشتر از صفر باشد.');
       error.hidden=false;error.scrollIntoView({block:'nearest',behavior:'smooth'});
       return;
     }
