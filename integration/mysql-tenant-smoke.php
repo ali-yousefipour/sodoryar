@@ -241,6 +241,11 @@ $invalidRejected=false;
 try { invoice_payment_rows([['method'=>'cash','amount'=>'-1']],100); }
 catch (RuntimeException $ex) { $invalidRejected=true; }
 integration_assert($invalidRejected,'Negative payments accepted.');
+$invalidGroupingRejected=false;
+try { invoice_payment_rows([['method'=>'cash','amount'=>'1,5']],15); }
+catch (RuntimeException $ex) { $invalidGroupingRejected=true; }
+integration_assert($invalidGroupingRejected,'Invalid grouped amount 1,5 was silently converted to 15.');
+
 $multiInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?)',
     [$companyA,'CI-MULTI',$customerA,$userA,1500000,'cash','2026-11-22']);
 create_invoice_payment_rows($companyA,$multiInvoice,$userA,$expected);
