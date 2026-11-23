@@ -49,12 +49,23 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
         if ($filter['payment_type']!=='') { $aggregateSql.=' AND p.payment_method=?'; $aggregateParams[]=$filter['payment_type']; }
         $aggregate=query($aggregateSql,$aggregateParams)->fetch();
         $total=array_merge($total,$aggregate);
-        foreach($rows as &$row) {
-            $parts=query('SELECT payment_method,COUNT(*) qty,SUM(amount) amount FROM invoice_payments WHERE company_id=? AND invoice_id=? AND voided_at IS NULL GROUP BY payment_method',[$tenant,$row['id']])->fetchAll();
-            if(count($parts)>1) $row['payment_type']='mixed';
-            elseif($parts) $row['payment_type']=$parts[0]['payment_method'];
+        if($rows){
+            $ids=array_map(static fn($row)=>(int)$row['id'],$rows);
+            $marks=implode(',',array_fill(0,count($ids),'?'));
+            $parts=query('SELECT invoice_id,COUNT(DISTINCT payment_method) method_count,MIN(payment_method) single_method
+                FROM invoice_payments WHERE company_id=? AND voided_at IS NULL AND invoice_id IN ('.$marks.')
+                GROUP BY invoice_id',array_merge([$tenant],$ids))->fetchAll();
+            $methodByInvoice=[];
+            foreach($parts as $part)$methodByInvoice[(int)$part['invoice_id']]=$part;
+            foreach($rows as &$row){
+                $methods=$methodByInvoice[(int)$row['id']]??null;
+                if($methods!==null){
+                    if((int)$methods['method_count']>1)$row['payment_type']='mixed';
+                    else $row['payment_type']=$methods['single_method'];
+                }
+            }
+            unset($row);
         }
-        unset($row);
     }
     return ['summary'=>$total,'rows'=>$rows];
 }
