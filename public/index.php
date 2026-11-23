@@ -916,6 +916,9 @@ if ($tenant) {
     }
 }
 $navItems[]=['profile','پروفایل و امنیت','profile','حساب کاربری'];
+$navCategories=[];
+foreach ($navItems as $item) $navCategories[$item[3]][]=$item;
+$navItems=array_merge(...array_values($navCategories));
 $navGroup=null;
 ?>
 <nav id="primaryNav" aria-label="منوی اصلی صدوریار" data-nav-menu>

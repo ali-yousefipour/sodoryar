@@ -96,6 +96,23 @@ def main() -> None:
         page = browser.new_page(viewport={"width": 360, "height": 800}, device_scale_factor=1)
         errors: list[str] = []
         page.on("pageerror", lambda error: errors.append(str(error)))
+        # A server page must retain all 20 rows; local sorting/search would
+        # misleadingly operate on only this subset of the report.
+        rows = ''.join(f'<tr><td>{i}</td><td>نمونه</td></tr>' for i in range(20))
+        page.set_content('<div class="main-wrap"><main class="content">'
+                         '<div class="table-wrap"><table data-pagination="server">'
+                         '<thead><tr><th>شماره</th><th>شرح</th></tr></thead>'
+                         f'<tbody>{rows}</tbody></table></div></main></div>')
+        page.add_script_tag(content=(ROOT / "public/assets/table-experience.js").read_text(encoding="utf-8"))
+        page.evaluate("document.dispatchEvent(new Event('DOMContentLoaded'))")
+        assert page.locator('tbody tr:visible').count() == 20
+        assert page.locator('.sd-table-toolbar,.sd-table-pager,.sd-sort-button').count() == 0
+        page.locator('table').evaluate("el => el.removeAttribute('data-pagination')")
+        page.evaluate("document.dispatchEvent(new Event('DOMContentLoaded'))")
+        assert page.locator('tbody tr:visible').count() == 15
+        page.get_by_role('button', name='بعدی', exact=True).click()
+        assert page.locator('tbody tr:visible').count() == 5
+        print('PASS: server pagination retains every row; ordinary tables still paginate')
         page.set_content(fixture(), wait_until="load")
         page.add_script_tag(content=(ROOT / "public/assets/app.js").read_text(encoding="utf-8"))
         page.evaluate("document.dispatchEvent(new Event('DOMContentLoaded'))")

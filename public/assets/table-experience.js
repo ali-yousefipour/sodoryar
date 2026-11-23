@@ -25,7 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.main-wrap>.content .table-wrap').forEach((wrap,index)=>{
     if(wrap.closest('.receipt,.invoice-paper,.template-designer,dialog'))return;
     const table=wrap.querySelector(':scope > table');
-    if(!table || table.dataset.tableEnhanced)return;
+    // Server-paged reports already search, sort and count the complete dataset.
+    // Client controls would only operate on the current page and hide its rows.
+    if(!table || table.dataset.tableEnhanced || table.dataset.pagination==='server')return;
     const head=table.tHead?.rows[0],body=table.tBodies[0];
     if(!head||!body)return;
     const rows=[...body.rows].filter(row=>!row.querySelector('.empty-state')&&row.cells.length>1);

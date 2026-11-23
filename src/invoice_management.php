@@ -293,7 +293,7 @@ function render_invoice_management(int $tenant): void {
         echo '</div><div class="filter-actions"><button type="button" class="secondary" data-columns-all>انتخاب همه</button><button type="button" class="secondary" data-columns-reset>پیش‌فرض</button><button type="submit">دریافت Excel نتایج فیلترشده</button></div><p class="muted">کد ملی و شماره همراه در فایل به‌صورت متن نگهداری می‌شوند.</p></form></details>';
     }
     echo '<section class="card manager-results"><div class="heading"><h2>فهرست اسناد</h2><span>'.money($sum['invoice_count']).' نتیجه</span></div>';
-    echo '<div class="table-wrap"><table><thead><tr><th>ردیف</th><th>شماره فاکتور</th><th>تاریخ</th><th>مشتری</th><th>خدمات</th><th>مبلغ</th><th>دریافتی</th><th>مانده</th><th>روش پرداخت</th><th>صادرکننده</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>';
+    echo '<div class="table-wrap" tabindex="0" role="region" aria-label="فهرست اسناد؛ برای مشاهده ستون‌ها افقی جابه‌جا کنید"><table data-pagination="server"><thead><tr><th>ردیف</th><th>شماره فاکتور</th><th>تاریخ</th><th>مشتری</th><th>خدمات</th><th>مبلغ</th><th>دریافتی</th><th>مانده</th><th>روش پرداخت</th><th>صادرکننده</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>';
     foreach($rows as $i=>$row){
         $paid=(int)$row['paid_amount'];$total=(int)$row['total_amount'];$void=(bool)$row['is_void'];
         $methods=(int)$row['cash_count']>0 && (int)$row['pos_count']>0?'ترکیبی':((int)$row['pos_count']>0?'کارتخوان':'نقدی');
