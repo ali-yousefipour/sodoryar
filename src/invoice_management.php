@@ -223,8 +223,26 @@ function render_invoice_management(int $tenant): void {
     foreach([20,50,100] as $size)echo '<option value="'.$size.'"'.($f['size']===$size?' selected':'').'>'.fa_digits((string)$size).'</option>';
     echo '</select></label></div><div class="filter-actions"><button type="submit">اعمال فیلترها</button><a class="button-link secondary" href="?page=invoice_manager">پاک کردن فیلترها</a>';
     if(can('reports.view')) echo '<a class="button-link secondary" href="?page=reports">گزارش‌های مالی و اکسل تراکنش‌ها</a>';
-    if(can('reports.export')) echo '<a class="button-link secondary" href="'.e($url(['export'=>'excel'])).'">خروجی اکسل فاکتورهای فیلترشده</a>';
+
     echo '</div></form>';
+    if (can('reports.export')) {
+        $exportHeaders=[
+            'row'=>'ردیف','number'=>'شماره فاکتور','date'=>'تاریخ شمسی','customer'=>'مشتری',
+            'national'=>'کد ملی','mobile'=>'تلفن همراه','services'=>'شرح خدمات',
+            'amount'=>'مبلغ فاکتور','paid'=>'مبلغ دریافت‌شده',
+            'remaining'=>'مانده','method'=>'روش پرداخت','operator'=>'صادرکننده','status'=>'وضعیت'
+        ];
+        echo '<details class="card manager-export-config"><summary>تنظیم و دریافت Excel فاکتورها</summary><form method="get" data-manager-export-form data-tenant="'.(int)$tenant.'">';
+        echo '<input type="hidden" name="page" value="invoice_manager"><input type="hidden" name="export" value="excel">';
+        foreach(['q','date_from','date_to','method','status','settlement','user_id','service','amount','sort','direction'] as $key) {
+            if ($f[$key]!=='') echo '<input type="hidden" name="'.$key.'" value="'.e((string)$f[$key]).'">';
+        }
+        echo '<p class="muted">تمام ستون‌ها به‌صورت پیش‌فرض فعال هستند. ترتیب ستون‌ها را می‌توانید تغییر دهید؛ انتخاب‌ها در همین مرورگر ذخیره می‌شوند.</p><div class="manager-export-columns" data-manager-export-columns>';
+        foreach($exportHeaders as $key=>$title) {
+            echo '<div class="manager-export-column" data-export-column="'.e($key).'"><label><input type="checkbox" name="columns[]" value="'.e($key).'" checked> '.e($title).'</label><div class="manager-export-move"><button type="button" class="secondary small" data-column-up aria-label="انتقال به بالا">↑</button><button type="button" class="secondary small" data-column-down aria-label="انتقال به پایین">↓</button></div></div>';
+        }
+        echo '</div><div class="filter-actions"><button type="button" class="secondary" data-columns-all>انتخاب همه</button><button type="button" class="secondary" data-columns-reset>پیش‌فرض</button><button type="submit">دریافت Excel نتایج فیلترشده</button></div><p class="muted">کد ملی و شماره همراه در فایل به‌صورت متن نگهداری می‌شوند.</p></form></details>';
+    }
     echo '<section class="card manager-results"><div class="heading"><h2>فهرست اسناد</h2><span>'.money($sum['invoice_count']).' نتیجه</span></div>';
     echo '<div class="table-wrap"><table><thead><tr><th>ردیف</th><th>شماره فاکتور</th><th>تاریخ</th><th>مشتری</th><th>خدمات</th><th>مبلغ</th><th>دریافتی</th><th>مانده</th><th>روش پرداخت</th><th>صادرکننده</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>';
     foreach($rows as $i=>$row){
