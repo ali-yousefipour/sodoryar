@@ -893,7 +893,9 @@ function render_invoices(int $tenant, int $limit): void {
         echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
         if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
             $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
-            if (can('invoices.payment_edit')) {
+            if (can('invoices.payment_edit') && invoice_payment_ledger_ready() && $actualPayments) {
+                render_invoice_payment_replace_dialog($tenant,(int)$r['id'],(int)$r['total_amount'],$actualPayments);
+            } elseif (can('invoices.payment_edit')) {
                 echo ' <button type="button" class="small secondary" data-dialog-open="'.$editId.'">ویرایش پرداخت</button>';
                 echo '<dialog class="app-dialog" id="'.$editId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ویرایش شیوه پرداخت</h2><label>نوع پرداخت<select name="payment_type"><option value="cash"'.($r['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($r['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label><label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e($r['pos_ref']).'"></label><label>دلیل اصلاح<textarea name="reason" minlength="5" maxlength="500" required></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div></form></dialog>';
             }
@@ -905,4 +907,40 @@ function render_invoices(int $tenant, int $limit): void {
         echo '</td></tr>';
     }
     echo '</tbody></table></div>';
+}
+
+/** Editable payment allocation; changes are always audit-preserving replacements. */
+function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $total,array $payments): void {
+    static $terminalLists=[];
+    if (!isset($terminalLists[$tenant])) {
+        $terminalLists[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
+    }
+    $dialogId='invoiceReplace'.$invoiceId;
+    echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialogId).'">ویرایش تراکنش‌ها</button>';
+    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialogId).'"><form method="post" class="stack invoice-payment-replace" data-payment-total="'.e((string)$total).'">'.csrf_field().
+         '<input type="hidden" name="action" value="replace_payments"><input type="hidden" name="invoice_id" value="'.e((string)$invoiceId).'">'.
+         '<input type="hidden" name="payment_replace_nonce" value="'.e($_SESSION['invoice_replace_nonce']??=bin2hex(random_bytes(16))).'">'.
+         '<h2>اصلاح جزئیات پرداخت</h2><p class="muted">پرداخت‌های قبلی حذف نمی‌شوند؛ با ذکر دلیل ابطال و ردیف‌های جدید ثبت خواهند شد.</p>'.
+         '<p>جمع مبلغ فاکتور: <strong>'.money_toman($total).'</strong></p><div class="invoice-payment-rows" data-edit-payment-list>';
+    foreach($payments as $index=>$row) {
+        $method=(string)$row['payment_method'];
+        echo '<div class="invoice-payment-row" data-edit-payment-row>';
+        echo '<label>روش<select name="payments['.$index.'][method]"><option value="cash"'.($method==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($method==='pos'?' selected':'').'>کارتخوان</option></select></label>';
+        echo '<label>مبلغ (تومان)<input type="text" inputmode="numeric" required name="payments['.$index.'][amount]" value="'.e(fa_digits((string)$row['amount'])).'"></label>';
+        echo '<div class="payment-pos-fields">';
+        echo '<label>شماره پیگیری<input maxlength="120" name="payments['.$index.'][tracking]" value="'.e((string)$row['tracking_number']).'"></label>';
+        echo '<label>شماره مرجع<input maxlength="120" name="payments['.$index.'][reference]" value="'.e((string)$row['reference_number']).'"></label>';
+        if ($terminalLists[$tenant]) {
+            echo '<label>دستگاه کارتخوان<select name="payments['.$index.'][terminal]"><option value="">بدون انتخاب</option>';
+            foreach ($terminalLists[$tenant] as $terminal) {
+                echo '<option value="'.e((string)$terminal['id']).'"'.((int)$row['terminal_id']===(int)$terminal['id']?' selected':'').'>'.e($terminal['brand']).'</option>';
+            }
+            echo '</select></label>';
+        }
+        echo '</div><button type="button" class="small secondary" data-edit-remove>حذف ردیف</button></div>';
+    }
+    echo '</div><button type="button" class="secondary" data-edit-add>+ افزودن پرداخت</button>'.
+         '<p class="muted" data-edit-summary></p><p class="invoice-payment-error" data-edit-error hidden></p>'.
+         '<label>دلیل اصلاح <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'.
+         '<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اصلاحات</button></div></form></dialog>';
 }
