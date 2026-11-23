@@ -159,6 +159,9 @@ def main() -> None:
         expect(manager_a.locator(".money-input-error").first).to_be_visible()
         extra_price.fill("999999999999999")
         expect(extra_price).to_have_attribute("aria-invalid", "true")
+        expect(manager_a.locator("[data-service-total]")).to_contain_text(
+            "مبلغ موردی نامعتبر"
+        )
         assert not re.search(r"[0-9٠-٩]", extra_price.input_value()), (
             "Over-limit monetary input must not display Latin or Arabic numerals"
         )
