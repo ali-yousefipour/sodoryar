@@ -133,6 +133,7 @@ def main() -> None:
         extra_price.press("End")
         extra_price.press("5")
         expect(extra_price).to_have_value("۱۲٬۳۴۵")
+        expect(manager_a.locator("[data-service-total]")).to_contain_text("۵۷٬۳۴۵")
         extra_price.fill("۱۲۳۴۵67")
         expect(extra_price).to_have_value("۱٬۲۳۴٬۵۶۷")
         extra_price.fill("1,5")
