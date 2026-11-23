@@ -658,9 +658,9 @@ if (in_array($page,['reports','activity'],true) && $tenant) {
                     fa_digits($p['national_code']),$p['customer'],$p['operator_name'],
                     $p['payment_method']==='cash'?'نقدی':'کارتخوان',
                     display_financial_reference($p['tracking_number']??''),display_financial_reference($p['reference_number']??''),
-                    money_toman($p['amount'])
+                    (int)$p['amount']
                 ],$transactions['rows']);
-                export_excel_xlsx('sodoryar-invoice-payments',['شماره فاکتور','زمان دریافت','کد ملی','نام راننده','اپراتور','روش دریافت','پیگیری','مرجع','مبلغ'],$rows);
+                export_excel_xlsx('sodoryar-invoice-payments',['شماره فاکتور','زمان دریافت','کد ملی','نام راننده','اپراتور','روش دریافت','پیگیری','مرجع','مبلغ'],$rows,[8]);
             } elseif ($page==='reports') {
                 $reportData=invoice_report($tenant,$reportFilter,10000);
                 if ((int)$reportData['summary']['qty']>10000) {
