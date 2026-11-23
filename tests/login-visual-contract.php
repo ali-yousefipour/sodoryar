@@ -13,4 +13,11 @@ foreach (['.login-layout','.login-showcase','.login-card','.login-form','.captch
 foreach (['name="username"','name="password"','name="captcha_answer"','<?=csrf_field()?>','role="alert"','autocomplete="current-password"'] as $required) {
     if (!str_contains($index,$required)) throw new RuntimeException('Login security/accessibility contract changed: '.$required);
 }
+$browser=(string)file_get_contents(__DIR__.'/../scripts/browser-financial-e2e.py');
+foreach (['wait_until="domcontentloaded"', 'css_response.status == 200', 'b".login-layout" in css_response.body()', 'for width in (320, 390, 768, 1440)'] as $required) {
+    if (!str_contains($browser,$required)) throw new RuntimeException('Sign-in browser QA is missing a required production-safe check: '.$required);
+}
+if (str_contains($browser, 'wait_until="networkidle"')) {
+    throw new RuntimeException('Login browser QA must not depend on external font network idleness.');
+}
 echo "Responsive scoped sign-in design and security form contracts passed\n";
