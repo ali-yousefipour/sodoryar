@@ -115,6 +115,20 @@ def main() -> None:
         expect(manager_a.get_by_text("CI E2E Service A")).to_be_visible()
         assert manager_a.get_by_text("CI E2E Service B").count() == 0, "Foreign company service leaked"
 
+        # Global Ctrl+K search must honor tenant isolation and keyboard dismissal.
+        manager_a.keyboard.press("Control+k")
+        search_dialog=manager_a.locator("#globalSearchDialog")
+        expect(search_dialog).to_be_visible()
+        search_dialog.locator("#globalSearchInput").fill("CI E2E Service A")
+        expect(search_dialog.locator("#globalSearchResults")).to_contain_text(
+            "CI E2E Service A", timeout=12000
+        )
+        assert "CI E2E Service B" not in search_dialog.inner_text(), (
+            "Cross-company service leaked into global search"
+        )
+        manager_a.keyboard.press("Escape")
+        expect(search_dialog).not_to_be_visible()
+
         manager_a.goto(f"{ORIGIN}/?page=invoices")
         expect(manager_a.locator("#invoiceCreateForm")).to_be_visible()
         assert "Vazirmatn" in manager_a.locator(".app-shell").evaluate(
