@@ -35,6 +35,9 @@ def log_in(browser, name: str):
     response = page.goto(f"{ORIGIN}/?page=login", wait_until="domcontentloaded")
     assert response is not None and response.status == 200, "Login page failed to load"
     expect(page.locator(".login-card")).to_be_visible()
+    assert "Vazirmatn" in page.locator("body").evaluate(
+        "(el) => getComputedStyle(el).fontFamily"
+    ), "Login must use the shared Persian font stack"
     expect(page.locator("#loginUsername")).to_have_attribute("autocomplete", "username")
     expect(page.locator("#loginPassword")).to_have_attribute("autocomplete", "current-password")
     assert page.locator('input[name="csrf"]').count() == 1, "Login CSRF field missing"
@@ -114,6 +117,12 @@ def main() -> None:
 
         manager_a.goto(f"{ORIGIN}/?page=invoices")
         expect(manager_a.locator("#invoiceCreateForm")).to_be_visible()
+        assert "Vazirmatn" in manager_a.locator(".app-shell").evaluate(
+            "(el) => getComputedStyle(el).fontFamily"
+        ), "Application typography differs from the login screen"
+        assert manager_a.locator(".main-wrap>.content input").first.evaluate(
+            "(el) => parseFloat(getComputedStyle(el).fontSize)"
+        ) >= 13, "Application text fields use an unreadable font size"
         scroll_hints = manager_a.locator(".sd-table-scroll-hint")
         assert scroll_hints.count() > 0, "Wide invoice table has no scroll guidance"
         assert any(scroll_hints.nth(i).is_visible() for i in range(scroll_hints.count())), (
@@ -141,6 +150,9 @@ def main() -> None:
         expect(manager_a.locator("[data-service-total]")).to_contain_text("۵۷٬۳۴۵")
         extra_price.fill("۱۲۳۴۵67")
         expect(extra_price).to_have_value("۱٬۲۳۴٬۵۶۷")
+        assert not re.search(r"[0-9٠-٩]", extra_price.input_value()), (
+            "Localized amount mixes Persian and Latin digits"
+        )
         extra_price.fill("1,5")
         expect(extra_price).to_have_attribute("aria-invalid", "true")
         expect(extra_price).to_have_value("۱,۵")
