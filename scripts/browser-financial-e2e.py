@@ -217,7 +217,7 @@ def main() -> None:
         payment_amount = manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]')
         payment_amount.fill("1,5")
         manager_a.locator("[data-wizard-next]").click()
-        expect(manager_a.locator("[data-wizard-error]")).not_to_be_empty()
+        expect(manager_a.locator("[data-wizard-error]")).to_contain_text("اصلاح")
         payment_amount.fill("۲۰۰۰۰")
         manager_a.locator("#invoiceAddPayment").click()
         manager_a.locator('#invoiceCreateForm').locator('select[name="payments[1][method]"]').select_option("pos")
@@ -252,7 +252,7 @@ def main() -> None:
         manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').fill('CI-INVOICE-POS-2026')
         manager_a.locator('#invoicePaymentRows select[name="payments[0][terminal]"]').select_option(index=1)
         manager_a.locator("[data-wizard-next]").click()
-        manager_a.locator("[data-print=1]").click()
+        manager_a.locator('[data-print="1"]').click()
         expect(manager_a.get_by_text('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.')).to_be_visible()
         manager_a.goto(f'{ORIGIN}/?page=dashboard')
         for key in ('today_count','month_count','today_total','month_total','receipts_today','cash_today','pos_today','due_total','unsettled_count','open_cashboxes','pending_cashboxes','unreviewed_issues'):
@@ -275,7 +275,7 @@ def main() -> None:
         manager_a.locator('#invoiceCreateForm input[name="payments[0][amount]"]').fill("15000")
         expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
         manager_a.locator("[data-wizard-next]").click()
-        manager_a.locator("[data-print=1]").click()
+        manager_a.locator('[data-print="1"]').click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         partial_id = re.search(r"[?&]id=(\d+)", manager_a.url)
         assert partial_id, "Partially paid invoice did not produce a receipt"
