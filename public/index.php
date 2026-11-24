@@ -1181,8 +1181,11 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php
 function finish_invoice_creation(int $invoiceId): never {
     if (hash_equals((string)($_SESSION['invoice_create_nonce']??''),(string)($_POST['invoice_create_nonce']??''))) unset($_SESSION['invoice_create_nonce']);
-    if (($_POST['invoice_after_save']??'print')==='print' && can('invoices.view') && can('invoices.print')) {
-        header('Location: ?page=receipt&id='.$invoiceId); exit;
+    if (can('invoices.view') && can('invoices.print')) {
+        if (($_POST['invoice_after_save']??'list')==='print') {
+            $_SESSION['flash']='فاکتور با موفقیت ثبت شد.';
+            header('Location: ?page=receipt&id='.$invoiceId); exit;
+        }
     }
     redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
 }
