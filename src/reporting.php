@@ -106,10 +106,11 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
     $toExclusive=(new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
     $issues=[];
+    $active=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
     $overpaid=query(
         'SELECT i.id,i.invoice_number,i.total_amount,COALESCE(SUM(p.amount),0) paid
          FROM invoices i JOIN invoice_payments p ON p.invoice_id=i.id AND p.company_id=i.company_id AND p.voided_at IS NULL
-         WHERE i.company_id=? AND i.invoice_date>=? AND i.invoice_date<?'.$scope.'
+         WHERE i.company_id=? AND i.invoice_date>=? AND i.invoice_date<?'.$scope.$active.'
          GROUP BY i.id,i.invoice_number,i.total_amount HAVING paid>i.total_amount
          ORDER BY i.id DESC LIMIT '.(int)$limit,
         [$tenant,$dateFrom,$toExclusive]
@@ -123,7 +124,7 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
          JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
          WHERE p.company_id=? AND p.payment_method=\'pos\' AND p.voided_at IS NULL
            AND (p.tracking_number IS NULL OR p.tracking_number=\'\')
-           AND p.paid_at>=? AND p.paid_at<?'.$scope.'
+           AND p.paid_at>=? AND p.paid_at<?'.$scope.$active.'
          ORDER BY p.id DESC LIMIT '.(int)$limit,
         [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
     )->fetchAll();
@@ -131,23 +132,39 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
         $issues[]=['kind'=>'بدون شماره پیگیری کارتخوان','invoice'=>$row['invoice_number'],
             'detail'=>'شناسه دریافت: '.fa_digits((string)$row['id']).'، مبلغ: '.money_toman($row['amount'])];
     }
+    // A tracking number is unique only within a known terminal and payment day.
+    // Unknown terminals are data-quality findings, not proven duplicate payments.
+    $valid=database_table_exists('invoice_voids')?
+        ' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
     $duplicates=query(
-        'SELECT i.invoice_number,p.id,p.tracking_number,p.terminal_id
+        "SELECT p.terminal_id,p.tracking_number,DATE(p.paid_at) payment_day,
+                MIN(i.invoice_number) invoice_number,COUNT(*) receipt_count,
+                GROUP_CONCAT(DISTINCT i.invoice_number ORDER BY i.invoice_number SEPARATOR ', ') invoice_numbers
          FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
-         JOIN (SELECT company_id,terminal_id,tracking_number
-               FROM invoice_payments WHERE company_id=? AND payment_method=\'pos\' AND voided_at IS NULL
-                 AND tracking_number IS NOT NULL AND tracking_number<>\'\'
-                 AND paid_at>=? AND paid_at<?
-               GROUP BY company_id,terminal_id,tracking_number HAVING COUNT(*)>1) d
-             ON d.company_id=p.company_id AND d.terminal_id <=> p.terminal_id
-             AND d.tracking_number=p.tracking_number
-         WHERE p.company_id=? AND p.voided_at IS NULL'.$scope.'
-         ORDER BY p.id DESC LIMIT '.(int)$limit,
-        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00',$tenant]
+         WHERE p.company_id=? AND p.payment_method='pos' AND p.voided_at IS NULL
+           AND p.terminal_id IS NOT NULL AND p.tracking_number IS NOT NULL AND p.tracking_number<>''
+           AND p.paid_at>=? AND p.paid_at<?".$scope.$valid."
+         GROUP BY p.terminal_id,p.tracking_number,DATE(p.paid_at) HAVING COUNT(*)>1
+         ORDER BY payment_day DESC,p.terminal_id,p.tracking_number LIMIT ".(int)$limit,
+        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
     )->fetchAll();
     foreach ($duplicates as $row) {
         $issues[]=['kind'=>'شماره پیگیری تکراری','invoice'=>$row['invoice_number'],
-            'detail'=>'کارتخوان '.fa_digits((string)($row['terminal_id']??'نامشخص')).'، پیگیری '.display_financial_reference($row['tracking_number'])];
+            'detail'=>'کارتخوان '.fa_digits((string)$row['terminal_id']).'، پیگیری '.display_financial_reference($row['tracking_number'])
+                .'، تاریخ '.jalali_datetime($row['payment_day']).'، تعداد '.fa_digits((string)$row['receipt_count'])
+                .'، فاکتورها: '.display_financial_reference($row['invoice_numbers'])];
+    }
+    $unknown=query(
+        "SELECT i.invoice_number,p.id,p.amount FROM invoice_payments p
+         JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
+         WHERE p.company_id=? AND p.payment_method='pos' AND p.voided_at IS NULL AND p.terminal_id IS NULL
+           AND p.paid_at>=? AND p.paid_at<?".$scope.$valid."
+         ORDER BY p.id DESC LIMIT ".(int)$limit,
+        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
+    )->fetchAll();
+    foreach($unknown as $row) {
+        $issues[]=['kind'=>'شناسه کارتخوان نامشخص','invoice'=>$row['invoice_number'],
+            'detail'=>'نقص اطلاعات دستگاه؛ دریافت معتبر است. شناسه دریافت: '.fa_digits((string)$row['id']).'، مبلغ: '.money_toman($row['amount'])];
     }
     return $issues;
 }
