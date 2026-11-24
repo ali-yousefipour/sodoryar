@@ -559,7 +559,7 @@ try {
             if (!preg_match('/^[a-f0-9]{32}$/D',$submittedNonce)) throw new RuntimeException('شناسه درخواست نامعتبر است.');
             $requestLedger=(bool)query("SHOW TABLES LIKE 'invoice_create_requests'")->fetch();
             $payload=$_POST;
-            unset($payload['invoice_after_save'],$payload['csrf'],$payload['_csrf']);
+            unset($payload['invoice_after_save'],$payload['csrf'],$payload['_csrf'],$payload['csrf_token']);
             $requestHash=hash('sha256',serialize($payload));
             if ($requestLedger) {
                 $previous=query('SELECT invoice_id,request_hash FROM invoice_create_requests WHERE company_id=? AND user_id=? AND request_key=?',[$tenant,$actor,$submittedNonce])->fetch();
@@ -1064,7 +1064,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <?php if(can('invoices.create')): ?>
 <?php $invoiceDriverLines=query("SELECT DISTINCT TRIM(line_area) AS line_name FROM global_drivers WHERE line_area IS NOT NULL AND TRIM(line_area) <> '' ORDER BY line_name")->fetchAll(PDO::FETCH_COLUMN); ?>
 <div class="invoice-page-heading"><div><span class="invoice-eyebrow">عملیات مالی / صدور سند</span><h1>صدور فاکتور</h1><p>مشخصات تاکسیران، تاریخ، خدمات و روش پرداخت را به ترتیب تکمیل کنید.</p></div></div>
-<button type="button" id="invoiceWizardOpen">صدور فاکتور جدید</button><p><a href="?page=invoice_manager">جستجو و گزارش فاکتورها</a></p><dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"><div class="invoice-workspace">
+<button type="button" id="invoiceWizardOpen">صدور فاکتور جدید</button><?php if(can('invoices.view')): ?><p><a href="?page=invoice_manager">جستجو و گزارش فاکتورها</a></p><?php endif; ?><dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"><div class="invoice-workspace">
 <form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-wizard-v1" novalidate><header class="invoice-wizard-header"><h2 id="invoiceWizardTitle">صدور فاکتور جدید</h2><p data-wizard-status tabindex="-1" aria-live="polite"></p></header><div class="invoice-wizard-body"><input type="hidden" name="invoice_after_save" value="list"><?=csrf_field()?><input type="hidden" name="action" value="add"><input type="hidden" name="invoice_create_nonce" value="<?=e($_SESSION['invoice_create_nonce'] ??= bin2hex(random_bytes(16)))?>">
 <section data-wizard-stage="1" class="invoice-panel invoice-panel-details" aria-labelledby="invoiceDetailsTitle">
 <div class="invoice-panel-heading"><span class="invoice-step">۱</span><div><h2 id="invoiceDetailsTitle">اطلاعات فاکتور</h2><p>شناسه تاکسیران و تاریخ انجام خدمت</p></div></div>
