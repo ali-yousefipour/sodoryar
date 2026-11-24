@@ -149,6 +149,13 @@ def main() -> None:
             f"Invoice mobile page overflows horizontally: {page_width}px > {viewport_width}px"
         )
         manager_a.locator("#invoiceWizardOpen").click()
+        wizard=manager_a.locator("#invoiceWizard")
+        expect(wizard).to_be_visible()
+        expect(wizard.locator(".invoice-wizard-steps li[aria-current=step]")).to_contain_text("تاکسیران")
+        expect(wizard.locator("[data-wizard-prev]")).not_to_be_visible()
+        expect(wizard.locator("[data-wizard-total]")).to_be_visible()
+        assert wizard.evaluate("(el) => el.scrollWidth <= el.clientWidth + 2"), "Wizard horizontal overflow"
+        assert wizard.locator("[data-wizard-next]").evaluate("(el) => el.getBoundingClientRect().height >= 44"), "Wizard touch target too small"
         manager_a.locator("#invoiceDriverNational").fill("1234567890")
         expect(manager_a.locator("#invoiceDriverStatus")).to_contain_text("CI Driver", timeout=12000)
         manager_a.locator("[data-wizard-next]").click()
@@ -224,6 +231,7 @@ def main() -> None:
         manager_a.locator('#invoiceCreateForm').locator('input[name="payments[1][tracking]"]').fill("CI-INVOICE-POS-2026")
         manager_a.locator('#invoicePaymentRows select[name="payments[1][terminal]"]').select_option(index=1)
         expect(manager_a.locator("[data-payment-paid]")).to_contain_text("۷۰٬۰۰۰")
+        expect(manager_a.locator("[data-wizard-total]")).to_contain_text("۷۰٬۰۰۰")
         expect(manager_a.locator("[data-payment-count]")).to_contain_text("۲")
         manager_a.locator("[data-wizard-next]").click()
         manager_a.locator('[data-print="1"]').click()
