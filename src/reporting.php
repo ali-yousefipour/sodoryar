@@ -154,18 +154,7 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
                 .'، تاریخ '.jalali_datetime($row['payment_day']).'، تعداد '.fa_digits((string)$row['receipt_count'])
                 .'، فاکتورها: '.display_financial_reference($row['invoice_numbers'])];
     }
-    $unknown=query(
-        "SELECT i.invoice_number,p.id,p.amount FROM invoice_payments p
-         JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
-         WHERE p.company_id=? AND p.payment_method='pos' AND p.voided_at IS NULL AND p.terminal_id IS NULL
-           AND p.paid_at>=? AND p.paid_at<?".$scope.$valid."
-         ORDER BY p.id DESC LIMIT ".(int)$limit,
-        [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
-    )->fetchAll();
-    foreach($unknown as $row) {
-        $issues[]=['kind'=>'شناسه کارتخوان نامشخص','invoice'=>$row['invoice_number'],
-            'detail'=>'نقص اطلاعات دستگاه؛ دریافت معتبر است. شناسه دریافت: '.fa_digits((string)$row['id']).'، مبلغ: '.money_toman($row['amount'])];
-    }
+    // Optional terminal metadata is not a financial exception; do not count it.
     return $issues;
 }
 

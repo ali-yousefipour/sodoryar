@@ -1,0 +1,7 @@
+/* Preserve the existing article.stat palette and layout. */
+.content .dashboard-stat-card{cursor:pointer}
+.content .dashboard-stat-card:focus-visible{outline:2px solid #7762bd;outline-offset:3px}
+dialog.app-dialog.dashboard-detail-dialog{width:min(1100px,94vw);max-width:94vw;max-height:88dvh;overflow:auto}
+.dashboard-detail-scroll{max-height:55dvh;overflow:auto}
+.dashboard-detail-scroll thead th{position:sticky;top:0;z-index:1;background:#f7f5fc}
+.dashboard-detail-dialog[open]{margin:auto}

@@ -793,37 +793,3 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.main-wrap>.content,.main-wrap>.topbar,.app-shell>.sidebar').forEach(localizeVisibleDigits);
 });
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const dialog=document.getElementById('dashboardDetail');
-  if(!dialog)return;
-  const title=document.getElementById('dashboardDetailTitle'),status=document.getElementById('dashboardDetailStatus'),
-    head=document.getElementById('dashboardDetailHead'),body=document.getElementById('dashboardDetailBody'),search=document.getElementById('dashboardDetailSearch');
-  let controller=null,allRows=[];
-  const digits=s=>String(s).replace(/[۰-۹]/g,c=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c))).replace(/[٠-٩]/g,c=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(c)));
-  const draw=()=>{
-    const term=digits(search.value.trim()).toLocaleLowerCase('fa');
-    const rows=allRows.filter(r=>r.some(v=>digits(v??'').toLocaleLowerCase('fa').includes(term)));
-    const fragment=document.createDocumentFragment();
-    for(const row of rows){const tr=document.createElement('tr');for(const value of row){const td=document.createElement('td');td.textContent=value??'—';tr.append(td);}fragment.append(tr);}
-    body.replaceChildren(fragment);
-    status.textContent=rows.length?rows.length.toLocaleString('fa-IR')+' ردیف از '+allRows.length.toLocaleString('fa-IR')+' ردیف':'اطلاعاتی برای نمایش وجود ندارد.';
-  };
-  search.addEventListener('input',draw);
-  for(const button of document.querySelectorAll('[data-dashboard-detail]'))button.addEventListener('click',async()=>{
-    controller?.abort();const request=new AbortController();controller=request;
-    title.textContent=button.querySelector('span')?.textContent||button.closest('dd')?.previousElementSibling?.textContent||'جزئیات شاخص';
-    const number=button.querySelector('b')?.textContent||button.textContent;
-    title.textContent+=' — '+number.trim();
-    allRows=[];search.value='';head.replaceChildren();body.replaceChildren();status.textContent='در حال دریافت اطلاعات…';search.disabled=true;
-    if(!dialog.open)dialog.showModal();
-    try{
-      const url=new URL(location.href);url.search='';url.searchParams.set('page','dashboard_detail');url.searchParams.set('key',button.dataset.dashboardDetail);
-      const response=await fetch(url,{signal:request.signal,credentials:'same-origin',cache:'no-store'});
-      if(!response.ok)throw Error('request');
-      const data=await response.json();if(request.signal.aborted)return;
-      const tr=document.createElement('tr');for(const label of data.headers){const th=document.createElement('th');th.scope='col';th.textContent=label;tr.append(th);}head.append(tr);
-      allRows=data.rows;search.disabled=false;draw();
-    }catch(error){if(!request.signal.aborted)status.textContent='دریافت جزئیات امکان‌پذیر نیست؛ دوباره تلاش کنید.';}
-  });
-  dialog.addEventListener('close',()=>controller?.abort());
-});

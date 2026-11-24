@@ -245,7 +245,10 @@ def main() -> None:
         expect(manager_a.get_by_text('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.')).to_be_visible()
         manager_a.goto(f'{ORIGIN}/?page=dashboard')
         for key in ('today_count','month_count','today_total','month_total','receipts_today','cash_today','pos_today','due_total','unsettled_count','open_cashboxes','pending_cashboxes','unreviewed_issues'):
-            manager_a.locator(f'[data-dashboard-detail="{key}"]').click()
+            card = manager_a.locator(f'[data-dashboard-detail="{key}"]')
+            expect(card).to_have_js_property('tagName','ARTICLE')
+            assert card.evaluate("el => getComputedStyle(el).backgroundImage.includes('gradient')"), 'Dashboard card lost its original gradient'
+            card.click()
             expect(manager_a.locator('#dashboardDetail')).to_be_visible()
             expect(manager_a.locator('#dashboardDetailSearch')).to_be_enabled(timeout=15000)
             manager_a.locator('#dashboardDetail [data-dialog-close]').first.click()

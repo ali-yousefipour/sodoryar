@@ -110,7 +110,7 @@ function dashboard_detail(int $tenant,string $key,string $today,string $monthSta
     return [$headers,$rows];
 }
 function render_dashboard_stat(string $key,string $title,mixed $value,string $note=''): void {
-    echo '<button type="button" class="stat dashboard-stat-button" data-dashboard-detail="'.e($key).'" aria-haspopup="dialog"><span>'.e($title).'</span><b>'.money($value).'</b>';
+    echo '<article class="stat dashboard-stat-card" role="button" tabindex="0" data-dashboard-detail="'.e($key).'" aria-haspopup="dialog"><span>'.e($title).'</span><b>'.money($value).'</b>';
     if($note!=='')echo '<small>'.e($note).'</small>';
-    echo '<small class="dashboard-detail-hint">مشاهده جزئیات</small></button>';
+    echo '</article>';
 }
