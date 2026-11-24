@@ -44,6 +44,6 @@ function render_individual_payment_receipt(int $tenant,int $paymentId): void {
     if($payment['reference_number'])echo '<p>شماره مرجع: '.e(display_financial_reference($payment['reference_number'])).'</p>';
     echo '<h2>مبلغ این دریافت: '.money_toman($payment['amount']).'</h2>'
       .'<p>دریافت‌کننده: '.e($payment['operator_name']?:'—').'</p>'
-      .'<p class="receipt-payment-note">ثبت تراکنش کارتخوان، به معنای تأیید قطعی بانکی نیست.</p>'
+       .(!$voided?'<p class="receipt-payment-note">این دریافت در سامانه به‌صورت قطعی ثبت شده است.</p>':'')
       .'</section>';
 }
