@@ -83,16 +83,18 @@ function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,arr
     }
 }
 /** Company lock serializes receipt checks across different invoices and sessions. */
-function assert_unique_invoice_pos_receipt(int $tenant,array $row): void {
+function assert_unique_invoice_pos_receipt(int $tenant,array $row,?string $paidAt=null,?int $excludeInvoice=null): void {
     if ($row['method']!=='pos') return;
     if (trim((string)($row['tracking']??''))==='') throw new RuntimeException('شماره پیگیری کارتخوان الزامی است.');
     if (!db()->inTransaction()) throw new LogicException('Receipt validation requires a transaction.');
     query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
     $terminal=$row['terminal']??null;
     if($terminal===null)return; // Unknown device cannot prove a duplicate receipt.
-    $day=new DateTimeImmutable('today',new DateTimeZone('Asia/Tehran'));
+    $day=new DateTimeImmutable($paidAt??'today',new DateTimeZone('Asia/Tehran'));
+    $day=$day->setTime(0,0);
+    $excluded=$excludeInvoice===null?'':' AND p.invoice_id<>'.(int)$excludeInvoice;
     $duplicate=query('SELECT p.id FROM invoice_payments p WHERE p.company_id=? AND p.payment_method=\'pos\'
-        AND p.tracking_number=? AND p.voided_at IS NULL AND p.terminal_id=? AND p.paid_at>=? AND p.paid_at<?'.(database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=p.company_id AND v.invoice_id=p.invoice_id)':'').' LIMIT 1 FOR UPDATE',
+        AND p.tracking_number=? AND p.voided_at IS NULL AND p.terminal_id=? AND p.paid_at>=? AND p.paid_at<?'.(database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=p.company_id AND v.invoice_id=p.invoice_id)':'').$excluded.' LIMIT 1 FOR UPDATE',
         [$tenant,$row['tracking'],$terminal,$day->format('Y-m-d').' 00:00:00',$day->modify('+1 day')->format('Y-m-d').' 00:00:00'])->fetch();
     if ($duplicate) throw new RuntimeException('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.');
 }
@@ -131,4 +133,37 @@ function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $
             [$tenant,$invoiceId,$row['method'],$row['amount'],$terminal,$row['tracking']!==''?$row['tracking']:null,$row['reference']?:null,$creator,$key]);
     }
     return (int)db()->lastInsertId();
+}
+
+/** Corrections are not new collections. Keep receipt identity, timestamp, creator and shift.
+ * Caller holds invoice lock and transaction; each original receipt is edited once.
+ */
+function correct_invoice_payment_rows(int $tenant,int $invoiceId,array $old,array $replacement,string $reason): array {
+    if(!db()->inTransaction())throw new LogicException('Receipt correction requires a transaction.');
+    if(!$old || count($old)!==count($replacement))throw new RuntimeException('تعداد تراکنش‌های قبلی در اصلاح فیش قابل تغییر نیست.');
+    if(mb_strlen($reason)<5||mb_strlen($reason)>500)throw new RuntimeException('دلیل اصلاح نامعتبر است.');
+    query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+    $seen=[];$changes=[];
+    foreach($old as $index=>$before){
+        $after=$replacement[$index];
+        if((int)$before['amount']!==(int)$after['amount'])throw new RuntimeException('مبلغ دریافت قبلی در اصلاح مشخصات فیش قابل تغییر نیست.');
+        $paidAt=(string)$before['paid_at'];
+        accounting_assert_write_open($tenant,substr($paidAt,0,10));
+        $terminal=$after['terminal']??null;
+        if($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND (is_active=1 OR id=?)',[$terminal,$tenant,$before['terminal_id']])->fetch())throw new RuntimeException('دستگاه کارتخوان نامعتبر است.');
+        if($after['method']==='pos' && $terminal!==null){
+            $key=json_encode([$terminal,$after['tracking'],substr($paidAt,0,10)],JSON_THROW_ON_ERROR);
+            if(isset($seen[$key]))throw new RuntimeException('شماره پیگیری تکراری برای دستگاه و تاریخ دریافت.');
+            $seen[$key]=true;
+        }
+        assert_unique_invoice_pos_receipt($tenant,$after,$paidAt,$invoiceId);
+        $new=['id'=>(int)$before['id'],'payment_method'=>$after['method'],'amount'=>(int)$after['amount'],'terminal_id'=>$terminal,'tracking_number'=>$after['tracking']!==''?$after['tracking']:null,'reference_number'=>$after['reference']!==''?$after['reference']:null,'paid_at'=>$paidAt];
+        $changes[]=['before'=>$before,'after'=>$new];
+    }
+    foreach($changes as $change){
+        $new=$change['after'];
+        query('UPDATE invoice_payments SET payment_method=?,terminal_id=?,tracking_number=?,reference_number=? WHERE id=? AND company_id=? AND invoice_id=? AND voided_at IS NULL',
+            [$new['payment_method'],$new['terminal_id'],$new['tracking_number'],$new['reference_number'],$new['id'],$tenant,$invoiceId]);
+    }
+    return $changes;
 }

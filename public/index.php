@@ -659,12 +659,12 @@ try {
                     if (count($active)!==1 || (int)$active[0]['amount']!==(int)$invoice['total_amount']) {
                         throw new RuntimeException('برای اصلاح چندتراکنشی از عملیات تخصصی مالی استفاده کنید؛ جایگزینی یکباره مجاز نیست.');
                     }
-                    query('UPDATE invoice_payments SET voided_at=NOW(),voided_by=?,void_reason=? WHERE id=? AND company_id=? AND voided_at IS NULL',
-                        [(int)user()['id'],$reason,$active[0]['id'],$tenant]);
-                    create_invoice_payment_rows($tenant,(int)$id,(int)user()['id'],[['method'=>$payment,'amount'=>(int)$invoice['total_amount'],'tracking'=>$payment==='pos'?$ref:'','reference'=>'']]);
+                    $old=$active[0];
+                    $replacement=invoice_payment_rows([['method'=>$payment,'amount'=>(int)$old['amount'],'tracking'=>$payment==='pos'?$ref:'','reference'=>$payment==='pos'?(string)($old['reference_number']??''):'','terminal'=>$payment==='pos'?(string)($old['terminal_id']??''):'']],(int)$old['amount']);
+                    $paymentChanges=correct_invoice_payment_rows($tenant,(int)$id,$active,$replacement,$reason);
                 }
                 query('UPDATE invoices SET payment_type=?,pos_ref=? WHERE id=? AND company_id=?',[$payment,$payment==='pos'?$ref:null,$id,$tenant]);
-                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'reason'=>$reason,'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
+                audit('invoice.payment.update',json_encode(['invoice_id'=>$id,'reason'=>$reason,'receipts'=>$paymentChanges??[],'before'=>['payment_type'=>$invoice['payment_type'],'pos_ref'=>$invoice['pos_ref']],'after'=>['payment_type'=>$payment,'pos_ref'=>$payment==='pos'?$ref:null]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
                 db()->commit();
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('invoices','شیوه پرداخت فاکتور با ثبت سابقه اصلاح شد.');
@@ -687,21 +687,22 @@ try {
                 if (database_table_exists('invoice_voids') && query('SELECT invoice_id FROM invoice_voids WHERE invoice_id=? AND company_id=?',[$id,$tenant])->fetch()) {
                     throw new RuntimeException('فاکتور باطل‌شده قابل ویرایش نیست.');
                 }
-                $replacement=invoice_payment_rows((array)($_POST['payments']??[]),(int)$invoice['total_amount']);
                 accounting_assert_write_open($tenant,$invoice['financial_date']);
                 cashbox_assert_payments_mutable($tenant,(int)$id);
                 $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
                 if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
+                $posted=(array)($_POST['payments']??[]);
                 $oldIds=array_map(static fn($p)=>(int)$p['id'],$oldPayments);
-                query('UPDATE invoice_payments SET voided_at=NOW(),voided_by=?,void_reason=? WHERE invoice_id=? AND company_id=? AND voided_at IS NULL',
-                    [(int)user()['id'],$reason,$id,$tenant]);
-                create_invoice_payment_rows($tenant,(int)$id,(int)user()['id'],$replacement);
+                if(array_map(static fn($p)=>(int)($p['id']??0),$posted)!==$oldIds)throw new RuntimeException('ردیف‌های دریافت تغییر کرده‌اند؛ صفحه را تازه‌سازی کنید.');
+                $paidTotal=array_sum(array_map(static fn($p)=>(int)$p['amount'],$oldPayments));
+                $replacement=invoice_payment_rows($posted,$paidTotal);
+                $paymentChanges=correct_invoice_payment_rows($tenant,(int)$id,$oldPayments,$replacement,$reason);
                 $first=$replacement[0];
                 query('UPDATE invoices SET payment_type=?,pos_ref=? WHERE id=? AND company_id=?',
                     [$first['method'],count($replacement)===1 && $first['method']==='pos'?$first['tracking']:null,$id,$tenant]);
                 audit('invoice.payments.replace',json_encode([
-                    'invoice_id'=>$id,'reason'=>$reason,'voided_payment_ids'=>$oldIds,
-                    'new_payment_count'=>count($replacement),'new_payment_total'=>(int)$invoice['total_amount']
+                    'invoice_id'=>$id,'reason'=>$reason,'receipts'=>$paymentChanges,
+                    'payment_count'=>count($replacement),'payment_total'=>$paidTotal
                 ],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE));
                 db()->commit();
                 unset($_SESSION['invoice_replace_nonce']);
@@ -1217,16 +1218,16 @@ function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $t
     }
     $dialogId='invoiceReplace'.$invoiceId;
     echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialogId).'">ویرایش تراکنش‌ها</button>';
-    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialogId).'"><form method="post" class="stack invoice-payment-replace" data-payment-total="'.e((string)$total).'">'.csrf_field().
+    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialogId).'"><form method="post" class="stack invoice-payment-replace" data-payment-total="'.e((string)array_sum(array_map(static fn($p)=>(int)$p['amount'],$payments))).'">'.csrf_field().
          '<input type="hidden" name="action" value="replace_payments"><input type="hidden" name="invoice_id" value="'.e((string)$invoiceId).'">'.
          '<input type="hidden" name="payment_replace_nonce" value="'.e($_SESSION['invoice_replace_nonce']??=bin2hex(random_bytes(16))).'">'.
-         '<h2>اصلاح جزئیات پرداخت</h2><p class="muted">پرداخت‌های قبلی حذف نمی‌شوند؛ با ذکر دلیل ابطال و ردیف‌های جدید ثبت خواهند شد.</p>'.
+         '<h2>اصلاح جزئیات پرداخت</h2><p class="muted">تاریخ و مبلغ وصول، شناسه رسید و صندوق ثابت می‌مانند؛ فقط مشخصات فیش اصلاح و سابقه تغییر ثبت می‌شود.</p>'.
          '<p>جمع مبلغ فاکتور: <strong>'.money_toman($total).'</strong></p><div class="invoice-payment-rows" data-edit-payment-list>';
     foreach($payments as $index=>$row) {
         $method=(string)$row['payment_method'];
-        echo '<div class="invoice-payment-row" data-edit-payment-row>';
+        echo '<div class="invoice-payment-row" data-edit-payment-row><input type="hidden" name="payments['.$index.'][id]" value="'.e((string)$row['id']).'"><p class="muted">زمان وصول: '.e(jalali_datetime($row['paid_at'],true)).'</p>';
         echo '<label>روش<select name="payments['.$index.'][method]"><option value="cash"'.($method==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($method==='pos'?' selected':'').'>کارتخوان</option></select></label>';
-        echo '<label>مبلغ (تومان)<input type="text" inputmode="numeric" required name="payments['.$index.'][amount]" value="'.e(fa_digits((string)$row['amount'])).'"></label>';
+        echo '<label>مبلغ (تومان)<input type="text" inputmode="numeric" required readonly name="payments['.$index.'][amount]" value="'.e(fa_digits((string)$row['amount'])).'"></label>';
         echo '<div class="payment-pos-fields">';
         echo '<label>شماره پیگیری<input maxlength="120" name="payments['.$index.'][tracking]" value="'.e((string)$row['tracking_number']).'"></label>';
         echo '<label>شماره مرجع<input maxlength="120" name="payments['.$index.'][reference]" value="'.e((string)$row['reference_number']).'"></label>';
@@ -1237,9 +1238,9 @@ function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $t
             }
             echo '</select></label>';
         }
-        echo '</div><button type="button" class="small secondary" data-edit-remove>حذف ردیف</button></div>';
+        echo '</div></div>';
     }
-    echo '</div><button type="button" class="secondary" data-edit-add>+ افزودن پرداخت</button>'.
+    echo '</div>'.
          '<p class="muted" data-edit-summary></p><p class="invoice-payment-error" data-edit-error hidden></p>'.
          '<label>دلیل اصلاح <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'.
          '<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اصلاحات</button></div></form></dialog>';

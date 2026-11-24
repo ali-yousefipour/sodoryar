@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       note.textContent=`جمع پرداخت‌ها: ${display(sum)} تومان | مانده: ${display(expected-sum)} تومان`;
       return !invalid && sum===expected && list.children.length>0;
     };
-    form.querySelector('[data-edit-add]').addEventListener('click',()=>{
+    form.querySelector('[data-edit-add]')?.addEventListener('click',()=>{
       if(!prototype||list.children.length>=50)return;
       const clone=prototype.cloneNode(true);
       clone.querySelectorAll('input').forEach(input=>input.value='');
@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
     form.addEventListener('submit',event=>{
       if(!recalc()){
-        event.preventDefault();error.textContent='جمع پرداخت‌ها باید دقیقاً با مبلغ فاکتور برابر باشد و همه مبالغ مثبت باشند.';error.hidden=false;
+        event.preventDefault();error.textContent='جمع پرداخت‌ها باید با مبلغ دریافت‌شده قبلی برابر باشد.';error.hidden=false;
         return;
       }
       list.querySelectorAll('input[name$="[amount]"]').forEach(input=>input.value=raw(input.value));

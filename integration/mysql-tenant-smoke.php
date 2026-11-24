@@ -454,6 +454,16 @@ db()->beginTransaction();
 query('UPDATE invoice_payments SET voided_at=NOW() WHERE invoice_id=? AND company_id=? AND payment_method=\'pos\'',[$multiInvoice,$companyA]);
 create_invoice_payment_rows($companyA,$invoiceA,$userA,[$expected[1]]);
 db()->rollBack();
+// Correction must retain original receipt identity and day, not post a new collection.
+db()->beginTransaction();
+$old=get_invoice_payment_rows($companyA,$multiInvoice);
+query("UPDATE invoice_payments SET paid_at=DATE_SUB(NOW(),INTERVAL 1 DAY) WHERE company_id=? AND invoice_id=?",[$companyA,$multiInvoice]);
+$old=get_invoice_payment_rows($companyA,$multiInvoice);
+$changed=$expected;$changed[1]['tracking']='CI-CORRECTED';
+correct_invoice_payment_rows($companyA,$multiInvoice,$old,$changed,'CI correction test');
+$after=get_invoice_payment_rows($companyA,$multiInvoice);
+integration_assert(array_column($old,'id')===array_column($after,'id') && array_column($old,'paid_at')===array_column($after,'paid_at') && $after[1]['tracking_number']==='CI-CORRECTED','Receipt correction moved or recreated original payment');
+db()->rollBack();
 $totals=invoice_payment_totals($companyA,$multiInvoice,1500000);
 integration_assert($totals['paid']===1500000 && $totals['remaining']===0 && count($totals['payments'])===2,
     'Multiple transactions were not persisted accurately.');
