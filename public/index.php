@@ -37,7 +37,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -101,6 +101,23 @@ if ($page==='service_rate_quotes') {
         error_log('Sodoryar rate quotes: '.$ex->getCode());
         http_response_code(503);echo json_encode(['error'=>'دریافت تعرفه در دسترس نیست.'],JSON_UNESCAPED_UNICODE);
     }
+    exit;
+}
+if ($page==='dashboard_detail') {
+    require_login(); require_permission('reports.view');
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
+    try {
+        $key=$_GET['key']??'';
+        if(!is_string($key)||!in_array($key,['today_count','month_count','today_total','month_total','receipts_today','cash_today','pos_today','due_total','unsettled_count','open_cashboxes','pending_cashboxes','unreviewed_issues','customers','services','invoices','revenue'],true)){http_response_code(400);exit;}
+        if($key==='customers'&&!can('customers.view')){http_response_code(403);exit;}
+        $today=date('Y-m-d');
+        [$jy,$jm]=gregorian_to_jalali((int)date('Y'),(int)date('n'),(int)date('j'));
+        $month=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$jy,$jm));
+        [$headers,$rows]=dashboard_detail((int)tenant_id(),$key,$today,$month);
+        echo json_encode(['headers'=>$headers,'rows'=>$rows],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+    }catch(Throwable $ex){error_log('Dashboard detail: '.$ex->getCode());http_response_code(503);echo '{}';}
     exit;
 }
 if ($page==='global_search') {
@@ -963,21 +980,28 @@ foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): $a
 <?php if(!can('reports.view')): ?><div class="card"><h2>خوش آمدید</h2><p class="muted">برای مشاهده گزارش‌های مالی، مدیر شرکت باید دسترسی مربوط را برای حساب شما فعال کند.</p></div><?php else: ?>
 <?php $validInvoice=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':''; $dashboardOwn=document_scope()==='own'; $dashboardScopeSql=$dashboardOwn?' AND user_id=?':''; $dashboardScopeParams=$dashboardOwn?[user()['id']]:[]; $stats=query('SELECT (SELECT COUNT(*) FROM customers WHERE company_id=?) customers,(SELECT COUNT(*) FROM services WHERE company_id=? AND is_active=1) services,(SELECT COUNT(*) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') revenue',array_merge([$tenant,$tenant,$tenant],$dashboardScopeParams,[$tenant],$dashboardScopeParams))->fetch(); ?>
 <?php [$todayJy,$todayJm]=gregorian_to_jalali((int)date('Y'),(int)date('n'),(int)date('j')); $jalaliMonthStart=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$todayJy,$todayJm)); $dashboardToday=date('Y-m-d'); $period=query('SELECT COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=? THEN 1 ELSE 0 END),0) today_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at)) BETWEEN ? AND ? THEN 1 ELSE 0 END),0) month_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=? THEN total_amount ELSE 0 END),0) today_total,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at)) BETWEEN ? AND ? THEN total_amount ELSE 0 END),0) month_total FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice,array_merge([$dashboardToday,$jalaliMonthStart,$dashboardToday,$dashboardToday,$jalaliMonthStart,$dashboardToday,$tenant],$dashboardScopeParams))->fetch(); ?>
-<div class="stats"><article class="stat"><span>خدمات ثبت‌شده امروز</span><b><?=money($period['today_count'])?></b></article><article class="stat"><span>خدمات ماه جاری</span><b><?=money($period['month_count'])?></b></article><article class="stat"><span>فروش امروز</span><b><?=money($period['today_total'])?></b><small>تومان؛ تاریخ صدور فاکتور</small></article><article class="stat"><span>فروش ماه جاری</span><b><?=money($period['month_total'])?></b><small>تومان؛ تاریخ صدور فاکتور</small></article></div>
+<div class="stats"><?php
+render_dashboard_stat('today_count','خدمات ثبت‌شده امروز',$period['today_count']);
+render_dashboard_stat('month_count','خدمات ماه جاری',$period['month_count']);
+render_dashboard_stat('today_total','فروش امروز',$period['today_total'],'تومان؛ تاریخ صدور فاکتور');
+render_dashboard_stat('month_total','فروش ماه جاری',$period['month_total'],'تومان؛ تاریخ صدور فاکتور');
+?></div>
 <?php $financeNow=dashboard_financial_snapshot((int)$tenant); ?>
 <?php if($financeNow['ledger_ready']): ?>
-<div class="stats finance-dashboard-stats">
-<article class="stat"><span>کل دریافتی قطعی امروز</span><b><?=money($financeNow['receipts_today'])?></b><small>تومان؛ جمع نقدی و کارتخوان</small></article>
-<article class="stat"><span>دریافت نقدی امروز</span><b><?=money($financeNow['cash_today'])?></b><small>تومان</small></article>
-<article class="stat"><span>دریافت کارتخوان امروز</span><b><?=money($financeNow['pos_today'])?></b><small>تومان؛ ثبت قطعی در سامانه</small></article>
-<article class="stat"><span>مانده کل مطالبات</span><b><?=money($financeNow['due_total'])?></b><small>تومان؛ اسناد معتبر</small></article>
-<article class="stat"><span>فاکتورهای تسویه‌نشده</span><b><?=money($financeNow['unsettled_count'])?></b></article>
-<article class="stat"><span>صندوق‌های باز</span><b><?=money($financeNow['open_cashboxes'])?></b></article>
-<article class="stat"><span>صندوق‌های در انتظار تأیید</span><b><?=money($financeNow['pending_cashboxes'])?></b></article>
-<article class="stat"><span>مغایرت‌های بررسی‌نشده ۳۰ روز اخیر</span><b><?=money($financeNow['unreviewed_issues'])?></b><small>حداکثر ۱۰۰ یافته بررسی می‌شود</small></article>
+<div class="stats finance-dashboard-stats"><?php
+render_dashboard_stat('receipts_today','کل دریافتی قطعی امروز',$financeNow['receipts_today'],'تومان؛ جمع نقدی و کارتخوان');
+render_dashboard_stat('cash_today','دریافت نقدی امروز',$financeNow['cash_today'],'تومان');
+render_dashboard_stat('pos_today','دریافت کارتخوان امروز',$financeNow['pos_today'],'تومان؛ ثبت قطعی در سامانه');
+render_dashboard_stat('due_total','مانده کل مطالبات',$financeNow['due_total'],'تومان؛ اسناد معتبر');
+render_dashboard_stat('unsettled_count','فاکتورهای تسویه‌نشده',$financeNow['unsettled_count']);
+render_dashboard_stat('open_cashboxes','صندوق‌های باز',$financeNow['open_cashboxes']);
+render_dashboard_stat('pending_cashboxes','صندوق‌های در انتظار تأیید',$financeNow['pending_cashboxes']);
+render_dashboard_stat('unreviewed_issues','مغایرت‌های بررسی‌نشده ۳۰ روز اخیر',$financeNow['unreviewed_issues'],'حداکثر ۱۰۰ یافته از هر نوع');
+?>
 </div>
 <?php else: ?><div class="alert">دفتر دریافت‌ها فعال نیست؛ آمار وصول تا تکمیل ساختار مالی قابل نمایش نیست.</div><?php endif; ?>
-<div class="dashboard-secondary"><div class="card"><h2>عملکرد کاربران در ماه شمسی جاری</h2><?php $rankingVoid=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':''; $ranking=query('SELECT u.full_name,COUNT(i.id) invoice_count,COALESCE(SUM(i.total_amount),0) total FROM users u LEFT JOIN invoices i ON i.user_id=u.id AND i.company_id=u.company_id AND COALESCE(i.invoice_date, DATE(i.created_at))>=?'.$rankingVoid.' WHERE u.company_id=? AND u.is_active=1 AND u.role=?'.($dashboardOwn?' AND u.id=?':'').' GROUP BY u.id,u.full_name ORDER BY invoice_count DESC,total DESC LIMIT 8',array_merge([$jalaliMonthStart,$tenant,'operator'],$dashboardScopeParams))->fetchAll(); ?><div class="ranking-chart"><?php if (!$ranking): ?><p class="muted">هنوز اپراتور فعالی برای نمایش عملکرد وجود ندارد.</p><?php endif; ?><?php $max=max(1,...array_map(static fn($r)=>(int)$r['invoice_count'],$ranking)); foreach($ranking as $row): ?><div class="ranking-row"><span><?=e($row['full_name'])?></span><div class="ranking-track"><progress max="<?=e((int)$max)?>" value="<?=e((int)$row['invoice_count'])?>" aria-label="تعداد فاکتورهای <?=e($row['full_name'])?>"></progress></div><b><?=money($row['invoice_count'])?></b></div><?php endforeach; ?></div></div><div class="card"><h2>شاخص‌های جاری</h2><dl class="metrics-list"><div><dt>رانندگان در پرونده شرکت</dt><dd><?=money($stats['customers'])?></dd></div><div><dt>خدمات فعال</dt><dd><?=money($stats['services'])?></dd></div><div><dt>کل فاکتورهای ثبت‌شده</dt><dd><?=money($stats['invoices'])?></dd></div><div><dt>مجموع مبالغ ثبت‌شده</dt><dd><?=money_toman($stats['revenue'])?></dd></div></dl></div></div>
+<dialog class="app-dialog dashboard-detail-dialog" id="dashboardDetail" aria-labelledby="dashboardDetailTitle"><div class="heading"><h2 id="dashboardDetailTitle">جزئیات شاخص</h2><button type="button" class="secondary small" data-dialog-close>بستن</button></div><p id="dashboardDetailStatus" role="status" aria-live="polite"></p><label>جستجو در جزئیات<input type="search" id="dashboardDetailSearch"></label><div class="table-wrap dashboard-detail-scroll"><table><thead id="dashboardDetailHead"></thead><tbody id="dashboardDetailBody"></tbody></table></div><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>بستن</button></div></dialog>
+<div class="dashboard-secondary"><div class="card"><h2>عملکرد کاربران در ماه شمسی جاری</h2><?php $rankingVoid=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':''; $ranking=query('SELECT u.full_name,COUNT(i.id) invoice_count,COALESCE(SUM(i.total_amount),0) total FROM users u LEFT JOIN invoices i ON i.user_id=u.id AND i.company_id=u.company_id AND COALESCE(i.invoice_date, DATE(i.created_at)) BETWEEN ? AND ?'.$rankingVoid.' WHERE u.company_id=? AND u.is_active=1 AND u.role=?'.($dashboardOwn?' AND u.id=?':'').' GROUP BY u.id,u.full_name ORDER BY invoice_count DESC,total DESC LIMIT 8',array_merge([$jalaliMonthStart,$dashboardToday,$tenant,'operator'],$dashboardScopeParams))->fetchAll(); ?><div class="ranking-chart"><?php if (!$ranking): ?><p class="muted">هنوز اپراتور فعالی برای نمایش عملکرد وجود ندارد.</p><?php endif; ?><?php $max=max(1,...array_map(static fn($r)=>(int)$r['invoice_count'],$ranking)); foreach($ranking as $row): ?><div class="ranking-row"><span><?=e($row['full_name'])?></span><div class="ranking-track"><progress max="<?=e((int)$max)?>" value="<?=e((int)$row['invoice_count'])?>" aria-label="تعداد فاکتورهای <?=e($row['full_name'])?>"></progress></div><b><?=money($row['invoice_count'])?></b></div><?php endforeach; ?></div></div><div class="card"><h2>شاخص‌های جاری</h2><dl class="metrics-list"><div><dt>رانندگان در پرونده شرکت</dt><dd><?php if(can('customers.view')): ?><button type="button" class="small secondary" data-dashboard-detail="customers"><?=money($stats['customers'])?></button><?php else: ?><?=money($stats['customers'])?><?php endif; ?></dd></div><div><dt>خدمات فعال</dt><dd><button type="button" class="small secondary" data-dashboard-detail="services"><?=money($stats['services'])?></button></dd></div><div><dt>کل فاکتورهای ثبت‌شده</dt><dd><button type="button" class="small secondary" data-dashboard-detail="invoices"><?=money($stats['invoices'])?></button></dd></div><div><dt>مجموع مبالغ ثبت‌شده</dt><dd><button type="button" class="small secondary" data-dashboard-detail="revenue"><?=money_toman($stats['revenue'])?></button></dd></div></dl></div></div>
 <?php if(can('invoices.view')): ?><div class="card"><div class="heading"><h2>آخرین فاکتورها</h2><a href="?page=invoice_manager">مشاهده همه</a></div><?php render_invoices($tenant,8); ?></div><?php endif; ?>
 <?php endif; ?>
 <?php elseif($page==='invoice_manager'): ?>
