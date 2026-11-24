@@ -3,6 +3,8 @@ name: Deploy Sodoryar to shared Linux host
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -116,7 +118,7 @@ jobs:
 
   deploy:
     needs: [source-validation, database-integration]
-    if: ${{ needs.source-validation.result == 'success' && needs.database-integration.result == 'success' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.source-validation.result == 'success' && needs.database-integration.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

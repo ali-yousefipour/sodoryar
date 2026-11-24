@@ -130,7 +130,7 @@ def main() -> None:
         expect(search_dialog).not_to_be_visible()
 
         manager_a.goto(f"{ORIGIN}/?page=invoices")
-        expect(manager_a.locator("#invoiceCreateForm")).to_be_visible()
+        expect(manager_a.locator("#invoiceCreateForm")).not_to_be_visible()
         assert "Vazirmatn" in manager_a.locator(".app-shell").evaluate(
             "(el) => getComputedStyle(el).fontFamily"
         ), "Application typography differs from the login screen"
@@ -148,8 +148,10 @@ def main() -> None:
         assert page_width <= viewport_width + 2, (
             f"Invoice mobile page overflows horizontally: {page_width}px > {viewport_width}px"
         )
+        manager_a.locator("#invoiceWizardOpen").click()
         manager_a.locator("#invoiceDriverNational").fill("1234567890")
         expect(manager_a.locator("#invoiceDriverStatus")).to_contain_text("CI Driver", timeout=12000)
+        manager_a.locator("[data-wizard-next]").click()
         manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
         selected_total = manager_a.locator("[data-service-total]").inner_text()
         assert ascii_number(selected_total) == 45000, "Selected service price did not update"
@@ -190,6 +192,10 @@ def main() -> None:
         assert ascii_number(manager_a.locator("[data-service-total]").inner_text()) == 70000, (
             "Custom invoice item was not included in the browser total"
         )
+        manager_a.locator("[data-wizard-next]").click()
+        manager_a.locator("[data-wizard-prev]").click()
+        expect(extra_price).to_have_value("۲۵٬۰۰۰")
+        manager_a.locator("[data-wizard-next]").click()
         method = manager_a.locator('#invoicePaymentRows [name$="[method]"]')
         for mode in ('cash', 'pos', 'cash'):
             manager_a.locator(f'[data-payment-mode="{mode}"]').click()
@@ -203,15 +209,15 @@ def main() -> None:
         assert method.locator('option').evaluate_all('(options) => options.map(o => o.value)') == ['cash', 'pos']
         method.select_option('pos')
         expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_visible()
-        manager_a.locator('.invoice-submit').click()
+        manager_a.locator('[data-wizard-next]').click()
         assert manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').evaluate('(el) => el.validity.valueMissing')
         assert 'page=invoices' in manager_a.url, 'POS without tracking was submitted'
         method.select_option('cash')
         expect(manager_a.locator('#invoicePaymentRows .payment-pos-fields')).to_be_hidden()
         payment_amount = manager_a.locator('#invoiceCreateForm').locator('input[name="payments[0][amount]"]')
         payment_amount.fill("1,5")
-        manager_a.locator(".invoice-submit").click()
-        expect(manager_a.locator("#invoicePaymentError")).to_be_visible()
+        manager_a.locator("[data-wizard-next]").click()
+        expect(manager_a.locator("[data-wizard-error]")).to_contain_text("اصلاح")
         payment_amount.fill("۲۰۰۰۰")
         manager_a.locator("#invoiceAddPayment").click()
         manager_a.locator('#invoiceCreateForm').locator('select[name="payments[1][method]"]').select_option("pos")
@@ -219,7 +225,8 @@ def main() -> None:
         manager_a.locator('#invoicePaymentRows select[name="payments[1][terminal]"]').select_option(index=1)
         expect(manager_a.locator("[data-payment-paid]")).to_contain_text("۷۰٬۰۰۰")
         expect(manager_a.locator("[data-payment-count]")).to_contain_text("۲")
-        manager_a.locator(".invoice-submit").click()
+        manager_a.locator("[data-wizard-next]").click()
+        manager_a.locator('[data-print="1"]').click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         expect(manager_a.locator(".receipt")).to_be_visible()
         expect(manager_a.locator(".receipt")).to_contain_text("۷۰٬۰۰۰")
@@ -235,13 +242,17 @@ def main() -> None:
         (OUTPUT / "invoice-a4.pdf").write_bytes(receipt_pdf)
         # A second invoice cannot reuse the same active POS receipt.
         manager_a.goto(f"{ORIGIN}/?page=invoices")
+        manager_a.locator("#invoiceWizardOpen").click()
         manager_a.locator('#invoiceDriverNational').fill('1234567890')
         expect(manager_a.locator('#invoiceDriverStatus')).to_contain_text('CI Driver', timeout=12000)
+        manager_a.locator("[data-wizard-next]").click()
         manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
+        manager_a.locator("[data-wizard-next]").click()
         manager_a.locator('[data-payment-mode="pos"]').click()
         manager_a.locator('#invoicePaymentRows input[name$="[tracking]"]').fill('CI-INVOICE-POS-2026')
         manager_a.locator('#invoicePaymentRows select[name="payments[0][terminal]"]').select_option(index=1)
-        manager_a.locator('.invoice-submit').click()
+        manager_a.locator("[data-wizard-next]").click()
+        manager_a.locator('[data-print="1"]').click()
         expect(manager_a.get_by_text('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.')).to_be_visible()
         manager_a.goto(f'{ORIGIN}/?page=dashboard')
         for key in ('today_count','month_count','today_total','month_total','receipts_today','cash_today','pos_today','due_total','unsettled_count','open_cashboxes','pending_cashboxes','unreviewed_issues'):
@@ -254,13 +265,17 @@ def main() -> None:
             manager_a.locator('#dashboardDetail [data-dialog-close]').first.click()
         # Issue a partially collected invoice and settle the remainder later.
         manager_a.goto(f"{ORIGIN}/?page=invoices")
+        manager_a.locator("#invoiceWizardOpen").click()
         manager_a.locator("#invoiceDriverNational").fill("1234567890")
         expect(manager_a.locator("#invoiceDriverStatus")).to_contain_text("CI Driver", timeout=12000)
+        manager_a.locator("[data-wizard-next]").click()
         manager_a.locator('[data-service-option][data-service-title="CI E2E Service A"] input').check()
+        manager_a.locator("[data-wizard-next]").click()
         manager_a.locator("#invoiceAllowPartial").check()
         manager_a.locator('#invoiceCreateForm input[name="payments[0][amount]"]').fill("15000")
         expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
-        manager_a.locator(".invoice-submit").click()
+        manager_a.locator("[data-wizard-next]").click()
+        manager_a.locator('[data-print="1"]').click()
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         partial_id = re.search(r"[?&]id=(\d+)", manager_a.url)
         assert partial_id, "Partially paid invoice did not produce a receipt"
