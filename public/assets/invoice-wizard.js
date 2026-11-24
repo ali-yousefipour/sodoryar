@@ -15,9 +15,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(n===3){
    const list=form.querySelector('[data-wizard-review]');list.replaceChildren();
    const add=(k,v)=>{const p=document.createElement('p');p.textContent=k+' : '+v;list.append(p);};
-   add('کد ملی',form.elements.driver_national_code.value);
+   add('کد ملی',form.elements.driver_national_code.value.replace(/[0-9]/g,d=>'۰۱۲۳۴۵۶۷۸۹'[Number(d)]));
+   add('تاریخ فاکتور',form.querySelector('[data-jalali-open]').textContent.trim());
    add('تاکسیران',form.querySelector('[data-driver-result]').textContent);
-   form.querySelectorAll('[data-service-option] input:checked').forEach(e=>add('خدمت',e.closest('label').innerText));
+   form.querySelectorAll('[data-service-option] input:checked').forEach(e=>add('خدمت',e.closest('label').textContent.trim()));
    form.querySelectorAll('.extra-invoice-row').forEach(e=>add('خدمت موردی',e.querySelector('[name="extra_title[]"]').value+' — '+e.querySelector('[name="extra_price[]"]').value));
    ['payable-total','payment-paid','payment-remaining','payment-count'].forEach((k,i)=>add(['مبلغ فاکتور','دریافتی','مانده','تعداد تراکنش'][i],form.querySelector('[data-'+k+']').textContent));
   }
@@ -43,11 +44,12 @@ document.addEventListener('DOMContentLoaded',()=>{
  document.getElementById('invoiceWizardOpen').addEventListener('click',()=>{show(0,false);dialog.showModal();status.focus();});
  form.addEventListener('input',()=>dirty=true);form.addEventListener('change',()=>dirty=true);
  const close=()=>{if(busy||form.dataset.submitting==='1')return;if(dirty&&!window.confirm('اطلاعات وارد شده حفظ می‌شوند. از ویزارد خارج می‌شوید؟'))return;dialog.close();};
- cancel.addEventListener('click',close);dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
+ cancel.addEventListener('click',close);dialog.addEventListener('cancel',e=>{if(e.target!==dialog)return;e.preventDefault();close();});
  prev.addEventListener('click',()=>{if(!busy)show(step-1);});
  next.addEventListener('click',()=>{if(!busy&&validate(step))show(step+1);});
  form.addEventListener('submit',e=>{
-  if(step!==3){e.preventDefault();return;}
+  if(e.defaultPrevented)return;
+  if(busy||step!==3){e.preventDefault();return;}
   for(let n=0;n<3;n++){show(n,false);if(!validate(n)){e.preventDefault();return;}}
   show(3,false);
   form.elements.invoice_after_save.value=e.submitter?.dataset.print==='1'?'print':'list';
