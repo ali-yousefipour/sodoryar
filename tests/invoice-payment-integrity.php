@@ -31,9 +31,10 @@ if ((int)$partial[0]['amount']!==1000000 || invoice_payment_rows([],5000000,true
 expect_payment_rejection([['method'=>'cash','amount'=>'۱٬۰۰۰٬۰۰۰']],5000000);
 expect_payment_rejection([['method'=>'cash','amount'=>'۶٬۰۰۰٬۰۰۰']],5000000);
 expect_payment_rejection([['method'=>'pos','amount'=>'100','tracking'=>'  ']],100);
-expect_payment_rejection([
+$unknownTerminal=invoice_payment_rows([
     ['method'=>'pos','amount'=>'50','terminal'=>'1','tracking'=>'۱۲۳'],
     ['method'=>'pos','amount'=>'50','tracking'=>'123'],
 ],100);
+if(count($unknownTerminal)!==2)throw new RuntimeException('Unknown device must not imply a duplicate.');
 
 echo "Invoice POS reference and terminal validation passed\n";

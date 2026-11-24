@@ -51,7 +51,7 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
             // Same device and tracking number cannot represent two payments on this invoice.
             // Tracking numbers may legitimately repeat across different terminals.
             foreach ($seenPosReferences as $seen) {
-                if ($seen['tracking']===$tracking && ($terminal===null || $seen['terminal']===null || $seen['terminal']===$terminal)) {
+                if ($seen['tracking']===$tracking && ($terminal!==null && $seen['terminal']===$terminal)) {
                     throw new RuntimeException('شماره پیگیری تکراری برای این کارتخوان ثبت شده است.');
                 }
             }
@@ -89,10 +89,11 @@ function assert_unique_invoice_pos_receipt(int $tenant,array $row): void {
     if (!db()->inTransaction()) throw new LogicException('Receipt validation requires a transaction.');
     query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
     $terminal=$row['terminal']??null;
-    $duplicate=query('SELECT id FROM invoice_payments WHERE company_id=? AND payment_method=\'pos\'
-        AND tracking_number=? AND voided_at IS NULL
-        AND (terminal_id=? OR terminal_id IS NULL OR ? IS NULL) LIMIT 1 FOR UPDATE',
-        [$tenant,$row['tracking'],$terminal,$terminal])->fetch();
+    if($terminal===null)return; // Unknown device cannot prove a duplicate receipt.
+    $day=new DateTimeImmutable('today',new DateTimeZone('Asia/Tehran'));
+    $duplicate=query('SELECT p.id FROM invoice_payments p WHERE p.company_id=? AND p.payment_method=\'pos\'
+        AND p.tracking_number=? AND p.voided_at IS NULL AND p.terminal_id=? AND p.paid_at>=? AND p.paid_at<?'.(database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=p.company_id AND v.invoice_id=p.invoice_id)':'').' LIMIT 1 FOR UPDATE',
+        [$tenant,$row['tracking'],$terminal,$day->format('Y-m-d').' 00:00:00',$day->modify('+1 day')->format('Y-m-d').' 00:00:00'])->fetch();
     if ($duplicate) throw new RuntimeException('این فیش کارتخوان قبلاً در شرکت ثبت شده است؛ شماره پیگیری تکراری است.');
 }
 function get_invoice_payment_rows(int $tenant,int $invoiceId): array {
