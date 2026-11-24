@@ -96,7 +96,7 @@ function invoice_payment_report(int $tenant,array $filter,int $limit=200): array
 
 /**
  * Tenant-scoped financial control exceptions.
- * Never claim a bank settlement is verified: POS entries are operator declarations.
+ * Posted cash/POS receipts are final in the internal ledger; reconciliation is independent.
  */
 function financial_control_exceptions(int $tenant,array $filter,int $limit=100): array {
     if (!invoice_payment_ledger_ready()) return [];
