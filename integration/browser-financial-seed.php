@@ -15,6 +15,7 @@ foreach (['ci-tenant-a'=>'a','ci-tenant-b'=>'b'] as $slug=>$suffix) {
     if ($tenant<1) throw new RuntimeException('Missing disposable company fixture: '.$slug);
     query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',
         [$tenant,'ci_manager_'.$suffix,$hash,'CI E2E Manager '.strtoupper($suffix),'company_admin']);
+    query('INSERT INTO pos_settings(company_id,brand,is_active) VALUES(?,?,1)',[$tenant,'CI E2E Terminal']);
     query('INSERT INTO services(company_id,title,price,is_active) VALUES(?,?,?,1)',
         [$tenant,'CI E2E Service '.strtoupper($suffix),$suffix==='a'?45000:99999]);
 }

@@ -383,6 +383,9 @@ $otherTenantAccountRejected=false;
 try {driver_account_data($companyA,$customerB);}
 catch(RuntimeException $expected){$otherTenantAccountRejected=true;}
 integration_assert($otherTenantAccountRejected,'Cross-company driver financial profile was accessible');
+[$detailHeaders,$detailRows]=dashboard_detail($companyA,'receipts_today',date('Y-m-d'),date('Y-m-01'));
+integration_assert(count($detailHeaders)===6,'Dashboard receipt detail headers missing');
+integration_assert(count($detailRows)===count(dashboard_detail($companyA,'cash_today',date('Y-m-d'),date('Y-m-01'))[1])+count(dashboard_detail($companyA,'pos_today',date('Y-m-d'),date('Y-m-01'))[1]),'Dashboard receipt detail method split mismatch');
 $_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
 
 
@@ -399,9 +402,11 @@ $paymentMigration=$root.'/database/migrations/016_invoice_payments.sql';
 foreach(range(1,2) as $pass) apply_sql_fixture($paymentMigration);
 integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=? AND invoice_id=?',[$companyA,$invoiceA])->fetchColumn()===1,
     'Legacy invoice backfill must not duplicate on repeated migration.');
+$terminalA=insert_fixture('INSERT INTO pos_settings(company_id,brand,is_active) VALUES(?,?,1)',[$companyA,'CI terminal A']);
+$terminalB=insert_fixture('INSERT INTO pos_settings(company_id,brand,is_active) VALUES(?,?,1)',[$companyB,'CI terminal B']);
 $expected=invoice_payment_rows([
     ['method'=>'cash','amount'=>'۵۰۰٬۰۰۰'],
-    ['method'=>'pos','amount'=>'1,000,000','tracking'=>'۱۲۳'],
+    ['method'=>'pos','amount'=>'1,000,000','tracking'=>'۱۲۳','terminal'=>(string)$terminalA],
 ],1500000);
 integration_assert(count($expected)===2 && $expected[0]['amount']===500000 && $expected[1]['tracking']==='123',
     'Persian/Arabic payment amount or tracking normalization failed.');
@@ -443,7 +448,7 @@ catch(PDOException $ex) {
 } finally { $otherConnection->rollBack(); db()->rollBack(); }
 integration_assert($sameCompanySerialized,'Concurrent receipt validation did not serialize by company.');
 db()->beginTransaction();
-create_invoice_payment_rows($companyB,$invoiceB,$userB,[$expected[1]]);
+create_invoice_payment_rows($companyB,$invoiceB,$userB,[array_replace($expected[1],['terminal'=>$terminalB])]);
 db()->rollBack();
 db()->beginTransaction();
 query('UPDATE invoice_payments SET voided_at=NOW() WHERE invoice_id=? AND company_id=? AND payment_method=\'pos\'',[$multiInvoice,$companyA]);
