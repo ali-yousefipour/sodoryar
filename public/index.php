@@ -554,10 +554,23 @@ try {
             require_permission('invoices.create');
             $expectedNonce=(string)($_SESSION['invoice_create_nonce']??'');
             $submittedNonce=(string)($_POST['invoice_create_nonce']??'');
+            $tenant = tenant_id();
+            $actor=(int)user()['id'];
+            if (!preg_match('/^[a-f0-9]{32}$/D',$submittedNonce)) throw new RuntimeException('شناسه درخواست نامعتبر است.');
+            $requestLedger=(bool)query("SHOW TABLES LIKE 'invoice_create_requests'")->fetch();
+            $payload=$_POST;
+            unset($payload['invoice_after_save'],$payload['csrf'],$payload['_csrf']);
+            $requestHash=hash('sha256',serialize($payload));
+            if ($requestLedger) {
+                $previous=query('SELECT invoice_id,request_hash FROM invoice_create_requests WHERE company_id=? AND user_id=? AND request_key=?',[$tenant,$actor,$submittedNonce])->fetch();
+                if ($previous) {
+                    if (!hash_equals($previous['request_hash'],$requestHash)) throw new RuntimeException('این شناسه قبلاً برای فاکتور دیگری استفاده شده است.');
+                    finish_invoice_creation((int)$previous['invoice_id']);
+                }
+            }
             if ($expectedNonce==='' || !hash_equals($expectedNonce,$submittedNonce)) {
                 throw new RuntimeException('این درخواست صدور قبلاً ثبت شده یا فرم منقضی شده است؛ صفحه را تازه‌سازی کنید.');
             }
-            $tenant = tenant_id();
             $national=ascii_digits(trim((string)($_POST['driver_national_code']??'')));
             $selected = normalize_invoice_service_ids($_POST['service_ids'] ?? []);
             $extras=normalize_invoice_extra_rows($_POST['extra_title']??[],$_POST['extra_price']??[]);
@@ -575,6 +588,15 @@ try {
             if ($extras && !invoice_extensions_ready()) throw new RuntimeException('برای ثبت آیتم اضافی، ابتدا میگرشن دیتابیس ۰۰۶ را اجرا کنید.');
             db()->beginTransaction();
             try {
+                if ($requestLedger) {
+                    query('INSERT INTO invoice_create_requests(company_id,user_id,request_key,request_hash) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE request_key=request_key',[$tenant,$actor,$submittedNonce,$requestHash]);
+                    $claimed=query('SELECT invoice_id,request_hash FROM invoice_create_requests WHERE company_id=? AND user_id=? AND request_key=? FOR UPDATE',[$tenant,$actor,$submittedNonce])->fetch();
+                    if (!hash_equals($claimed['request_hash'],$requestHash)) throw new RuntimeException('شناسه درخواست با محتوای فاکتور مطابقت ندارد.');
+                    if ($claimed['invoice_id']) {
+                        db()->commit();
+                        finish_invoice_creation((int)$claimed['invoice_id']);
+                    }
+                }
                 accounting_assert_write_open($tenant,$invoiceDate);
                 $customer=register_missing_driver($tenant,$national,(array)($_POST['new_driver']??[]),true);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
@@ -594,14 +616,10 @@ try {
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
                 if (invoice_payment_ledger_ready()) create_invoice_payment_rows($tenant,$invoiceId,(int)user()['id'],$paymentRows);
+                if ($requestLedger) query('UPDATE invoice_create_requests SET invoice_id=? WHERE company_id=? AND user_id=? AND request_key=?',[$invoiceId,$tenant,$actor,$submittedNonce]);
                 audit('invoice.create',$number); db()->commit();
-                unset($_SESSION['invoice_create_nonce']);
-                // Creation alone must not imply access to the receipt or invoice list.
-                if (($_POST['invoice_after_save']??'print')==='print' && can('invoices.view') && can('invoices.print')) {
-                    header('Location: ?page=receipt&id='.$invoiceId); exit;
-                }
-                redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
-            } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
+                finish_invoice_creation($invoiceId);
+            } catch(Throwable $ex) { if(db()->inTransaction())db()->rollBack(); throw $ex; }
         }
         if ($page==='invoices' && $action==='collect_balance') {
             require_permission('invoices.payment_edit');
@@ -1161,6 +1179,13 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 </main></div></div>
 <?php endif; ?><?php if ($page==='login'): ?><script src="assets/login-ui.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-ui.js'),0,16))?>" defer></script><?php endif; ?><?php if($page!=='login'): ?><script src="assets/user-preferences.js?v=<?=e((string)filemtime(__DIR__.'/assets/user-preferences.js'))?>" defer></script><?php endif; ?><script src="assets/app.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/app.js'),0,16))?>" defer></script><script src="assets/global-search.js?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.js'))?>" defer></script><script src="assets/table-experience.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/table-experience.js'),0,16))?>" defer></script><script src="assets/report-progress.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/report-progress.js'),0,16))?>" defer></script></body></html>
 <?php
+function finish_invoice_creation(int $invoiceId): never {
+    if (hash_equals((string)($_SESSION['invoice_create_nonce']??''),(string)($_POST['invoice_create_nonce']??''))) unset($_SESSION['invoice_create_nonce']);
+    if (($_POST['invoice_after_save']??'print')==='print' && can('invoices.view') && can('invoices.print')) {
+        header('Location: ?page=receipt&id='.$invoiceId); exit;
+    }
+    redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
+}
 function render_invoices(int $tenant, int $limit): void {
     require_permission('invoices.view');
     $voidColumn=database_table_exists('invoice_voids')?'v.reason AS void_reason, v.voided_at':'NULL AS void_reason, NULL AS voided_at';
