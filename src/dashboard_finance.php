@@ -4,8 +4,9 @@ declare(strict_types=1);
 /** Current financial dashboard values use actual receipt timestamps, not invoice dates. */
 function dashboard_financial_snapshot(int $tenant): array {
     require_permission('reports.view');
-    $today=date('Y-m-d');
-    $tomorrow=(new DateTimeImmutable('tomorrow'))->format('Y-m-d');
+    $day=new DateTimeImmutable('today',new DateTimeZone('Asia/Tehran'));
+    $today=$day->format('Y-m-d');
+    $tomorrow=$day->modify('+1 day')->format('Y-m-d');
     $empty=[
         'receipts_today'=>0,'cash_today'=>0,'pos_today'=>0,
         'due_total'=>0,'unsettled_count'=>0,
@@ -16,8 +17,7 @@ function dashboard_financial_snapshot(int $tenant): array {
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
     $activeInvoice=database_table_exists('invoice_voids')?
        ' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':'';
-    $receipt=query('SELECT COALESCE(SUM(p.amount),0) received,
-        COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_total,
+    $receipt=query('SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_total,
         COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_total
         FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
         WHERE p.company_id=? AND p.voided_at IS NULL
@@ -31,9 +31,10 @@ function dashboard_financial_snapshot(int $tenant): array {
          WHERE company_id=? AND voided_at IS NULL GROUP BY company_id,invoice_id) pay
         ON pay.company_id=i.company_id AND pay.invoice_id=i.id
         WHERE i.company_id=?'.$scope.$activeInvoice,[$tenant,$tenant])->fetch();
-    $empty['receipts_today']=(int)$receipt['received'];
+    // Both methods are final receipts on successful posting; no bank approval state.
     $empty['cash_today']=(int)$receipt['cash_total'];
     $empty['pos_today']=(int)$receipt['pos_total'];
+    $empty['receipts_today']=$empty['cash_today']+$empty['pos_today'];
     $empty['due_total']=(int)$due['total_due'];
     $empty['unsettled_count']=(int)$due['unsettled'];
     if(function_exists('cashbox_ready')&&cashbox_ready()){
