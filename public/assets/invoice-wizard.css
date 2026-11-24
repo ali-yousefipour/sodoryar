@@ -1,0 +1,13 @@
+#invoiceWizard{width:min(1000px,96vw);max-width:96vw;max-height:92dvh;padding:0;border:1px solid #ddd;border-radius:16px;direction:rtl;overflow:hidden;background:var(--surface,#fff);color:inherit}
+#invoiceWizard::backdrop{background:rgba(38,35,77,.55)}
+#invoiceWizard .invoice-workspace{padding:0;margin:0;border:0}
+#invoiceWizard form.invoice-form{display:flex;flex-direction:column;gap:0;max-height:90dvh;margin:0;padding:0}
+#invoiceWizard .invoice-wizard-header{padding:16px 20px;border-bottom:1px solid #ddd;flex-shrink:0}
+#invoiceWizard .invoice-wizard-header h2,#invoiceWizard .invoice-wizard-header p{margin:0}
+#invoiceWizard .invoice-wizard-body{overflow:auto;min-height:0;flex:1;padding:16px 20px;display:grid;gap:12px}
+#invoiceWizard .invoice-form-footer{position:sticky;bottom:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid #ddd;background:var(--surface,#fff);flex-shrink:0}
+#invoiceWizard [hidden]{display:none!important}
+#invoiceWizard .invoice-wizard-error{color:#a52222;margin:0;padding:0 20px}
+#invoiceWizard .invoice-wizard-error:empty{display:none}
+#invoiceWizard [data-wizard-review] p{margin:8px 0;overflow-wrap:anywhere}
+@media(max-width:600px){#invoiceWizard{width:98vw;max-width:98vw;max-height:96dvh}#invoiceWizard form.invoice-form{max-height:94dvh}#invoiceWizard .invoice-wizard-body,#invoiceWizard .invoice-wizard-header,#invoiceWizard .invoice-form-footer{padding:10px}#invoiceWizard .invoice-form-footer button{flex:1 1 auto;font-size:.85rem}}
