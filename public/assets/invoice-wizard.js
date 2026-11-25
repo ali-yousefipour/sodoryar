@@ -64,9 +64,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(busy||step!==3){e.preventDefault();return;}
   for(let n=0;n<3;n++){show(n,false);if(!validate(n)){e.preventDefault();return;}}
   show(3,false);
-  form.elements.invoice_after_save.value=e.submitter?.dataset.print==='1'?'print':'list';
+  form.elements.invoice_after_save.value=e.submitter?.dataset.saveNext==='1'?'next':e.submitter?.dataset.print==='1'?'print':'list';
  },true);
  form.addEventListener('submit',e=>{if(e.defaultPrevented)return;busy=true;form.setAttribute('aria-busy','true');status.textContent='در حال ثبت فاکتور…';[prev,next,cancel,...saves].forEach(b=>b.disabled=true);});
  window.addEventListener('pageshow',()=>{busy=false;form.removeAttribute('aria-busy');[prev,next,cancel,...saves].forEach(b=>b.disabled=false);if(dialog.open)show(step,false);});
  show(0,false);
+ if(dialog.dataset.startNext==='1'){
+  delete dialog.dataset.startNext;
+  dialog.showModal();
+  status.textContent='فاکتور قبلی ثبت شد — ۱ از ۴، انتخاب تاکسیران جدید';
+  form.elements.driver_national_code.focus();
+ }
 });
