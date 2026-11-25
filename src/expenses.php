@@ -24,9 +24,10 @@ function expense_create(array $input): int {
     require_login();
     if(!expenses_ready())throw new RuntimeException('ساختار هزینه‌ها آماده نیست.');
     $tenant=tenant_id();$actor=(int)user()['id'];
+    if(is_super())throw new RuntimeException('ثبت هزینه باید توسط کاربر همان شرکت انجام شود.');
     $branch=branch_require($tenant,$actor,$input['branch_id']??null);
     $category=filter_var($input['category_id']??null,FILTER_VALIDATE_INT);
-    $date=ascii_digits((string)($input['expense_date']??''));$d=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+    $date=jalali_to_gregorian_date((string)($input['expense_date']??''));$d=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
     $title=trim((string)($input['title']??''));$notes=trim((string)($input['notes']??''));
     $key=(string)($input['request_key']??'');
     if(!$category||!$d||$d->format('Y-m-d')!==$date||$date>date('Y-m-d')||$title===''||mb_strlen($title)>180||mb_strlen($notes)>4000||!preg_match('/^[a-f0-9]{64}$/D',$key))throw new RuntimeException('اطلاعات سند معتبر نیست.');
