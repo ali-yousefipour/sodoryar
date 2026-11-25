@@ -174,7 +174,7 @@ apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 integration_assert(financial_issue_reviews_ready(),'Financial issue review journal failed to install');
 $health=sodoryar_finance_schema_checks();
-integration_assert(count($health)===14 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7,
+integration_assert(count($health)===15 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7,
     'Finance schema health checks did not recognize the seven installed migrations');
 
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
@@ -620,13 +620,14 @@ integration_assert(count(array_filter(sodoryar_finance_schema_checks(),static fn
 require $root.'/src/expense_settings.php';
 require $root.'/src/expenses.php';
 $expenseCashBefore=query('SELECT * FROM cash_shift_adjustments ORDER BY id')->fetchAll();
+$expenseCashColumns=implode(',',array_map(static fn($column)=>'`'.$column.'`',array_keys($expenseCashBefore[0])));
 $expenseSalesBefore=query('SELECT id,total_amount FROM invoices ORDER BY id')->fetchAll();
 apply_sql_fixture($root.'/database/migrations/031_expense_documents.sql');
 $legacyDocs=query("SELECT id,company_id,request_key FROM expenses WHERE document_number LIKE 'LEGACY-CASH-%' ORDER BY id")->fetchAll();
 apply_sql_fixture($root.'/database/migrations/031_expense_documents.sql');
 integration_assert($legacyDocs===query("SELECT id,company_id,request_key FROM expenses WHERE document_number LIKE 'LEGACY-CASH-%' ORDER BY id")->fetchAll(),'Legacy expense imported twice');
 integration_assert(count($legacyDocs)===1,'Explicit legacy cash expense not imported');
-integration_assert($expenseCashBefore===query('SELECT * FROM cash_shift_adjustments ORDER BY id')->fetchAll(),'Expense migration changed or reposted cash');
+integration_assert($expenseCashBefore===query('SELECT '.$expenseCashColumns.' FROM cash_shift_adjustments ORDER BY id')->fetchAll(),'Expense migration changed or reposted cash');
 integration_assert((int)query('SELECT COUNT(*) FROM expense_payments WHERE cash_adjustment_id IS NOT NULL')->fetchColumn()===1,'Legacy payment missing original cash adjustment');
 integration_assert((int)query('SELECT COUNT(*) FROM expense_items')->fetchColumn()===1,'Legacy expense item missing');
 function expense_test_user(int $id): void {
@@ -710,3 +711,26 @@ expense_test_user($managerA);
 integration_assert($expenseSalesBefore===query('SELECT id,total_amount FROM invoices ORDER BY id')->fetchAll(),'Expense module changed invoice sales');
 integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Expense module created invoice receipts');
 echo "PASS: expense migration replay/legacy preservation, exact cash/bank/personal/mixed payments, approval/rejection, reimbursements, draft versions, request replay, void reversals, ownership and unchanged sales.\n";
+
+$partialExpense=expense_save($companyA,$managerA,$expenseBase,$key('partial-pay-document'));
+// At this stage approval policy is all; approve through a different authorized reviewer.
+expense_test_user($expenseReviewer);expense_review($companyA,$partialExpense,$expenseReviewer,'approved','CI partial payment approval');expense_test_user($managerA);
+$payInput=['method'=>'bank','amount'=>'40','bank_account_id'=>$centralAccount,'paid_date'=>date('Y-m-d')];
+expense_add_payment($companyA,$partialExpense,$managerA,$payInput,$key('partial-pay'));
+expense_add_payment($companyA,$partialExpense,$managerA,$payInput,$key('partial-pay'));
+integration_assert((int)query('SELECT SUM(amount) FROM expense_payments WHERE company_id=? AND expense_id=?',[$companyA,$partialExpense])->fetchColumn()===40,'Partial payment replay duplicated outflow');
+expense_test_reject(fn()=>expense_add_payment($companyA,$partialExpense,$managerA,array_merge($payInput,['amount'=>'61']),$key('partial-overpay')),'Partial payment above remaining allowed');
+
+integration_assert(count(array_filter(sodoryar_finance_schema_checks(),static fn($check)=>$check['installed']))===15,'Expense document schema readiness missing');
+
+query("UPDATE expense_policies SET approval_mode='none' WHERE company_id=?",[$companyA]);
+$beforeFailure=cashbox_shift_totals($companyA,$sourceShift);
+$opening=(int)query('SELECT opening_cash FROM cash_shifts WHERE company_id=? AND id=?',[$companyA,$sourceShift])->fetchColumn();
+$available=$opening+$beforeFailure['cash']+$beforeFailure['incoming']-$beforeFailure['outgoing'];
+$atomic=$expenseBase;$atomic['items'][0]['unit_price']=(string)($available+1);
+$atomic['payments']=[['method'=>'cash','amount'=>'1','cash_shift_id'=>$sourceShift],['method'=>'cash','amount'=>(string)$available,'cash_shift_id'=>$sourceShift]];
+$beforeDocuments=(int)query('SELECT COUNT(*) FROM expenses WHERE company_id=?',[$companyA])->fetchColumn();
+expense_test_reject(fn()=>expense_save($companyA,$managerA,$atomic,$key('atomic-overdraft')),'Overdraft during second cash payment accepted');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)===$beforeFailure,'Failed second payment left first cash outflow');
+integration_assert((int)query('SELECT COUNT(*) FROM expenses WHERE company_id=?',[$companyA])->fetchColumn()===$beforeDocuments,'Failed posting left expense document');
+echo "PASS: expense multi-payment failure rolled back document and all cash movements.\n";

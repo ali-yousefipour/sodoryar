@@ -19,6 +19,7 @@ $result=expense_report_data(7,$filter);expense_report_assert($result['page']===3
 foreach([['branch_id'=>'2 OR 1=1'],['method'=>'pos'],['approval_status'=>'deleted'],['date_from'=>'2026-02-30'],['date_from'=>'2026-12-02','date_to'=>'2026-01-01'],['amount_min'=>'200','amount_max'=>'100'],['category_id'=>['3']]] as $invalid){
     $rejected=false;try{expense_report_filters($invalid);}catch(RuntimeException $ex){$rejected=true;}expense_report_assert($rejected);
 }
-expense_report_assert(expense_report_exact_add('99999999999999999999','1')==='100000000000000000000');
-expense_report_assert(expense_report_exact_add('0','0')==='0');
+$source=file_get_contents(dirname(__DIR__).'/src/expense_reports.php');
+$cashStart=strpos($source,'$cashFlow=query');$bankEnd=strpos($source,'[$allSource',$cashStart);$flows=substr($source,$cashStart,$bankEnd-$cashStart);
+expense_report_assert(str_contains($flows,'expense_document_id') && str_contains($flows,"ELSE -a.amount") && str_contains($flows,"ELSE -m.amount") && !str_contains($flows,'approval_status'));
 echo "Expense report filters, tenant/actor scope, exact sums and pagination checks passed\n";

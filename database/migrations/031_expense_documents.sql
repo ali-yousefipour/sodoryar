@@ -244,3 +244,9 @@ CREATE TABLE IF NOT EXISTS expense_requests (
 INSERT INTO expense_requests(company_id,request_key,request_digest,expense_id,created_at)
 SELECT e.company_id,e.request_key,e.request_digest,e.id,e.created_at FROM expenses e
 WHERE NOT EXISTS (SELECT 1 FROM expense_requests r WHERE r.company_id=e.company_id AND r.request_key=e.request_key);
+
+SET @ddl=IF((SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='cash_shift_adjustments' AND COLUMN_NAME='expense_document_id')=0,'ALTER TABLE cash_shift_adjustments ADD COLUMN expense_document_id BIGINT UNSIGNED NULL','SELECT 1');
+PREPARE expense_stmt FROM @ddl; EXECUTE expense_stmt; DEALLOCATE PREPARE expense_stmt;
+SET @ddl=IF((SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='cash_shift_adjustments' AND CONSTRAINT_NAME='fk_cash_adjust_expense_document')=0,'ALTER TABLE cash_shift_adjustments ADD CONSTRAINT fk_cash_adjust_expense_document FOREIGN KEY(expense_document_id,company_id) REFERENCES expenses(id,company_id)','SELECT 1');
+PREPARE expense_stmt FROM @ddl; EXECUTE expense_stmt; DEALLOCATE PREPARE expense_stmt;
+UPDATE cash_shift_adjustments a JOIN expense_payments p ON p.cash_adjustment_id=a.id AND p.company_id=a.company_id SET a.expense_document_id=p.expense_id WHERE a.expense_document_id IS NULL;

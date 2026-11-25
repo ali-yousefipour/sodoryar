@@ -17,7 +17,8 @@ function sodoryar_finance_schema_checks(): array {
         'هزینه نقدی (۰۲۶)'=>['cash_shift_adjustments.expense_branch_id','cash_shift_adjustments.expense_token'],
         'انتقال داخلی (۰۲۷)'=>['cash_transfers','cash_shift_adjustments.transfer_id'],
         'مشخصات کارتخوان (۰۲۸)'=>['pos_account_registry.merchant_number','pos_account_registry.serial_number'],
-        'تطبیق بانکی (۰۳۰)'=>['pos_bank_settlements','pos_bank_settlement_items']
+        'تطبیق بانکی (۰۳۰)'=>['pos_bank_settlements','pos_bank_settlement_items'],
+        'اسناد هزینه (۰۳۱)'=>['expenses','expense_items','expense_payments','expense_requests','employee_reimbursements','expense_bank_movements','expense_attachments','cash_shift_adjustments.expense_document_id']
     ];
     $tables=query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
     $known=array_fill_keys($tables,true);

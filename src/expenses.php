@@ -1,7 +1,10 @@
 <?php
 declare(strict_types=1);
 
-function expenses_ready(): bool {return database_table_exists('expenses') && database_table_exists('expense_payments');}
+function expenses_ready(): bool {
+    foreach(['expenses','expense_payments','expense_items','expense_requests','expense_categories','expense_policies','expense_bank_movements','employee_reimbursements','expense_events','expense_attachments'] as $table)if(!database_table_exists($table))return false;
+    return (bool)query("SHOW COLUMNS FROM cash_shift_adjustments LIKE 'expense_document_id'")->fetch();
+}
 function expense_require_permission(string $action): void {
     if(!can('expenses.'.$action))throw new RuntimeException('مجوز عملیات هزینه را ندارید.');
 }
@@ -53,7 +56,7 @@ function expense_event(int $tenant,int $id,int $actor,string $action,string $rea
     audit('expense.'.$action,json_encode(['expense_id'=>$id,'reason'=>$reason],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE),$tenant);
 }
 /** Must be called within the document transaction; every cash outflow has a ledger row. */
-function expense_cash_movement(int $tenant,int $branch,int $actor,int $shift,int $amount,string $direction,string $reason): int {
+function expense_cash_movement(int $tenant,int $branch,int $actor,int $shift,int $amount,string $direction,string $reason,int $expenseId): int {
     require_permission('cashbox.adjust');
     $row=query('SELECT s.operator_id,s.status,s.opening_cash,r.branch_id,r.is_active FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.company_id=? AND s.id=? FOR UPDATE',[$tenant,$shift])->fetch();
     if(!$row||$row['status']!=='open'||!(int)$row['is_active']||(int)$row['branch_id']!==$branch||((int)$row['operator_id']!==$actor&&!can('cashbox.manage')))throw new RuntimeException('صندوق باز و مجاز همین شعبه را انتخاب کنید.');
@@ -62,7 +65,7 @@ function expense_cash_movement(int $tenant,int $branch,int $actor,int $shift,int
         $totals=cashbox_shift_totals($tenant,$shift);
         if($amount>(int)$row['opening_cash']+$totals['cash']+$totals['incoming']-$totals['outgoing'])throw new RuntimeException('موجودی نقدی صندوق کافی نیست.');
     }
-    query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,?,?,?,?)',[$tenant,$shift,$direction,$amount,$reason,$actor]);
+    query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by,expense_document_id) VALUES(?,?,?,?,?,?,?)',[$tenant,$shift,$direction,$amount,$reason,$actor,$expenseId]);
     return (int)db()->lastInsertId();
 }
 function expense_bank_require(int $tenant,int $branch,int $account): void {
@@ -74,7 +77,7 @@ function expense_post_payments(int $tenant,array $expense,int $actor): void {
     foreach(query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NULL ORDER BY id FOR UPDATE',[$tenant,$id])->fetchAll() as $payment){
         accounting_assert_write_open($tenant,$payment['paid_date']);
         $adjustment=null;
-        if($payment['method']==='cash')$adjustment=expense_cash_movement($tenant,$branch,$actor,(int)$payment['cash_shift_id'],(int)$payment['amount'],'out','پرداخت هزینه '.$expense['document_number']);
+        if($payment['method']==='cash')$adjustment=expense_cash_movement($tenant,$branch,$actor,(int)$payment['cash_shift_id'],(int)$payment['amount'],'out','پرداخت هزینه '.$expense['document_number'],$id);
         elseif($payment['method']==='bank'){
             expense_bank_require($tenant,$branch,(int)$payment['bank_account_id']);
             query("INSERT INTO expense_bank_movements(company_id,expense_id,payment_id,bank_account_id,direction,amount,paid_date,reference,created_by) VALUES(?,?,?,?,'out',?,?,?,?)",[$tenant,$id,$payment['id'],$payment['bank_account_id'],$payment['amount'],$payment['paid_date'],$payment['tracking_number'],$actor]);
@@ -157,7 +160,7 @@ function expense_reimburse(int $tenant,int $actor,array $input,string $requestKe
         $p=query("SELECT p.amount-COALESCE((SELECT SUM(r.amount) FROM employee_reimbursements r WHERE r.company_id=p.company_id AND r.payment_id=p.id),0) remaining FROM expense_payments p WHERE p.company_id=? AND p.expense_id=? AND p.id=? AND p.method='personal' AND p.posted_at IS NOT NULL FOR UPDATE",[$tenant,$id,$payment])->fetch();
         if(!$p||$amount>(int)$p['remaining'])throw new RuntimeException('مبلغ بازپرداخت بیشتر از بدهی به کارمند است.');
         accounting_assert_write_open($tenant,$date);$adjustment=null;
-        if($method==='cash')$adjustment=expense_cash_movement($tenant,(int)$e['branch_id'],$actor,(int)$shift,$amount,'out','بازپرداخت کارمند بابت '.$e['document_number']);else expense_bank_require($tenant,(int)$e['branch_id'],(int)$account);
+        if($method==='cash')$adjustment=expense_cash_movement($tenant,(int)$e['branch_id'],$actor,(int)$shift,$amount,'out','بازپرداخت کارمند بابت '.$e['document_number'],$id);else expense_bank_require($tenant,(int)$e['branch_id'],(int)$account);
         query('INSERT INTO employee_reimbursements(company_id,expense_id,payment_id,amount,method,cash_shift_id,bank_account_id,cash_adjustment_id,paid_date,tracking_number,created_by,request_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[$tenant,$id,$payment,$amount,$method,$shift,$account,$adjustment,$date,$tracking,$actor,$requestKey]);$rid=(int)db()->lastInsertId();
         if($method==='bank')query("INSERT INTO expense_bank_movements(company_id,expense_id,reimbursement_id,bank_account_id,direction,amount,paid_date,reference,created_by) VALUES(?,?,?,?,'out',?,?,?,?)",[$tenant,$id,$rid,$account,$amount,$date,$tracking,$actor]);
         expense_event($tenant,$id,$actor,'reimburse',(string)$rid);db()->commit();return $rid;
@@ -171,7 +174,7 @@ function expense_void(int $tenant,int $id,int $actor,string $reason): void {
         accounting_assert_write_open($tenant,$e['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
         if(query('SELECT id FROM employee_reimbursements WHERE company_id=? AND expense_id=? LIMIT 1',[$tenant,$id])->fetch())throw new RuntimeException('این سند بازپرداخت کارمند دارد؛ ابتدا فرایند برگشت بازپرداخت لازم است.');
         foreach(query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL ORDER BY cash_shift_id,id FOR UPDATE',[$tenant,$id])->fetchAll() as $p){
-            if($p['method']==='cash')expense_cash_movement($tenant,(int)$e['branch_id'],$actor,(int)$p['cash_shift_id'],(int)$p['amount'],'in','برگشت هزینه '.$e['document_number']);
+            if($p['method']==='cash')expense_cash_movement($tenant,(int)$e['branch_id'],$actor,(int)$p['cash_shift_id'],(int)$p['amount'],'in','برگشت هزینه '.$e['document_number'],$id);
             elseif($p['method']==='bank')query("INSERT INTO expense_bank_movements(company_id,expense_id,payment_id,bank_account_id,direction,amount,paid_date,reference,created_by) VALUES(?,?,?,?,'in',?,?,?,?)",[$tenant,$id,$p['id'],$p['bank_account_id'],$p['amount'],date('Y-m-d'),'برگشت: '.$reason,$actor]);
         }
         query("UPDATE expenses SET approval_status='voided',voided_at=NOW(),version=version+1 WHERE company_id=? AND id=?",[$tenant,$id]);expense_event($tenant,$id,$actor,'void',$reason);db()->commit();

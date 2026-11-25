@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function database_table_exists(string $table): bool {
     static $cache=[];
-    if (!in_array($table,['user_profiles','invoice_voids','invoice_payments','branches','user_branch_assignments','pos_branch_assignments','company_bank_accounts','pos_account_registry','cash_transfers','pos_bank_settlements','pos_bank_settlement_items','expenses','expense_payments','expense_categories','expense_requests'],true)) return false;
+    if (!in_array($table,['user_profiles','invoice_voids','invoice_payments','branches','user_branch_assignments','pos_branch_assignments','company_bank_accounts','pos_account_registry','cash_transfers','pos_bank_settlements','pos_bank_settlement_items','expenses','expense_payments','expense_categories','expense_requests','expense_items','expense_policies','expense_bank_movements','employee_reimbursements','expense_events','expense_attachments'],true)) return false;
     if (!array_key_exists($table,$cache)) {
         try { query('SELECT 1 FROM '.$table.' LIMIT 0'); $cache[$table]=true; }
         catch (PDOException $ex) {

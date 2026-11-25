@@ -523,6 +523,8 @@ def main() -> None:
         expense_form.locator('input[name="payments[0][amount]"]').fill('۲۵۰')
         expense_form.locator('[data-expense-next]').click()
         expect(expense_form.locator('[data-expense-review]')).to_contain_text('پرداخت شخصی')
+        import base64
+        expense_form.locator('input[name="attachment"]').set_input_files({'name':'expense-test.png','mimeType':'image/png','buffer':base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jz1kAAAAASUVORK5CYII=')})
         expense_form.locator('[data-expense-print]').click()
         manager_a.wait_for_url(lambda url:'page=expense_receipt' in url)
         expense_id=re.search(r'[?&]id=(\d+)',manager_a.url).group(1)
@@ -531,6 +533,20 @@ def main() -> None:
         assert len(manager_a.pdf(prefer_css_page_size=True,print_background=True))>1000
         foreign_expense=manager_b.goto(f"{ORIGIN}/?page=expense_receipt&id={expense_id}")
         assert foreign_expense.status==403,'Expense receipt leaked across tenants'
+        attachment=manager_a.locator('a[href*="page=expense_attachment"]').first.get_attribute('href')
+        assert attachment,'Uploaded expense attachment missing from saved receipt'
+        own_file=manager_a.request.get(f"{ORIGIN}/{attachment}")
+        assert own_file.status==200 and own_file.headers.get('content-type','').startswith('image/png')
+        foreign_file=manager_b.request.get(f"{ORIGIN}/{attachment}")
+        assert foreign_file.status==403,'Expense attachment leaked across tenants'
+        context_operator,operator=log_in(browser,'ci_operator_a')
+        own_scope=operator.goto(f"{ORIGIN}/?page=expenses")
+        assert own_scope.status==200
+        assert 'CI E2E personal tea expense' not in operator.locator('tbody').inner_text()
+        denied=operator.goto(f"{ORIGIN}/?page=expense_receipt&id={expense_id}")
+        assert denied.status==403,'Operator could read colleague expense'
+        context_operator.close()
+
         manager_a.goto(f"{ORIGIN}/?page=expenses")
         expect(manager_a.locator('tbody')).to_contain_text('CI E2E personal tea expense')
         with manager_a.expect_download() as expense_download:

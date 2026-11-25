@@ -31,3 +31,8 @@ foreach (['ci-tenant-a'=>'a','ci-tenant-b'=>'b'] as $slug=>$suffix) {
 query('INSERT INTO global_drivers(national_code,first_name,last_name,mobile,line_area) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE national_code=VALUES(national_code)',
     ['1234567890','CI','Driver','09123456789','خط آزمایشی']);
 echo "Disposable E2E tenants, managers, services and driver seeded.\n";
+
+foreach(['ci_operator_a','ci_operator_b'] as $username){
+    $uid=(int)query('SELECT id FROM users WHERE username=?',[$username])->fetchColumn();
+    foreach(['expenses.view','expenses.create'] as $permission)query('INSERT IGNORE INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$uid,$permission]);
+}

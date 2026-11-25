@@ -75,14 +75,14 @@ function expense_report_data(int $tenant,array $filter,bool $all=false): array {
     [$sql,$params]=expense_report_query($tenant,$filter);
     $summary=query("SELECT COUNT(*) document_count,COALESCE(SUM(e.total_amount),0) total_amount,
       COALESCE(SUM(CASE WHEN e.approval_status='approved' AND c.accounting_type='expense' THEN e.total_amount ELSE 0 END),0) approved_expenses,
-      COALESCE(SUM(pay.paid_amount),0) paid_amount,COALESCE(SUM(pay.cash_paid),0) cash_paid,
-      COALESCE(SUM(pay.bank_paid),0) bank_paid,COALESCE(SUM(pay.personal_paid),0) personal_paid,
+      COALESCE(SUM(pay.paid_amount),0) original_paid_amount,COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.paid_amount ELSE 0 END),0) paid_amount,COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.cash_paid ELSE 0 END),0) cash_paid,
+      COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.bank_paid ELSE 0 END),0) bank_paid,COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.personal_paid ELSE 0 END),0) personal_paid,
       COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.employee_due ELSE 0 END),0) employee_due,
-      COALESCE(SUM(GREATEST(e.total_amount-COALESCE(pay.paid_amount,0),0)),0) remaining".$sql,$params)->fetch();
+      COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN GREATEST(e.total_amount-COALESCE(pay.paid_amount,0),0) ELSE 0 END),0) remaining".$sql,$params)->fetch();
     $total=(int)$summary['document_count'];$pages=max(1,intdiv($total+29,30));$page=min($pages,max(1,(int)($filter['report_page']??1)));
     $rows=query("SELECT e.*,b.name branch_name,c.name category_name,c.accounting_type,COALESCE(u.full_name,'—') operator_name,
       COALESCE(pay.paid_amount,0) paid_amount,COALESCE(pay.cash_paid,0) cash_paid,COALESCE(pay.bank_paid,0) bank_paid,
-      COALESCE(pay.personal_paid,0) personal_paid,COALESCE(pay.employee_due,0) employee_due,
+      COALESCE(pay.personal_paid,0) personal_paid,CASE WHEN e.approval_status='approved' THEN COALESCE(pay.employee_due,0) ELSE 0 END employee_due,
       GREATEST(e.total_amount-COALESCE(pay.paid_amount,0),0) remaining".$sql.' ORDER BY e.expense_date DESC,e.id DESC'.($all?'':' LIMIT 30 OFFSET '.(($page-1)*30)),$params)->fetchAll();
     return ['summary'=>$summary,'rows'=>$rows,'page'=>$page,'pages'=>$pages,'total'=>$total];
 }
@@ -92,7 +92,7 @@ function expense_approval_label(string $status): string {
 function expense_method_label(string $method): string {return ['cash'=>'صندوق نقدی','bank'=>'حساب بانکی','personal'=>'پرداخت شخصی کارمند'][$method]??$method;}
 function render_expense_summary(array $summary): void {
     echo '<div class="stats">';
-    foreach(['total_amount'=>'جمع اسناد انتخاب‌شده','approved_expenses'=>'هزینه جاری تأییدشده','paid_amount'=>'پرداخت به فروشنده','remaining'=>'مانده پرداخت اسناد','employee_due'=>'بدهی به کارکنان'] as $key=>$title)
+    foreach(['total_amount'=>'جمع اسناد انتخاب‌شده','approved_expenses'=>'هزینه جاری تأییدشده','paid_amount'=>'پرداخت اسناد تأییدشده','remaining'=>'مانده پرداخت اسناد تأییدشده','employee_due'=>'بدهی به کارکنان'] as $key=>$title)
         echo '<article class="stat"><span>'.e($title).'</span><b>'.money_toman($summary[$key]??0).'</b></article>';
     echo '</div>';
 }
@@ -132,13 +132,13 @@ function expense_report_export(int $tenant,array $filter,string $format): never 
     if(!in_array($format,['xlsx','csv'],true))throw new RuntimeException('نوع خروجی هزینه نامعتبر است.');
     $report=expense_report_data($tenant,$filter,true);
     $company=(string)query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn();
-    $headers=['شرکت','شماره سند','تاریخ شمسی','شعبه','ثبت‌کننده','دسته','عنوان','وضعیت','مبلغ کل (تومان)','پرداخت‌شده','مانده سند','بدهی به کارمند'];$rows=[];
-    foreach($report['rows'] as $row)$rows[]=[$company,$row['document_number'],jalali_datetime($row['expense_date']),$row['branch_name'],$row['operator_name'],$row['category_name'],$row['title'],expense_approval_label($row['approval_status']),$row['total_amount'],$row['paid_amount'],$row['remaining'],$row['employee_due']];
-    $sum=$report['summary'];$rows[]=[$company,'جمع کنترل','','','','','','',$sum['total_amount'],$sum['paid_amount'],$sum['remaining'],$sum['employee_due']];
-    if($format==='xlsx')export_excel_xlsx('sodoryar-expenses',$headers,$rows,[8,9,10,11]);
+    $headers=['شرکت','شماره سند','تاریخ شمسی','شعبه','ثبت‌کننده','دسته','عنوان','وضعیت','مبلغ کل (تومان)','پرداخت فعال','مانده فعال سند','بدهی فعال به کارمند','پرداخت اولیه سند (تاریخی)'];$rows=[];
+    foreach($report['rows'] as $row)$rows[]=[$company,$row['document_number'],jalali_datetime($row['expense_date']),$row['branch_name'],$row['operator_name'],$row['category_name'],$row['title'],expense_approval_label($row['approval_status']),$row['total_amount'],$row['approval_status']==='approved'?$row['paid_amount']:'0',$row['approval_status']==='approved'?$row['remaining']:'0',$row['employee_due'],$row['paid_amount']];
+    $sum=$report['summary'];$rows[]=[$company,'جمع کنترل','','','','','','',$sum['total_amount'],$sum['paid_amount'],$sum['remaining'],$sum['employee_due'],$sum['original_paid_amount']];
+    if($format==='xlsx')export_excel_xlsx('sodoryar-expenses',$headers,$rows,[8,9,10,11,12]);
     header('Content-Type: text/csv; charset=UTF-8');header('Content-Disposition: attachment; filename="sodoryar-expenses.csv"');header('Cache-Control: private, no-store');header('X-Content-Type-Options: nosniff');
     $out=fopen('php://output','wb');fwrite($out,"\xEF\xBB\xBF");fputcsv($out,$headers,',','"','');
-    foreach($rows as $row){foreach($row as $index=>&$cell)if(!in_array($index,[8,9,10,11],true) && preg_match('/^(?:\s*[=+@\-]|[\t\r\n])/u',(string)$cell))$cell="'".$cell;unset($cell);fputcsv($out,$row,',','"','');}
+    foreach($rows as $row){foreach($row as $index=>&$cell)if(!in_array($index,[8,9,10,11,12],true) && preg_match('/^(?:\s*[=+@\-]|[\t\r\n])/u',(string)$cell))$cell="'".$cell;unset($cell);fputcsv($out,$row,',','"','');}
     fclose($out);exit;
 }
 
@@ -148,63 +148,68 @@ function render_expense_receipt(int $tenant,int $id): void {
     $company=(string)query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn();
     $branch=(string)query('SELECT name FROM branches WHERE id=? AND company_id=?',[$expense['branch_id'],$tenant])->fetchColumn();
     $creator=(string)query('SELECT full_name FROM users WHERE id=? AND company_id=?',[$expense['created_by'],$tenant])->fetchColumn();
+    $category=(string)query('SELECT name FROM expense_categories WHERE id=? AND company_id=?',[$expense['category_id'],$tenant])->fetchColumn();
     $items=query('SELECT * FROM expense_items WHERE company_id=? AND expense_id=? ORDER BY id',[$tenant,$id])->fetchAll();
-    $payments=query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? ORDER BY id',[$tenant,$id])->fetchAll();
+    $payments=query("SELECT p.*,r.name register_name,a.title bank_title FROM expense_payments p LEFT JOIN cash_shifts s ON s.id=p.cash_shift_id AND s.company_id=p.company_id LEFT JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id LEFT JOIN company_bank_accounts a ON a.id=p.bank_account_id AND a.company_id=p.company_id WHERE p.company_id=? AND p.expense_id=? ORDER BY p.id",[$tenant,$id])->fetchAll();
     echo '<section class="receipt receipt-a4 receipt-font-vazirmatn card"><div class="receipt-toolbar"><button type="button" data-print-receipt>چاپ / ذخیره PDF سند هزینه</button></div><h1>سند هزینه شرکت</h1><h2>'.e($company).'</h2>';
     if($expense['approval_status']!=='approved')echo '<p class="receipt-void-label">'.e(expense_approval_label($expense['approval_status'])).' — سند قطعی تأییدشده نیست</p>';
-    echo '<p>شماره سند: '.e(display_financial_reference($expense['document_number'])).' | شعبه: '.e($branch).'</p><p>تاریخ هزینه: '.e(jalali_datetime($expense['expense_date'])).' | ثبت‌کننده: '.e($creator).'</p><h3>'.e($expense['title']).'</h3><p>'.nl2br(e($expense['description']??'')).'</p>';
-    echo '<table><thead><tr><th>شرح قلم</th><th>مقدار</th><th>مبلغ واحد (تومان)</th><th>جمع (تومان)</th></tr></thead><tbody>';
+    echo '<p>شماره سند: '.e(display_financial_reference($expense['document_number'])).' | شعبه: '.e($branch).'</p><p>تاریخ هزینه: '.e(jalali_datetime($expense['expense_date'])).' | ثبت‌کننده: '.e($creator).'</p><p>دسته هزینه: '.e($category).' | زمان ثبت سند: '.e(jalali_datetime($expense['created_at'],true)).'</p><h3>'.e($expense['title']).'</h3><p>'.nl2br(e($expense['description']??'')).'</p>';
+    echo '<table><thead><tr><th>شرح قلم</th><th>مقدار / واحد</th><th>مبلغ واحد (تومان)</th><th>جمع (تومان)</th></tr></thead><tbody>';
     foreach($items as $item){
         $quantity=(int)$item['quantity_milli'];$fraction=$quantity%1000;
         $display=(string)intdiv($quantity,1000).($fraction?'.'.rtrim(str_pad((string)$fraction,3,'0',STR_PAD_LEFT),'0'):'');
-        echo '<tr><td>'.e($item['title']??$item['description']??'').'</td><td>'.e(fa_digits($display)).'</td><td>'.money_toman($item['unit_price']).'</td><td>'.money_toman($item['line_total']).'</td></tr>';
+        echo '<tr><td>'.e($item['title']??'').'<br><small>'.nl2br(e($item['description']??'')).'</small></td><td>'.e(fa_digits($display)).' '.e($item['unit']??'').'</td><td>'.money_toman($item['unit_price']).'</td><td>'.money_toman($item['line_total']).'</td></tr>';
     }
-    echo '</tbody></table><p>جمع اقلام: '.money_toman($expense['subtotal']).' | هزینه اضافی: '.money_toman($expense['extra_amount']).' | تخفیف: '.money_toman($expense['discount_amount']).'</p><h2>مبلغ کل سند: '.money_toman($expense['total_amount']).'</h2><h3>پرداخت‌های ثبت‌شده</h3><table><thead><tr><th>روش</th><th>تاریخ پرداخت</th><th>مبلغ (تومان)</th><th>وضعیت ثبت</th></tr></thead><tbody>';
-    foreach($payments as $payment)echo '<tr><td>'.e(expense_method_label($payment['method'])).'</td><td>'.e(jalali_datetime($payment['paid_date'])).'</td><td>'.money_toman($payment['amount']).'</td><td>'.($payment['posted_at']!==null?'ثبت‌شده':'در انتظار تأیید').'</td></tr>';
+    echo '</tbody></table><p>جمع اقلام: '.money_toman($expense['subtotal']).' | هزینه اضافی: '.money_toman($expense['extra_amount']).' | تخفیف: '.money_toman($expense['discount_amount']).'</p><h2>مبلغ کل سند: '.money_toman($expense['total_amount']).'</h2><h3>پرداخت‌های ثبت‌شده</h3><table><thead><tr><th>روش</th><th>تاریخ پرداخت</th><th>مبلغ (تومان)</th><th>منبع / پیگیری</th><th>وضعیت ثبت</th></tr></thead><tbody>';
+    foreach($payments as $payment)echo '<tr><td>'.e(expense_method_label($payment['method'])).'</td><td>'.e(jalali_datetime($payment['paid_date'])).'</td><td>'.money_toman($payment['amount']).'</td><td>'.e($payment['register_name']??$payment['bank_title']??'پرداخت‌کننده سند').'<br>'.e(display_financial_reference($payment['tracking_number']??'')).'</td><td>'.($payment['posted_at']!==null?'ثبت‌شده':'در انتظار تأیید').'</td></tr>';
     echo '</tbody></table>';
     $reimbursements=query('SELECT r.* FROM employee_reimbursements r JOIN expense_payments p ON p.id=r.payment_id AND p.company_id=r.company_id WHERE p.company_id=? AND p.expense_id=? ORDER BY r.id',[$tenant,$id])->fetchAll();
     if($reimbursements){echo '<h3>بازپرداخت به کارکنان (تسویه بدهی؛ هزینه جدید نیست)</h3>';foreach($reimbursements as $row)echo '<p>'.e(jalali_datetime($row['paid_date'])).' — '.e(expense_method_label($row['method'])).' — '.money_toman($row['amount']).'</p>';}
+    $attachments=query('SELECT id,original_name FROM expense_attachments WHERE company_id=? AND expense_id=? ORDER BY id',[$tenant,$id])->fetchAll();
+    if($attachments){echo '<h3>پیوست‌های سند</h3><ul>';foreach($attachments as $file)echo '<li><a href="?page=expense_attachment&amp;id='.(int)$file['id'].'">'.e($file['original_name']).'</a></li>';echo '</ul>';}
+    $events=query('SELECT v.action,v.reason,v.created_at,u.full_name actor_name FROM expense_events v LEFT JOIN users u ON u.id=v.actor_id AND u.company_id=v.company_id WHERE v.company_id=? AND v.expense_id=? ORDER BY v.id',[$tenant,$id])->fetchAll();
+    if($events){echo '<h3>گردش و تأیید سند</h3>';foreach($events as $event)echo '<p>'.e(jalali_datetime($event['created_at'],true)).' — '.e($event['actor_name']??'—').' — '.e($event['action']).': '.e($event['reason']??'').'</p>';}
     echo '<p>یادداشت: '.nl2br(e($expense['notes']??'')).'</p><p>زمان ثبت: '.e(jalali_datetime($expense['created_at'],true)).' | نسخه سند: '.e(fa_digits((string)$expense['version'])).'</p><p>امضای ثبت‌کننده: ...................　 امضای تأییدکننده: ...................</p></section>';
 }
 function expense_dashboard_snapshot(int $tenant): array {
     expense_require_permission('view');
     $now=new DateTimeImmutable('today',new DateTimeZone('Asia/Tehran'));
-    [$jy,$jm]=gregorian_to_jalali((int)$now->format('Y'),(int)$now->format('n'),(int)$now->format('j'));
+    [$jy,$jm,$jd]=gregorian_to_jalali((int)$now->format('Y'),(int)$now->format('n'),(int)$now->format('j'));
     $from=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$jy,$jm));$to=$now->format('Y-m-d');
     $filter=expense_report_filters(['date_from'=>$from,'date_to'=>$to,'branch_id'=>(string)($_GET['branch_id']??''),'approval_status'=>'approved']);
     [$source,$params]=expense_report_query($tenant,$filter);
-    $recognized=query("SELECT COALESCE(SUM(CASE WHEN c.accounting_type='expense' THEN e.total_amount ELSE 0 END),0) recognized_expenses".$source,$params)->fetchColumn();
+    $recognizedRow=query("SELECT COALESCE(SUM(CASE WHEN c.accounting_type='expense' THEN e.total_amount ELSE 0 END),0) recognized_expenses,COALESCE(SUM(c.accounting_type='expense'),0) expense_count".$source,$params)->fetch();
+    $recognized=$recognizedRow['recognized_expenses'];
     $branchSql=$filter['branch_id']!==''?' AND e.branch_id='.(int)$filter['branch_id']:'';
     $scope=expense_scope_sql($tenant,'e').$branchSql;
     $next=$now->modify('+1 day')->format('Y-m-d');
-    $payments=query("SELECT COALESCE(SUM(CASE WHEN p.method='cash' THEN p.amount ELSE 0 END),0) cash_paid,
-      COALESCE(SUM(CASE WHEN p.method='bank' THEN p.amount ELSE 0 END),0) bank_paid
-      FROM expense_payments p JOIN expenses e ON e.id=p.expense_id AND e.company_id=p.company_id
-      WHERE e.company_id=? AND e.approval_status='approved' AND p.posted_at IS NOT NULL AND p.paid_date>=? AND p.paid_date<?".$scope,[$tenant,$from,$next])->fetch();
-    $reimbursements=query("SELECT COALESCE(SUM(CASE WHEN r.method='cash' THEN r.amount ELSE 0 END),0) cash_paid,
-      COALESCE(SUM(CASE WHEN r.method='bank' THEN r.amount ELSE 0 END),0) bank_paid
-      FROM employee_reimbursements r JOIN expense_payments p ON p.id=r.payment_id AND p.company_id=r.company_id
-      JOIN expenses e ON e.id=p.expense_id AND e.company_id=p.company_id
-      WHERE e.company_id=? AND e.approval_status='approved' AND r.paid_date>=? AND r.paid_date<?".$scope,[$tenant,$from,$next])->fetch();
+    $cashFlow=query("SELECT COALESCE(SUM(CASE WHEN a.direction='out' THEN a.amount ELSE -a.amount END),0) cash_paid
+      FROM cash_shift_adjustments a JOIN expenses e ON e.id=a.expense_document_id AND e.company_id=a.company_id
+      WHERE a.company_id=? AND a.created_at>=? AND a.created_at<?".$scope,[$tenant,$from.' 00:00:00',$next.' 00:00:00'])->fetchColumn();
+    $bankFlow=query("SELECT COALESCE(SUM(CASE WHEN m.direction='out' THEN m.amount ELSE -m.amount END),0) bank_paid
+      FROM expense_bank_movements m JOIN expenses e ON e.id=m.expense_id AND e.company_id=m.company_id
+      WHERE m.company_id=? AND m.paid_date>=? AND m.paid_date<?".$scope,[$tenant,$from,$next])->fetchColumn();
     [$allSource,$allParams]=expense_report_source($tenant);
     $owed=query("SELECT COALESCE(SUM(pay.employee_due),0)".$allSource." AND e.approval_status='approved'".$branchSql,$allParams)->fetchColumn();
     $salesScope=(document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'').report_branch_sql($tenant,'i.branch_id',$filter['branch_id']);
     $valid=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
     $sales=query('SELECT COALESCE(SUM(i.total_amount),0) FROM invoices i WHERE i.company_id=? AND COALESCE(i.invoice_date,DATE(i.created_at))>=? AND COALESCE(i.invoice_date,DATE(i.created_at))<=?'.$salesScope.$valid,[$tenant,$from,$to])->fetchColumn();
-    return ['from'=>$from,'to'=>$to,'sales'=>$sales,'recognized_expenses'=>$recognized,'cash_paid'=>expense_report_exact_add((string)$payments['cash_paid'],(string)$reimbursements['cash_paid']),'bank_paid'=>expense_report_exact_add((string)$payments['bank_paid'],(string)$reimbursements['bank_paid']),'employee_due'=>$owed];
-}
-/** MySQL DECIMAL results may exceed PHP integer range; add without binary floats. */
-function expense_report_exact_add(string $left,string $right): string {
-    $left=ltrim($left,'0')?:'0';$right=ltrim($right,'0')?:'0';$carry=0;$sum='';
-    for($a=strlen($left)-1,$b=strlen($right)-1;$a>=0 || $b>=0 || $carry;$a--,$b--){$digit=($a>=0?(int)$left[$a]:0)+($b>=0?(int)$right[$b]:0)+$carry;$sum=(string)($digit%10).$sum;$carry=intdiv($digit,10);}
-    return $sum;
+    $previousYear=$jm===1?$jy-1:$jy;$previousMonth=$jm===1?12:$jm-1;
+    $previousFrom=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$previousYear,$previousMonth));
+    $previousTo=min((new DateTimeImmutable($previousFrom))->modify('+'.($jd-1).' days')->format('Y-m-d'),(new DateTimeImmutable($from))->modify('-1 day')->format('Y-m-d'));
+    $previousFilter=$filter;$previousFilter['date_from']=$previousFrom;$previousFilter['date_to']=$previousTo;
+    [$previousSource,$previousParams]=expense_report_query($tenant,$previousFilter);
+    $previousExpenses=query("SELECT COALESCE(SUM(CASE WHEN c.accounting_type='expense' THEN e.total_amount ELSE 0 END),0)".$previousSource,$previousParams)->fetchColumn();
+    $pending=query("SELECT COUNT(*) FROM expenses e WHERE e.company_id=? AND e.approval_status='pending'".$scope,[$tenant])->fetchColumn();
+    return ['expense_count'=>$recognizedRow['expense_count'],'pending_count'=>$pending,'previous_expenses'=>$previousExpenses,'previous_from'=>$previousFrom,'previous_to'=>$previousTo,'from'=>$from,'to'=>$to,'sales'=>$sales,'recognized_expenses'=>$recognized,'cash_paid'=>$cashFlow,'bank_paid'=>$bankFlow,'employee_due'=>$owed];
 }
 function render_expense_dashboard(int $tenant): void {
     if(!can('expenses.view'))return;
     $snapshot=expense_dashboard_snapshot($tenant);
     echo '<section class="card"><h2>هزینه و پرداخت‌های ماه شمسی جاری</h2><p>'.e(jalali_datetime($snapshot['from'])).' تا '.e(jalali_datetime($snapshot['to'])).'</p><div class="stats">';
-    foreach(['sales'=>'فروش ثبت‌شده','recognized_expenses'=>'هزینه جاری تأییدشده','cash_paid'=>'پرداخت نقدی اسناد تأییدشده و بازپرداخت کارکنان','bank_paid'=>'پرداخت بانکی اسناد تأییدشده و بازپرداخت کارکنان','employee_due'=>'بدهی باز به کارکنان (تمام دوره‌ها)'] as $key=>$title)
+    foreach(['sales'=>'فروش ثبت‌شده','recognized_expenses'=>'هزینه جاری تأییدشده','cash_paid'=>'خالص خروج نقدی هزینه و بازپرداخت، پس از برگشت‌ها','bank_paid'=>'خالص خروج بانکی هزینه و بازپرداخت، پس از برگشت‌ها','employee_due'=>'بدهی باز به کارکنان (تمام دوره‌ها)'] as $key=>$title)
         echo '<article class="stat"><span>'.e($title).'</span><b>'.money_toman($snapshot[$key]).'</b></article>';
+    echo '<article class="stat"><span>تعداد هزینه جاری تأییدشده</span><b>'.e(fa_digits((string)$snapshot['expense_count'])).'</b></article><article class="stat"><span>در انتظار تأیید (تمام دوره‌ها)</span><b>'.e(fa_digits((string)$snapshot['pending_count'])).'</b></article><article class="stat"><span>هزینه جاری دوره مشابه ماه شمسی قبل</span><b>'.money_toman($snapshot['previous_expenses']).'</b><small>'.e(jalali_datetime($snapshot['previous_from'])).' تا '.e(jalali_datetime($snapshot['previous_to'])).'</small></article>';
     // Decimal subtraction stays in the database; this is a performance indicator, not accounting profit.
     $net=query('SELECT CAST(? AS DECIMAL(30,0))-CAST(? AS DECIMAL(30,0))',[$snapshot['sales'],$snapshot['recognized_expenses']])->fetchColumn();
     echo '<article class="stat"><span>فروش منهای هزینه جاری (شاخص عملکرد، نه سود حسابداری)</span><b>'.money_toman($net).'</b></article></div></section>';
