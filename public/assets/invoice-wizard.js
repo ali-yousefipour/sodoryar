@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  new MutationObserver(updateTotal).observe(payable,{childList:true,characterData:true,subtree:true});
  updateTotal();
  let step=0,dirty=false,busy=false;
+ const markDirty=e=>{if(e.isTrusted)dirty=true;};
  const ascii=s=>String(s??'').replace(/[۰-۹]/g,c=>c.charCodeAt(0)-1776).replace(/[٠-٩]/g,c=>c.charCodeAt(0)-1632);
  const money=s=>{const v=ascii(s).replace(/[٬،]/g,',').trim();return /^(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(v)?BigInt(v.replace(/,/g,'')):0n;};
  const show=(n,focus=true)=>{
@@ -54,7 +55,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }return true;
  };
  document.getElementById('invoiceWizardOpen').addEventListener('click',()=>{show(0,false);dialog.showModal();status.focus();});
- form.addEventListener('input',()=>dirty=true);form.addEventListener('change',()=>dirty=true);
+ form.addEventListener('input',markDirty);form.addEventListener('change',markDirty);
  const close=()=>{if(busy||form.dataset.submitting==='1')return;if(dirty&&!window.confirm('اطلاعات وارد شده حفظ می‌شوند. از ویزارد خارج می‌شوید؟'))return;dialog.close();document.getElementById('invoiceWizardOpen').focus();};
  cancel.addEventListener('click',close);dialog.addEventListener('cancel',e=>{if(e.target!==dialog)return;e.preventDefault();close();});
  prev.addEventListener('click',()=>{if(!busy)show(step-1);});
