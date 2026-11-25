@@ -28,6 +28,22 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(value)node.textContent=value;
     return node;
   };
+  const branch=form.querySelector('#invoiceBranch');
+  const filterTerminals=()=>{
+    host.querySelectorAll('select[name$="[terminal]"]').forEach((select,index)=>{
+      for(const option of select.options){
+        const unavailable=!!option.value && !!branch && !option.dataset.branches?.split(',').includes(branch.value);
+        option.disabled=unavailable;option.hidden=unavailable;
+      }
+      if(select.selectedOptions[0]?.disabled){select.value='';rows[index].terminal='';}
+      select.required=!!branch && rows[index]?.method==='pos';
+    });
+  };
+  branch?.addEventListener('change',()=>{
+    filterTerminals();
+    error.textContent='شعبه تغییر کرد؛ کارتخوان معتبر این شعبه را انتخاب کنید. صندوق نقدی هنگام ثبت برای همین شعبه بررسی می‌شود.';
+    error.hidden=false;
+  });
   const totalPaid=()=>rows.reduce((sum,r)=>sum+amount(r.amount),0n);
   const refresh=()=>{
     const due=total();
@@ -46,6 +62,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     set('[data-payable-total]',due);set('[data-payment-paid]',paid);
     set('[data-payment-remaining]',remaining>0n?remaining:0n);
     set('[data-payment-count]',BigInt(rows.length));
+    filterTerminals();
     error.hidden=true;
   };
   const createRow=(method,proposed)=>{
@@ -69,7 +86,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const pos=el('div',{class:'payment-pos-fields'});
     const source=document.getElementById('invoiceTerminalOptions');
     if(source && source.options.length>1){
-      const terminalLabel=el('label',{},'دستگاه کارتخوان (اختیاری)');
+      const terminalLabel=el('label',{},'دستگاه کارتخوان');
       const terminal=source.cloneNode(true);
       terminal.id='';terminal.hidden=false;terminal.removeAttribute('aria-hidden');
       terminal.name=`payments[${index}][terminal]`;
@@ -115,6 +132,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     const due=total(),noInitialPayment=!!noInitial?.checked;
     const paid=noInitialPayment?0n:totalPaid();
     const invalid=!noInitialPayment && (rows.length===0||rows.some(r=>amount(r.amount)<=0n));
+    if(!noInitialPayment && branch && rows.some(r=>r.method==='pos'&&!r.terminal)){
+      event.preventDefault();error.textContent='کارتخوان معتبر شعبه را برای هر پرداخت انتخاب کنید.';error.hidden=false;return;
+    }
     if(due<=0n||invalid||paid>due||(!allowPartial?.checked && due!==paid)){
       event.preventDefault();
       error.textContent=paid>due?'مبلغ دریافتی نمی‌تواند بیشتر از مبلغ فاکتور باشد.':(!allowPartial?.checked && due!==paid?'جمع پرداخت‌ها باید با مبلغ فاکتور برابر باشد.':'مبلغ هر تراکنش باید بیشتر از صفر باشد.');
