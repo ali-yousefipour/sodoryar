@@ -16,8 +16,7 @@ function expense_cash_entry(int $tenant,int $branch,int $shift,int $amount,strin
     branch_require($tenant,(int)user()['id'],$branch);
     $s=query("SELECT s.* FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.id=? AND s.company_id=? AND s.status='open' AND r.branch_id=? AND r.is_active=1 FOR UPDATE",[$shift,$tenant,$branch])->fetch();
     if(!$s||($owner!==null&&(int)$s['operator_id']!==$owner))throw new RuntimeException('صندوق فعال و مجاز نیست.');
-    $t=cashbox_shift_totals($tenant,$shift);
-    if($direction==='out'&&$amount>(int)$s['opening_cash']+$t['cash']+$t['incoming']-$t['outgoing'])throw new RuntimeException('موجودی نقدی کافی نیست.');
+    if($direction==='out'&&$amount>cashbox_expected_cash($tenant,$shift))throw new RuntimeException('موجودی نقدی کافی نیست.');
     query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,?,?,?,?)',[$tenant,$shift,$direction,$amount,$reason,(int)user()['id']]);
     return (int)db()->lastInsertId();
 }

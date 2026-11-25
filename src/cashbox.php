@@ -58,8 +58,21 @@ function cashbox_shift_totals(int $tenant,int $shift): array {
        COALESCE(SUM(CASE WHEN direction='in' THEN amount ELSE 0 END),0) incoming,
        COALESCE(SUM(CASE WHEN direction='out' THEN amount ELSE 0 END),0) outgoing
        FROM cash_shift_adjustments WHERE company_id=? AND shift_id=?",[$tenant,$shift])->fetch();
-    return ['receipts'=>(int)$money['receipts'],'cash'=>(int)$money['cash'],'pos'=>(int)$money['pos'],
-      'incoming'=>(int)$adjust['incoming'],'outgoing'=>(int)$adjust['outgoing']];
+    $exact=static fn($value): int|string => filter_var($value,FILTER_VALIDATE_INT)!==false ? (int)$value : (string)$value;
+    return ['receipts'=>(int)$money['receipts'],'cash'=>$exact($money['cash']),'pos'=>$exact($money['pos']),
+      'incoming'=>$exact($adjust['incoming']),'outgoing'=>$exact($adjust['outgoing'])];
+}
+/** Net in DECIMAL before conversion: gross turnover may exceed the PHP integer range. */
+function cashbox_expected_cash(int $tenant,int $shift): int {
+    $value=query("SELECT s.opening_cash
+        + COALESCE((SELECT SUM(p.amount) FROM invoice_payments p WHERE p.company_id=s.company_id
+            AND p.cash_shift_id=s.id AND p.voided_at IS NULL AND p.payment_method='cash'),0)
+        + COALESCE((SELECT SUM(CASE WHEN a.direction='in' THEN CAST(a.amount AS DECIMAL(65,0)) ELSE -CAST(a.amount AS DECIMAL(65,0)) END)
+            FROM cash_shift_adjustments a WHERE a.company_id=s.company_id AND a.shift_id=s.id),0)
+        FROM cash_shifts s WHERE s.company_id=? AND s.id=?",[$tenant,$shift])->fetchColumn();
+    $amount=filter_var($value,FILTER_VALIDATE_INT);
+    if($amount===false) throw new RuntimeException('موجودی صندوق خارج از محدوده عدد صحیح قابل ثبت است.');
+    return $amount;
 }
 function cashbox_add_adjustment(int $tenant,int $shift,int $actor,string $direction,int $amount,string $reason): void {
     if(!in_array($direction,['in','out'],true)||mb_strlen($reason)<5||mb_strlen($reason)>500) {
@@ -83,8 +96,8 @@ function cashbox_close_shift(int $tenant,int $shift,int $actor,int $declared,str
         $row=query('SELECT id,operator_id,opening_cash,status FROM cash_shifts WHERE id=? AND company_id=? FOR UPDATE',[$shift,$tenant])->fetch();
         if(!$row || !in_array($row['status'],['open','rejected'],true)) throw new RuntimeException('این شیفت قابل بستن نیست.');
         if((int)$row['operator_id']!==$actor && !can('cashbox.manage')) throw new RuntimeException('بستن صندوق این کاربر مجاز نیست.');
-        $totals=cashbox_shift_totals($tenant,$shift);
-        $expected=(int)$row['opening_cash']+$totals['cash']+$totals['incoming']-$totals['outgoing'];
+        $expected=cashbox_expected_cash($tenant,$shift);
+        if($expected<0 && $declared>PHP_INT_MAX+$expected) throw new RuntimeException('مغایرت صندوق خارج از محدوده قابل ثبت است.');
         $difference=$declared-$expected;
         if($difference!==0 && mb_strlen($note)<5) throw new RuntimeException('برای مغایرت نقدی، توضیح حداقل ۵ نویسه الزامی است.');
         query("UPDATE cash_shifts SET declared_cash=?,expected_cash=?,difference_cash=?,closed_at=NOW(),

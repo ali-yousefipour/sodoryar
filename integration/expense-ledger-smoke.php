@@ -30,8 +30,7 @@ function expense_expect_blocked(callable $action,string $message): void {
     throw new RuntimeException($message);
 }
 function expense_test_balance(int $tenant,int $shift): int {
-    $t=cashbox_shift_totals($tenant,$shift);
-    return (int)query('SELECT opening_cash FROM cash_shifts WHERE company_id=? AND id=?',[$tenant,$shift])->fetchColumn()+$t['cash']+$t['incoming']-$t['outgoing'];
+    return cashbox_expected_cash($tenant,$shift);
 }
 function expense_test_input(int $branch,int $category,string $method,?int $source,int $amount): array {
     return ['branch_id'=>$branch,'category_id'=>$category,'expense_date'=>jalali_datetime(date('Y-m-d'),true),'title'=>'خرید چای آزمایشی','notes'=>'isolated fixture','request_key'=>bin2hex(random_bytes(32)),
@@ -133,3 +132,17 @@ integration_assert(count($dueReport)>0&&array_sum(array_column($dueReport,'amoun
 echo "PASS: all 19 report queries, exact grouped cost/employee liabilities and reconciled real cash/bank movements.\n";
 echo "PASS: draft/edit/version/retry/resubmit, automatic/threshold policies, exact discount/extra and branch review ceilings.\n";
 echo "PASS: expense migrations twice, cash reconciliation, refunds, employee liability, retries, closed shifts, bank account and tenant boundaries.\n";
+
+// Synthetic turnover above PHP_INT_MAX must net exactly, without floating point.
+db()->beginTransaction();
+try {
+    $hugeShift=insert_fixture("INSERT INTO cash_shifts(company_id,register_id,operator_id,opening_cash,started_at) VALUES(?,?,?,?,NOW())",[$companyA,$register,$userA,17]);
+    foreach(['in','in','out','out'] as $direction) {
+        query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,?,?,?,?)',[$companyA,$hugeShift,$direction,(string)PHP_INT_MAX,'CI integer boundary',$userA]);
+    }
+    integration_assert(cashbox_expected_cash($companyA,$hugeShift)===17,'Large offsetting cash turnover lost precision');
+    integration_assert(cashbox_shift_totals($companyA,$hugeShift)['incoming']==='18446744073709551614','Gross cash turnover was truncated');
+    query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,?,?,?,?)',[$companyA,$hugeShift,'in',(string)PHP_INT_MAX,'CI excessive balance',$userA]);
+    expense_expect_blocked(fn()=>cashbox_expected_cash($companyA,$hugeShift),'Unrepresentable cash balance was silently truncated');
+} finally {db()->rollBack();}
+echo "PASS: exact cash balance with gross turnover above PHP_INT_MAX and explicit net overflow rejection.\n";

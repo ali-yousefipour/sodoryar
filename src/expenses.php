@@ -107,8 +107,7 @@ function expense_post_payments(int $tenant,array $x,int $actor): void {
                 if($p['method']==='cash'){
                     $s=query("SELECT s.* FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.id=? AND s.company_id=? AND s.status='open' AND r.branch_id=? AND r.is_active=1 FOR UPDATE",[$p['cash_shift_id'],$tenant,$x['branch_id']])->fetch();
                     if(!$s||(int)$s['operator_id']!==(int)$x['created_by'])throw new RuntimeException('شیفت اولیه صندوق دیگر فعال نیست.');
-                    $t=cashbox_shift_totals($tenant,(int)$s['id']);
-                    if((int)$p['amount']>(int)$s['opening_cash']+$t['cash']+$t['incoming']-$t['outgoing'])throw new RuntimeException('موجودی نقدی کافی نیست.');
+                    if((int)$p['amount']>cashbox_expected_cash($tenant,(int)$s['id']))throw new RuntimeException('موجودی نقدی کافی نیست.');
                     query("INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,'out',?,?,?)",[$tenant,$s['id'],$p['amount'],'سند هزینه '.$id,$actor]);$adjustment=(int)db()->lastInsertId();
                 }elseif($p['method']==='bank'&&!query('SELECT id FROM company_bank_accounts WHERE company_id=? AND id=? AND is_active=1 AND (branch_id IS NULL OR branch_id=?) FOR UPDATE',[$tenant,$p['account_id'],$x['branch_id']])->fetch())throw new RuntimeException('حساب پرداخت دیگر مجاز نیست.');
                 query('UPDATE expense_payments SET posted_at=NOW(),cash_adjustment_id=? WHERE company_id=? AND id=?',[$adjustment,$tenant,$p['id']]);

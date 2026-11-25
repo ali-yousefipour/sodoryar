@@ -312,7 +312,7 @@ jobs:
           set -euo pipefail
           # Read-only FTP readback: verify the critical private source that
           # the public PHP router uses; never expose PHP source over HTTPS.
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
             test -s "deploy-payload/_private/src/$file"
           done
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
@@ -327,9 +327,22 @@ jobs:
           get "_private/src/localization.php" -o "$RUNNER_TEMP/sodoryar-readback-localization.php"
           get "_private/src/reporting.php" -o "$RUNNER_TEMP/sodoryar-readback-reporting.php"
           get "_private/src/invoice_numbers.php" -o "$RUNNER_TEMP/sodoryar-readback-invoice_numbers.php"
+          get "_private/src/cashbox.php" -o "$RUNNER_TEMP/sodoryar-readback-cashbox.php"
+          get "_private/src/expenses.php" -o "$RUNNER_TEMP/sodoryar-readback-expenses.php"
+          get "_private/src/expenses_page.php" -o "$RUNNER_TEMP/sodoryar-readback-expenses_page.php"
+          get "_private/src/expense_workflow.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_workflow.php"
+          get "_private/src/expense_settlement.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_settlement.php"
+          get "_private/src/expense_returns.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_returns.php"
+          get "_private/src/expense_reports.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_reports.php"
+          get "_private/src/expense_report_center.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_report_center.php"
+          get "_private/src/expense_pdf.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_pdf.php"
+          get "_private/src/finance_schema_health.php" -o "$RUNNER_TEMP/sodoryar-readback-finance_schema_health.php"
+          get "_private/vendor/autoload.php" -o "$RUNNER_TEMP/sodoryar-readback-autoload.php"
+          get "_private/src/fonts/Vazirmatn-Regular.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Regular.ttf"
+          get "_private/src/fonts/Vazirmatn-Bold.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Bold.ttf"
           bye
           EOF
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
             expected="$(sha256sum "deploy-payload/_private/src/$file" | cut -d' ' -f1)"
             actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-$file" | cut -d' ' -f1)"
             if [[ "$expected" != "$actual" ]]; then
@@ -337,6 +350,11 @@ jobs:
               exit 1
             fi
             echo "Verified private PHP source: $file"
+          done
+          for file in vendor/autoload.php src/fonts/Vazirmatn-Regular.ttf src/fonts/Vazirmatn-Bold.ttf; do
+            expected="$(sha256sum "deploy-payload/_private/$file" | cut -d' ' -f1)"
+            actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-${file##*/}" | cut -d' ' -f1)"
+            test "$expected" = "$actual" || { echo "::error::Private dependency $file does not match the commit."; exit 1; }
           done
 
       - name: Verify deployed application commit manifest
@@ -406,7 +424,7 @@ jobs:
             echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
-          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css login-ui.js app.js table-experience.js report-progress.js; do
+          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css expenses.css expenses.js login-ui.js app.js table-experience.js report-progress.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
@@ -456,7 +474,7 @@ jobs:
         run: |
           set -euo pipefail
           origin="https://taxiranico.ir"
-          for private_path in "_private/.env.example" "_private/src/bootstrap.php" "_private/.sodoryar-instance"; do
+          for private_path in "_private/.env.example" "_private/src/bootstrap.php" "_private/src/expense_pdf.php" "_private/vendor/autoload.php" "_private/.sodoryar-instance"; do
             status="$(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' "$origin/$private_path")"
             case "$status" in
               403|404|410) echo "Private-path access blocked: $private_path (HTTP $status)" ;;
