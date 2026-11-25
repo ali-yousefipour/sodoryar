@@ -21,7 +21,7 @@ function expense_cash_entry(int $tenant,int $branch,int $shift,int $amount,strin
 function expense_settle(int $id,array $input): void {
     require_admin();if(!expense_extensions_ready())throw new RuntimeException('مهاجرت ۰۲۷ لازم است.');
     $tenant=tenant_id();$actor=(int)user()['id'];$key=(string)($input['request_key']??'');$amount=invoice_payment_amount($input['amount']??'');$method=(string)($input['method']??'');$source=filter_var($input['source']??null,FILTER_VALIDATE_INT);
-    if(!preg_match('/^[a-f0-9]{64}$/D',$key)||!$source||!in_array($method,['cash','bank'],true))throw new RuntimeException('اطلاعات تسویه نامعتبر است.');
+    if(($input['payment_confirmed']??null)!=='1'||!preg_match('/^[a-f0-9]{64}$/D',$key)||!$source||!in_array($method,['cash','bank'],true))throw new RuntimeException('اطلاعات تسویه نامعتبر است.');
     db()->beginTransaction();
     try{
         query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();

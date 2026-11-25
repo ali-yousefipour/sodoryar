@@ -25,14 +25,14 @@ function render_expense_financial_actions(int $tenant,array $x): void {
         <input type="hidden" name="action" value="settle"><input type="hidden" name="id" value="<?=e($id)?>"><input type="hidden" name="method" value="<?=e($method)?>"><input type="hidden" name="request_key" value="<?=e(bin2hex(random_bytes(32)))?>">
         <label>مبلغ تسویه (تومان)<input name="amount" inputmode="numeric" required value="<?=e(money($due))?>"></label>
         <label>منبع پرداخت<select name="source" required><option value="">انتخاب کنید</option><?php foreach($sources as $source):?><option value="<?=e($source['id'])?>"><?=e($source['title'])?></option><?php endforeach;?></select></label>
-        <label><input type="checkbox" required> پرداخت واقعی انجام شده و مبلغ را تأیید می‌کنم.</label><button type="submit">ثبت تسویه</button>
+        <label><input type="checkbox" name="payment_confirmed" value="1" required> پرداخت واقعی انجام شده و مبلغ را تأیید می‌کنم.</label><button type="submit">ثبت تسویه</button>
         </form></details>
         <?php endforeach;endif;?></section>
     <?php endif;?>
     <?php if(expense_manager()&&in_array($x['approval_status'],['approved','pending','rejected','draft'],true)):?>
     <section class="card"><h2>ابطال سند هزینه</h2>
     <?php if($settlements):?><p>این سند دارای تسویه کارکنان است. ابطال تا زمان ثبت برگشت معتبر تسویه مسدود است.</p>
-    <?php else:?><details><summary>ابطال با حفظ تاریخچه</summary><p>در صورت قطعی بودن سند، برگشت مالی ثبت می‌شود. برگشت نقدی مستلزم باز بودن شیفت اولیه است.</p>
+    <?php else:?><details><summary>ابطال با حفظ تاریخچه</summary><p>ابطال اداری به معنی بازگشت وجه نیست. ابطال پرداخت نقدی یا بانکی قطعی تا ثبت سند مستقل برگشت واقعی وجه مسدود است.</p>
     <form method="post" action="?page=expenses&amp;detail=<?=e($id)?>" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="void"><input type="hidden" name="id" value="<?=e($id)?>">
     <label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
     <label><input type="checkbox" required> ابطال و آثار مالی آن را تأیید می‌کنم.</label><button type="submit">ثبت ابطال</button></form></details><?php endif;?></section>
