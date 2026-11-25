@@ -286,6 +286,24 @@ function handle_module_post(string $page, string $action): void {
         $brand=trim((string)($_POST['brand']??'')); $ip=trim((string)($_POST['ip_address']??''));
         $port=filter_var($_POST['port']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>65535]]);
         if ($brand==='' || ($ip!=='' && !filter_var($ip,FILTER_VALIDATE_IP)) || !$port) throw new RuntimeException('مشخصات کارتخوان نامعتبر است.');
+        if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')) {
+            $branch=branch_require($tenant,(int)user()['id'],$_POST['branch_id']??null);
+            $account=filter_var($_POST['account_id']??null,FILTER_VALIDATE_INT);
+            $number=trim(ascii_digits((string)($_POST['terminal_number']??'')));
+            if(!$account||!preg_match('/^[0-9]{1,64}$/D',$number))throw new RuntimeException('حساب مقصد و شماره پایانه الزامی است.');
+            db()->beginTransaction();
+            try {
+                query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+                if(!query('SELECT id FROM company_bank_accounts WHERE company_id=? AND id=? AND is_active=1 AND (branch_id IS NULL OR branch_id=?) FOR UPDATE',[$tenant,$account,$branch])->fetch())throw new RuntimeException('حساب مقصد متعلق به این شعبه نیست.');
+                query('INSERT INTO pos_settings(company_id,brand,ip_address,port,is_active) VALUES(?,?,?,?,1)',[$tenant,$brand,$ip,$port]);
+                $terminal=(int)db()->lastInsertId();
+                query('INSERT INTO pos_account_registry(company_id,terminal_id,account_id,terminal_number) VALUES(?,?,?,?)',[$tenant,$terminal,$account,$number]);
+                query('INSERT INTO pos_branch_assignments(company_id,terminal_id,branch_id,effective_from) VALUES(?,?,?,NOW())',[$tenant,$terminal,$branch]);
+                audit('pos.register.manual',$number,$tenant);
+                db()->commit();
+            }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
+            redirect('pos','کارتخوان برای ثبت دستی پرداخت فعال شد.');
+        }
         query('INSERT INTO pos_settings(company_id,brand,ip_address,port,is_active) VALUES(?,?,?,?,0)',[$tenant,$brand,$ip,$port]);
         audit('pos.create',$brand); redirect('pos','کارتخوان ثبت شد (اتصال عملیاتی هنوز فعال نیست).');
     }
@@ -545,7 +563,7 @@ function render_module(string $page, int $tenant): void {
     <?php return; }
     if ($page==='pos') { require_permission('pos.view'); ?>
       <h1>مدیریت کارتخوان‌ها</h1><p class="muted">تعریف دستگاه برای استفاده در اتصال آینده؛ پرداخت آنلاین از سرور لینوکسی انجام نمی‌شود.</p>
-      <?php if(can('users.manage')): ?><div class="card"><h2>افزودن کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>برند<input name="brand" required></label><label>IP دستگاه<input name="ip_address" placeholder="192.168.1.10"></label><label>پورت<input name="port" type="number" min="1" max="65535" required></label><button>ثبت دستگاه</button></form></div><?php endif; ?>
+      <?php if(can('users.manage')): ?><div class="card"><h2>افزودن کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>برند<input name="brand" required></label><label>IP دستگاه<input name="ip_address" placeholder="192.168.1.10"></label><label>پورت<input name="port" type="number" min="1" max="65535" required></label><?php if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')): ?><label>شعبه<select name="branch_id" required><option value="">انتخاب شعبه</option><?=resource_options(branch_choices($tenant,(int)user()['id']))?></select></label><label>حساب مقصد<select name="account_id" required><option value="">انتخاب حساب</option><?=resource_options(query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll(),'title')?></select></label><label>شماره پایانه<input name="terminal_number" inputmode="numeric" maxlength="64" required></label><?php endif; ?><button>ثبت دستگاه</button></form></div><?php endif; ?>
       <div class="card"><h2>دستگاه‌ها</h2><?php render_table(['برند','IP','پورت','فعال'],query('SELECT brand,ip_address,port,is_active FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
     <?php return; }
     if ($page==='templates') { require_admin(); ?>
