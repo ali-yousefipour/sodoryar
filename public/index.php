@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
+/** Mixed-version deployment or stale OPcache must not expose a secondary fatal error. */
+if (!function_exists('public_operation_error')) {
+    function public_operation_error(Throwable $ex): string {
+        return 'عملیات به دلیل خطای داخلی انجام نشد. لطفاً بعداً دوباره تلاش کنید.';
+    }
+}
+
 require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/localization.php';
