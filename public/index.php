@@ -13,6 +13,7 @@ require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/expenses.php';
 require __DIR__ . '/_private/src/expense_settlement.php';
 require __DIR__ . '/_private/src/expense_financial_forms.php';
+require __DIR__ . '/_private/src/expense_reports.php';
 require __DIR__ . '/_private/src/expenses_page.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
@@ -810,6 +811,9 @@ $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
 }
+if ($page==='expenses' && ($_GET['export']??'')==='xlsx' && $tenant) {
+    try { expense_export((int)$tenant); } catch(Throwable $ex) { error_log((string)$ex); $error=public_operation_error($ex); }
+}
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
 if ($page==='finance_center' && ($_GET['preset_export']??'')==='excel' && $tenant) {
     try { finance_preset_export((int)$tenant,finance_preset_input($_GET)); }
@@ -1027,6 +1031,7 @@ render_dashboard_stat('month_count','خدمات ماه جاری',$period['month_
 render_dashboard_stat('today_total','فروش امروز',$period['today_total'],'تومان؛ تاریخ صدور فاکتور');
 render_dashboard_stat('month_total','فروش ماه جاری',$period['month_total'],'تومان؛ تاریخ صدور فاکتور');
 ?></div>
+<?php if($tenant && expense_manager()) expense_dashboard((int)$tenant,$jalaliMonthStart,$dashboardToday); ?>
 <?php $financeNow=dashboard_financial_snapshot((int)$tenant); ?>
 <?php if($financeNow['ledger_ready']): ?>
 <div class="stats finance-dashboard-stats"><?php
