@@ -11,6 +11,8 @@ if (!function_exists('public_operation_error')) {
 require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/expenses.php';
+require __DIR__ . '/_private/src/expense_settlement.php';
+require __DIR__ . '/_private/src/expense_financial_forms.php';
 require __DIR__ . '/_private/src/expenses_page.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
