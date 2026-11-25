@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 function database_table_exists(string $table): bool {
     static $cache=[];
-    if (!in_array($table,['user_profiles','invoice_voids','invoice_payments','branches','user_branch_assignments','pos_branch_assignments','company_bank_accounts','pos_account_registry','cash_transfers'],true)) return false;
+    if (!in_array($table,['user_profiles','invoice_voids','invoice_payments','branches','user_branch_assignments','pos_branch_assignments','company_bank_accounts','pos_account_registry','cash_transfers','pos_bank_settlements','pos_bank_settlement_items'],true)) return false;
     if (!array_key_exists($table,$cache)) {
         try { query('SELECT 1 FROM '.$table.' LIMIT 0'); $cache[$table]=true; }
         catch (PDOException $ex) {
@@ -280,6 +280,14 @@ function handle_module_post(string $page, string $action): void {
             throw $ex;
         }
         redirect('bills',$action==='trash'?'فیش به سطل زباله منتقل شد.':($action==='restore'?'فیش بازیابی شد.':'فیش واجد شرایط به‌صورت دائمی حذف شد.'));
+    }
+    if ($page==='pos' && $action==='settle') {
+        require_admin();
+        $token=(string)($_POST['settlement_token']??'');
+        if(!isset($_SESSION['pos_settle_token']) || !hash_equals($_SESSION['pos_settle_token'],$token))throw new RuntimeException('درخواست تطبیق بانکی معتبر نیست.');
+        pos_settlement_record($tenant,(int)user()['id'],(int)($_POST['terminal_id']??0),(int)($_POST['account_id']??0),(array)($_POST['payment_ids']??[]),invoice_payment_amount($_POST['amount']??''),(string)($_POST['settled_date']??''),trim((string)($_POST['bank_reference']??'')),$token);
+        unset($_SESSION['pos_settle_token']);
+        redirect('pos','تطبیق دریافت‌های کارتخوان با واریز مستند بانک ثبت شد.');
     }
     if ($page === 'pos' && in_array($action,['transfer','status'],true)) {
         require_admin();
@@ -603,6 +611,7 @@ function render_module(string $page, int $tenant): void {
       <?php if(in_array(user()['role'],['company_admin','superadmin'],true) && branches_ready() && database_table_exists('pos_account_registry')): $devices=query('SELECT id,brand name FROM pos_settings WHERE company_id=? ORDER BY id',[$tenant])->fetchAll(); ?>
       <section class="card"><h2>انتقال کارتخوان به شعبه دیگر</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="transfer"><label>کارتخوان<select name="terminal_id" required><?=resource_options($devices)?></select></label><label>شعبه مقصد<select name="branch_id" required><?=resource_options(branch_choices($tenant,(int)user()['id']))?></select></label><label>حساب مقصد<select name="account_id" required><?=resource_options(query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll(),'title')?></select></label><button>ثبت انتقال</button></form><h2>وضعیت کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="status"><label>کارتخوان<select name="terminal_id" required><?=resource_options($devices)?></select></label><label><input type="checkbox" name="is_active" value="1">فعال</label><button>ثبت وضعیت</button></form></section>
       <?php render_table(['کارتخوان','شعبه','از','تا'],query('SELECT p.brand,b.name,a.effective_from,a.effective_until FROM pos_branch_assignments a JOIN pos_settings p ON p.id=a.terminal_id AND p.company_id=a.company_id JOIN branches b ON b.id=a.branch_id AND b.company_id=a.company_id WHERE a.company_id=? ORDER BY a.id DESC',[$tenant])->fetchAll()); endif; ?>
+      <?php if(in_array(user()['role'],['company_admin','superadmin'],true))render_pos_settlements($tenant); ?>
       <div class="card"><h2>دستگاه‌ها</h2><?php render_table(['برند','IP','پورت','فعال'],query('SELECT brand,ip_address,port,is_active FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
     <?php return; }
     if ($page==='templates') { require_admin(); ?>

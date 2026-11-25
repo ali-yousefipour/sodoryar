@@ -15,6 +15,7 @@ require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/invoice_payments.php';
+require __DIR__ . '/_private/src/pos_settlements.php';
 require __DIR__ . '/_private/src/invoice_numbers.php';
 require __DIR__ . '/_private/src/invoice_management.php';
 require __DIR__ . '/_private/src/global_search.php';
@@ -689,6 +690,7 @@ try {
                 accounting_assert_write_open($tenant,$invoice['financial_date']);
                 if (invoice_payment_ledger_ready()) {
                     cashbox_assert_payments_mutable($tenant,(int)$id);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                     $active=get_invoice_payment_rows($tenant,(int)$id);
                     if (count($active)!==1 || (int)$active[0]['amount']!==(int)$invoice['total_amount']) {
                         throw new RuntimeException('برای اصلاح چندتراکنشی از عملیات تخصصی مالی استفاده کنید؛ جایگزینی یکباره مجاز نیست.');
@@ -723,6 +725,7 @@ try {
                 }
                 accounting_assert_write_open($tenant,$invoice['financial_date']);
                 cashbox_assert_payments_mutable($tenant,(int)$id);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                 $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
                 if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
                 $posted=(array)($_POST['payments']??[]);
@@ -758,6 +761,7 @@ try {
                 $locked=query('SELECT id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$locked) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 accounting_assert_write_open($tenant,$locked['financial_date']);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                 query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
                 audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
                 db()->commit();

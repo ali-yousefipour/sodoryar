@@ -591,3 +591,19 @@ integration_assert(cashbox_shift_totals($companyA,$sourceShift)['outgoing']===30
 integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Expense or transfer created an invoice receipt');
 integration_assert((int)query('SELECT COUNT(*) FROM cash_shift_adjustments WHERE company_id=? AND transfer_id=?',[$companyA,$transferId])->fetchColumn()===2,'Transfer should contain exactly two movements');
 echo "PASS: migrations 023-029 repeated with exact historical preservation, branch authorization, cross-branch receipt attribution, expense and transfer idempotency.\n";
+
+apply_sql_fixture($root.'/database/migrations/030_pos_settlements.sql');
+apply_sql_fixture($root.'/database/migrations/030_pos_settlements.sql');
+require $root.'/src/pos_settlements.php';
+$bank=insert_fixture('INSERT INTO banks(name) VALUES(?)',['CI test bank']);
+$account=insert_fixture('INSERT INTO company_bank_accounts(company_id,branch_id,bank_id,title,account_number) VALUES(?,?,?,?,?)',[$companyA,$branch2,$bank,'CI documented bank account','12345']);
+query('INSERT INTO pos_account_registry(company_id,terminal_id,account_id,terminal_number) VALUES(?,?,?,?)',[$companyA,$terminal2,$account,'22222']);
+$payment=(int)query("SELECT id FROM invoice_payments WHERE company_id=? AND invoice_id=? AND payment_method='pos'",[$companyA,$branchInvoice])->fetchColumn();
+$settlement=pos_settlement_record($companyA,$managerA,$terminal2,$account,[$payment],600,date('Y-m-d'),'CI-BANK-REF',str_repeat('1',64));
+integration_assert(pos_settlement_record($companyA,$managerA,$terminal2,$account,[$payment],600,date('Y-m-d'),'CI-BANK-REF',str_repeat('1',64))===$settlement,'Bank settlement replay duplicated');
+$settledGuard=false;
+db()->beginTransaction();
+try{pos_assert_invoice_unsettled($companyA,$branchInvoice);}catch(RuntimeException $ex){$settledGuard=true;}finally{db()->rollBack();}
+integration_assert($settledGuard,'Settled invoice correction guard missing');
+integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Bank settlement duplicated receipts');
+echo "PASS: bank settlement exact reconciliation, replay and settled receipt protection.\n";

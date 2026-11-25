@@ -159,6 +159,7 @@ function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $
  */
 function correct_invoice_payment_rows(int $tenant,int $invoiceId,array $old,array $replacement,string $reason): array {
     if(!db()->inTransaction())throw new LogicException('Receipt correction requires a transaction.');
+    if(function_exists('pos_assert_invoice_unsettled'))pos_assert_invoice_unsettled($tenant,$invoiceId);
     if(!$old || count($old)!==count($replacement))throw new RuntimeException('تعداد تراکنش‌های قبلی در اصلاح فیش قابل تغییر نیست.');
     if(mb_strlen($reason)<5||mb_strlen($reason)>500)throw new RuntimeException('دلیل اصلاح نامعتبر است.');
     query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
