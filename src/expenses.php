@@ -105,7 +105,7 @@ function expense_save(int $tenant,int $actor,array $input,string $requestKey): i
     try{
         query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
         $prior=query('SELECT expense_id id,request_digest FROM expense_requests WHERE company_id=? AND request_key=?',[$tenant,$requestKey])->fetch();
-        if($prior){if(!hash_equals($prior['request_digest'],$digest))throw new RuntimeException('شناسه درخواست قبلاً برای سند دیگری مصرف شده است.');db()->commit();return (int)$prior['id'];}
+        if($prior){$original=expense_require_document($tenant,(int)$prior['id']);if((int)$original['created_by']!==$actor)throw new RuntimeException('درخواست هزینه متعلق به کاربر دیگری است.');if(!hash_equals($prior['request_digest'],$digest))throw new RuntimeException('شناسه درخواست قبلاً برای سند دیگری مصرف شده است.');db()->commit();return (int)$prior['id'];}
         if(!query('SELECT id FROM expense_categories WHERE company_id=? AND id=? AND is_active=1',[$tenant,$category])->fetch())throw new RuntimeException('دسته‌بندی فعال هزینه را انتخاب کنید.');
         $policy=expense_policy($tenant);
         $approval=$mode==='draft'?'draft':(($policy['approval_mode']==='all'||($policy['approval_mode']==='threshold'&&$money['total_amount']>(int)$policy['approval_threshold']))?'pending':'approved');

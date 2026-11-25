@@ -5,7 +5,9 @@ function expense_handle_post(string $action): never {
     if(in_array($action,['category','category_edit','policy'],true))expense_settings_post($action);
     if($action==='save'){
         $token=(string)($_POST['expense_token']??'');
-        if(!isset($_SESSION['expense_create_token']) || !hash_equals($_SESSION['expense_create_token'],$token))throw new RuntimeException('درخواست ثبت هزینه معتبر نیست؛ صفحه را دوباره بارگذاری کنید.');
+        $sessionValid=isset($_SESSION['expense_create_token']) && hash_equals($_SESSION['expense_create_token'],$token);
+        $replay=preg_match('/^[a-f0-9]{64}$/D',$token)?query('SELECT r.expense_id FROM expense_requests r JOIN expenses e ON e.id=r.expense_id AND e.company_id=r.company_id WHERE r.company_id=? AND r.request_key=? AND e.created_by=?',[$tenant,$token,$actor])->fetch():false;
+        if(!$sessionValid&&!$replay)throw new RuntimeException('درخواست ثبت هزینه معتبر نیست؛ صفحه را دوباره بارگذاری کنید.');
         $id=expense_save($tenant,$actor,$_POST,$token);
         unset($_SESSION['expense_create_token']);
         $message='سند هزینه ثبت شد.';
@@ -77,7 +79,7 @@ function render_expense_actions(int $tenant,array $row,array $cash,array $banks)
     if($own && !in_array($status,['draft','voided'],true))echo '<form method="post" class="stack">'.$base.'<input type="hidden" name="action" value="request_change">'.$reason.'<button class="secondary">ثبت درخواست اصلاح</button></form>';
     if($status!=='voided' && ($own||can('expenses.manage')))echo '<form method="post" enctype="multipart/form-data" class="stack">'.$base.'<input type="hidden" name="action" value="attach"><label>پیوست سند (PDF، JPG، PNG؛ حداکثر ۵ مگابایت)<input type="file" name="attachment" accept="application/pdf,image/jpeg,image/png" required></label><button class="secondary">افزودن پیوست</button></form>';
     if(can('expenses.manage') && $status==='approved' && (int)$row['employee_due']>0){
-        $payments=query("SELECT id,amount FROM expense_payments WHERE company_id=? AND expense_id=? AND method='personal' ORDER BY id",[$tenant,$id])->fetchAll();
+        $payments=query("SELECT p.id,p.amount-COALESCE((SELECT SUM(r.amount) FROM employee_reimbursements r WHERE r.company_id=p.company_id AND r.payment_id=p.id),0) amount FROM expense_payments p WHERE p.company_id=? AND p.expense_id=? AND p.method='personal' AND p.posted_at IS NOT NULL HAVING amount>0 ORDER BY p.id",[$tenant,$id])->fetchAll();
         $token=$_SESSION['expense_reimburse_tokens'][$id]??=bin2hex(random_bytes(32));
         echo '<form method="post" class="stack">'.$base.'<input type="hidden" name="action" value="reimburse"><input type="hidden" name="reimburse_token" value="'.e($token).'"><h3>بازپرداخت به کارمند</h3><label>پرداخت شخصی<select name="payment_id" required>';foreach($payments as $payment)echo '<option value="'.(int)$payment['id'].'">'.fa_digits((string)$payment['id']).' — '.money_toman($payment['amount']).'</option>';
         echo '</select></label><label>مبلغ بازپرداخت (تومان)<input name="amount" inputmode="numeric" data-money-input required></label><label>منبع<select name="method"><option value="cash">صندوق نقدی</option>'.(can('expenses.bank')?'<option value="bank">حساب بانکی</option>':'').'</select></label><label>صندوق<select name="cash_shift_id">'.expense_ui_options($cash).'</select></label><label>حساب بانکی<select name="bank_account_id">'.expense_ui_options($banks).'</select></label>'.expense_ui_date('paid_date','تاریخ پرداخت').'<label>شماره پیگیری<input name="tracking_number" maxlength="120"></label><button>ثبت بازپرداخت</button></form>';

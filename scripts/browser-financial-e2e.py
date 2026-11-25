@@ -501,11 +501,48 @@ def main() -> None:
         assert manager_a.locator("#primaryNav .nav-link.active").count() == 1, (
             "Categorized sidebar lost the active route"
         )
+        # Exercise a stored expense through real PHP, approval policy and isolated DB.
+        manager_a.goto(f"{ORIGIN}/?page=expenses", wait_until="domcontentloaded")
+        policy=manager_a.locator('form').filter(has=manager_a.locator('input[name="action"][value="policy"]'))
+        policy.locator('select[name="approval_mode"]').select_option('none')
+        policy.get_by_role('button',name='ذخیره روال',exact=True).click()
+        manager_a.wait_for_url('**/?page=expenses*')
+        manager_a.get_by_role('button',name='ثبت هزینه جدید',exact=True).click()
+        expense_form=manager_a.locator('#expenseForm')
+        expense_form.locator('select[name="branch_id"]').select_option(label='شعبه مرکزی')
+        category=expense_form.locator('select[name="category_id"] option').filter(has_text='پذیرایی').get_attribute('value')
+        expense_form.locator('select[name="category_id"]').select_option(category)
+        expense_form.locator('input[name="title"]').fill('CI E2E personal tea expense')
+        expense_form.locator('[data-expense-next]').click()
+        expense_form.locator('input[name="items[0][title]"]').fill('چای آزمایشی')
+        expense_form.locator('input[name="items[0][quantity]"]').fill('۲')
+        expense_form.locator('input[name="items[0][unit_price]"]').fill('۱۲۵')
+        expense_form.locator('[data-expense-next]').click()
+        expense_form.locator('[data-expense-add-payment]').click()
+        expense_form.locator('select[name="payments[0][method]"]').select_option('personal')
+        expense_form.locator('input[name="payments[0][amount]"]').fill('۲۵۰')
+        expense_form.locator('[data-expense-next]').click()
+        expect(expense_form.locator('[data-expense-review]')).to_contain_text('پرداخت شخصی')
+        expense_form.locator('[data-expense-print]').click()
+        manager_a.wait_for_url(lambda url:'page=expense_receipt' in url)
+        expense_id=re.search(r'[?&]id=(\d+)',manager_a.url).group(1)
+        expect(manager_a.locator('.receipt')).to_contain_text('CI E2E personal tea expense')
+        expect(manager_a.locator('.receipt')).to_contain_text('۲۵۰')
+        assert len(manager_a.pdf(prefer_css_page_size=True,print_background=True))>1000
+        foreign_expense=manager_b.goto(f"{ORIGIN}/?page=expense_receipt&id={expense_id}")
+        assert foreign_expense.status==403,'Expense receipt leaked across tenants'
+        manager_a.goto(f"{ORIGIN}/?page=expenses")
+        expect(manager_a.locator('tbody')).to_contain_text('CI E2E personal tea expense')
+        with manager_a.expect_download() as expense_download:
+            manager_a.get_by_role('button',name='خروجی Excel',exact=True).click()
+        data=pathlib.Path(expense_download.value.path()).read_bytes()
+        assert zipfile.is_zipfile(io.BytesIO(data)),'Expense export is not an XLSX workbook'
+        print('PASS: stored expense wizard, exact Persian quantities, personal debt, saved print/PDF, XLSX and expense tenant isolation')
         # Verify the real authenticated workflow at compact mobile, tablet and
         # desktop widths, not just the isolated component fixture.
         for width in (320, 768, 1440):
             manager_a.set_viewport_size({"width": width, "height": 900})
-            for route in ("dashboard", "invoices", "bills", "templates", "reports", "finance_center", "cashbox", "periods", "settings"):
+            for route in ("dashboard", "invoices", "bills", "templates", "reports", "finance_center", "cashbox", "periods", "settings", "expenses"):
                 response = manager_a.goto(f"{ORIGIN}/?page={route}", wait_until="domcontentloaded")
                 status = response.status if response else 0
                 if status != 200:
