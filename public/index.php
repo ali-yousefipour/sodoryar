@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
+require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
@@ -598,6 +599,7 @@ try {
                     }
                 }
                 accounting_assert_write_open($tenant,$invoiceDate);
+                $issueBranch=branches_ready()?branch_require($tenant,$actor,$_POST['branch_id']??null):null;
                 $customer=register_missing_driver($tenant,$national,(array)($_POST['new_driver']??[]),true);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
                 $items=[];
@@ -613,6 +615,7 @@ try {
                 $ref=count($paymentRows)===1?$paymentRows[0]['tracking']:null;
                 $number = insert_invoice_with_short_number($tenant,$customer,(int)user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate);
                 $invoiceId = (int)db()->lastInsertId();
+                if ($issueBranch!==null) query('UPDATE invoices SET branch_id=? WHERE company_id=? AND id=?',[$issueBranch,$tenant,$invoiceId]);
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
                 if (invoice_payment_ledger_ready()) create_invoice_payment_rows($tenant,$invoiceId,(int)user()['id'],$paymentRows);
@@ -1067,6 +1070,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"<?=!empty($_SESSION['invoice_start_next']) ? ' data-start-next="1"' : ''?>><?php unset($_SESSION['invoice_start_next']); ?><div class="invoice-workspace">
 <form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-wizard-v2" novalidate><header class="invoice-wizard-header"><div class="invoice-wizard-title"><h2 id="invoiceWizardTitle">صدور فاکتور جدید</h2><p data-wizard-status tabindex="-1" aria-live="polite"></p></div><ol class="invoice-wizard-steps" aria-label="مراحل صدور فاکتور"><li><span>۱</span><b>تاکسیران</b></li><li><span>۲</span><b>خدمات</b></li><li><span>۳</span><b>پرداخت</b></li><li><span>۴</span><b>تأیید نهایی</b></li></ol></header><div class="invoice-wizard-body"><input type="hidden" name="invoice_after_save" value="list"><?=csrf_field()?><input type="hidden" name="action" value="add"><input type="hidden" name="invoice_create_nonce" value="<?=e($_SESSION['invoice_create_nonce'] ??= bin2hex(random_bytes(16)))?>">
 <section data-wizard-stage="1" class="invoice-panel invoice-panel-details" aria-labelledby="invoiceDetailsTitle">
+<?php if(branches_ready()): $branchOptions=branch_choices($tenant,(int)user()['id']); ?><label for="invoiceBranch">شعبه<select id="invoiceBranch" name="branch_id" required><option value="">انتخاب شعبه</option><?php foreach($branchOptions as $branch): ?><option value="<?=e($branch['id'])?>" <?=count($branchOptions)===1 || (int)$branch['is_default']===1?'selected':''?>><?=e($branch['name'])?></option><?php endforeach; ?></select></label><?php endif; ?>
 <div class="invoice-panel-heading"><span class="invoice-step">۱</span><div><h2 id="invoiceDetailsTitle">اطلاعات فاکتور</h2><p>شناسه تاکسیران و تاریخ انجام خدمت</p></div></div>
 <div class="invoice-details-grid">
 <div class="invoice-driver-wrap"><label class="invoice-driver-field" for="invoiceDriverNational">کد ملی تاکسیران<input id="invoiceDriverNational" name="driver_national_code" data-driver-lookup data-driver-autocomplete inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="از رقم ششم جستجو می‌شود" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="invoiceDriverSuggestions" aria-describedby="invoiceDriverStatus" required autofocus><small id="invoiceDriverStatus" class="lookup-result" data-driver-result role="status" aria-live="polite">با ورود حداقل ۶ رقم، رانندگان مشابه نمایش داده می‌شوند.</small></label><div id="invoiceDriverSuggestions" class="invoice-driver-suggestions" data-driver-suggestions role="listbox" aria-label="رانندگان مشابه" hidden></div></div>
