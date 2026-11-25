@@ -204,6 +204,7 @@ function permission_catalog(): array {
         'users.manage'=>'مدیریت کاربران شرکت', 'roles.manage'=>'مدیریت نقش‌های شرکت',
         'invoices.print'=>'چاپ فاکتور', 'invoices.payment_edit'=>'ویرایش روش پرداخت فاکتور',
         'invoices.void'=>'ابطال فاکتور',
+        'expenses.view'=>'مشاهده اسناد هزینه', 'expenses.create'=>'ثبت هزینه', 'expenses.approve'=>'تأیید هزینه شعب مجاز', 'expenses.manage'=>'مدیریت هزینه و بازپرداخت', 'expenses.bank'=>'پرداخت هزینه از حساب بانکی', 'expenses.export'=>'خروجی هزینه‌ها',
         'cashbox.view'=>'مشاهده صندوق روزانه', 'cashbox.open'=>'شروع شیفت صندوق',
         'cashbox.adjust'=>'ثبت ورود و خروج وجه صندوق', 'cashbox.close'=>'درخواست تسویه صندوق',
         'cashbox.manage'=>'مدیریت صندوق‌ها', 'cashbox.approve'=>'تأیید تسویه صندوق',
@@ -238,14 +239,14 @@ function require_document_owner(int $ownerId): void {
 /** Permissions only for company managers; never delegate these to operators. */
 function operator_permission_assignable(string $permission): bool {
     return array_key_exists($permission,permission_catalog())
-        && !in_array($permission,['users.manage','roles.manage','cashbox.manage','cashbox.approve','periods.manage','finance.reconcile'],true);
+        && !in_array($permission,['expenses.manage','users.manage','roles.manage','cashbox.manage','cashbox.approve','periods.manage','finance.reconcile'],true);
 }
 function permission_groups(): array {
     $names=[
         'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
         'bills'=>'فیش‌ها و قبوض', 'reports'=>'گزارش‌های مالی', 'activity'=>'گزارش فعالیت‌ها',
         'commissions'=>'پورسانت', 'pos'=>'کارتخوان‌ها', 'cashbox'=>'صندوق و تسویه', 'periods'=>'دوره مالی', 'users'=>'کاربران',
-        'roles'=>'مدیریت نقش‌ها'
+        'expenses'=>'هزینه‌ها', 'roles'=>'مدیریت نقش‌ها'
     ];
     $groups=[];
     foreach(permission_catalog() as $key=>$label) {

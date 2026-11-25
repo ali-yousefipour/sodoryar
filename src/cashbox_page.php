@@ -106,7 +106,7 @@ function render_cashbox(int $tenant): void {
        $own?[$tenant,$actor]:[$tenant])->fetchAll();
     if(cashbox_expenses_ready()){
         $summary=query("SELECT b.name,SUM(a.amount) total FROM cash_shift_adjustments a JOIN branches b ON b.id=a.expense_branch_id AND b.company_id=a.company_id JOIN cash_shifts s ON s.id=a.shift_id AND s.company_id=a.company_id WHERE a.company_id=?".$expenseScope.($own?' AND s.operator_id=?':'')." GROUP BY b.id,b.name ORDER BY b.name",$own?[$tenant,$actor]:[$tenant])->fetchAll();
-        echo '<section class="card"><h2>جمع هزینه‌های نقدی '.($own?'ثبت‌شده در صندوق‌های شما':'شرکت به تفکیک شعبه').'</h2>';
+        echo '<section class="card"><h2>جمع هزینه‌های نقدی قدیمی '.($own?'ثبت‌شده در صندوق‌های شما':'شرکت به تفکیک شعبه').'</h2>';
         foreach($summary as $item) echo '<p>'.e($item['name']).': '.money_toman($item['total']).'</p>';
         if(!$summary) echo '<p>هزینه‌ای ثبت نشده است.</p>';
         echo '</section>';
@@ -138,7 +138,7 @@ function render_cashbox(int $tenant): void {
             echo '<h3>هزینه‌های شرکت از این صندوق</h3><p>هزینه‌ها در خروج وجه و مانده صندوق محاسبه شده‌اند.</p>';
             foreach($expenses as $expense) echo '<p>'.e($expense['branch_name']).' — '.money_toman($expense['amount']).' — '.e($expense['reason']).' — '.e(jalali_datetime($expense['created_at'],true)).'</p>';
             if(!$expenses) echo '<p class="muted">هزینه‌ای ثبت نشده است.</p>';
-            if($canOperate && $shift['status']==='open' && can('cashbox.adjust')){
+            if($canOperate && $shift['status']==='open' && can('cashbox.adjust') && (!function_exists('expenses_ready') || !expenses_ready())){
                 $token=$_SESSION['expense_tokens'][$id]??=bin2hex(random_bytes(32));
                 echo '<form method="post" class="form-grid">'.csrf_field().'<input type="hidden" name="action" value="expense"><input type="hidden" name="shift_id" value="'.$id.'"><input type="hidden" name="expense_token" value="'.e($token).'"><label>مبلغ هزینه (تومان)<input name="amount" inputmode="numeric" data-money-input required></label><label>شرح هزینه شرکت<input name="reason" minlength="5" maxlength="500" required></label><button type="submit">ثبت هزینه از صندوق نقدی</button></form>';
             }

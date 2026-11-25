@@ -146,6 +146,7 @@ function cashbox_expenses_ready(): bool {
     return (bool)query("SHOW COLUMNS FROM cash_shift_adjustments LIKE 'expense_branch_id'")->fetch();
 }
 function cashbox_add_expense(int $tenant,int $shift,int $actor,int $amount,string $reason,string $token): void {
+    if(function_exists('expenses_ready') && expenses_ready())throw new RuntimeException('هزینه جدید را از بخش هزینه‌ها با سند و اقلام ثبت کنید.');
     require_permission('cashbox.adjust');
     if (!cashbox_expenses_ready() || !branches_ready()) throw new RuntimeException('ابتدا مهاجرت‌های ۰۲۴ تا ۰۲۶ را اعمال کنید.');
     if ($amount<=0 || mb_strlen($reason)<5 || mb_strlen($reason)>500 || !preg_match('/^[a-f0-9]{64}$/D',$token)) throw new RuntimeException('مبلغ یا شرح هزینه نامعتبر است.');

@@ -32,6 +32,10 @@ require __DIR__ . '/_private/src/financial_issue_reviews.php';
 require __DIR__ . '/_private/src/dashboard_finance.php';
 require __DIR__ . '/_private/src/finance_schema_health.php';
 require __DIR__ . '/_private/src/default_services.php';
+require __DIR__ . '/_private/src/expense_settings.php';
+require __DIR__ . '/_private/src/expenses.php';
+require __DIR__ . '/_private/src/expense_reports.php';
+require __DIR__ . '/_private/src/expense_page.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
 function lock_active_company_admins(int $tenant): int {
@@ -47,7 +51,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['expenses','expense_receipt','expense_attachment','branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -779,6 +783,7 @@ try {
             redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
         }
         if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_post($page,$action);
+        if ($page==='expenses') expense_handle_post($action);
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -813,6 +818,17 @@ if ($page === 'reports' || $page==='finance_center') require_permission('reports
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
+}
+if(in_array($page,['expenses','expense_receipt','expense_attachment'],true)){
+    expense_require_permission('view');
+    if(!expenses_ready()){$error='ابتدا مهاجرت ۰۳۱ هزینه‌ها و وابستگی‌های آن را نصب کنید.';}
+    elseif($page==='expense_attachment'){
+        try{expense_serve_attachment((int)$tenant,(int)($_GET['id']??0));}catch(Throwable $ex){http_response_code(403);exit('پیوست موجود یا مجاز نیست.');}
+    }
+    elseif($page==='expense_receipt'){
+        try{expense_require_document((int)$tenant,(int)($_GET['id']??0));}catch(Throwable $ex){http_response_code(403);exit('سند هزینه موجود یا مجاز نیست.');}
+    }
+    elseif($page==='expenses' && in_array($_GET['export']??'',['excel','xlsx','csv'],true))expense_report_export((int)$tenant,expense_report_filters($_GET),($_GET['export']==='excel'?'xlsx':(string)$_GET['export']));
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
 if ($page==='finance_center' && ($_GET['preset_export']??'')==='excel' && $tenant) {
@@ -876,7 +892,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><?php if($page!=='login'): ?><meta name="csrf-token" content="<?=e(csrf_token())?>"><?php endif; ?>
-<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/app.css'),0,16))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='dashboard'): ?><link rel="stylesheet" href="assets/dashboard-detail.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.css'),0,16))?>"><script src="assets/dashboard-detail.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoices'): ?><script src="assets/invoice-payments.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-payments.js'),0,16))?>" defer></script><link rel="stylesheet" href="assets/invoice-wizard.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.css'),0,16))?>"><script src="assets/service-rates.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/service-rates.js'),0,16))?>" defer></script><script src="assets/invoice-wizard.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoice_manager'): ?><script src="assets/invoice-manager.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-manager.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?><link rel="stylesheet" href="assets/design-system-audit.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/design-system-audit.css'),0,16))?>"><link rel="stylesheet" href="assets/global-search.css?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.css'))?>"></head><body>
+<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/app.css'),0,16))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='dashboard'): ?><link rel="stylesheet" href="assets/dashboard-detail.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.css'),0,16))?>"><script src="assets/dashboard-detail.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoices'): ?><script src="assets/invoice-payments.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-payments.js'),0,16))?>" defer></script><link rel="stylesheet" href="assets/invoice-wizard.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.css'),0,16))?>"><script src="assets/service-rates.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/service-rates.js'),0,16))?>" defer></script><script src="assets/invoice-wizard.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoice_manager'): ?><script src="assets/invoice-manager.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-manager.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?><link rel="stylesheet" href="assets/design-system-audit.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/design-system-audit.css'),0,16))?>"><link rel="stylesheet" href="assets/global-search.css?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.css'))?>"><?php if(in_array($page,['expenses','expense_receipt'],true)): ?><link rel="stylesheet" href="assets/expenses.css?v=<?=e((string)filemtime(__DIR__.'/assets/expenses.css'))?>"><?php if($page==='expenses'): ?><script src="assets/expenses.js?v=<?=e((string)filemtime(__DIR__.'/assets/expenses.js'))?>" defer></script><?php endif; endif; ?></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap" id="mainContent">
   <div class="login-layout">
@@ -956,6 +972,7 @@ if ($tenant) {
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
     if (can('invoices.create')) $navItems[]=['invoices','صدور فاکتور جدید','invoices','عملیات روزانه'];
     if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
+    if (can('expenses.view')) $navItems[]=['expenses','هزینه‌ها','invoices','عملیات و صدور'];
     if (can('cashbox.view')) $navItems[]=['cashbox','صندوق و تسویه روزانه','commissions','عملیات روزانه'];
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
     if (can('periods.manage')) $navItems[]=['finance_health','سلامت ساختار مالی','settings','تنظیمات و پیکربندی'];
@@ -1031,7 +1048,7 @@ render_dashboard_stat('month_count','خدمات ماه جاری',$period['month_
 render_dashboard_stat('today_total','فروش امروز',$period['today_total'],'تومان؛ تاریخ صدور فاکتور');
 render_dashboard_stat('month_total','فروش ماه جاری',$period['month_total'],'تومان؛ تاریخ صدور فاکتور');
 ?></div>
-<?php $financeNow=dashboard_financial_snapshot((int)$tenant); ?>
+<?php $financeNow=dashboard_financial_snapshot((int)$tenant); if(expenses_ready() && can('expenses.view'))render_expense_dashboard((int)$tenant); ?>
 <?php if($financeNow['ledger_ready']): ?>
 <div class="stats finance-dashboard-stats"><?php
 render_dashboard_stat('receipts_today','کل دریافتی قطعی امروز',$financeNow['receipts_today'],'تومان؛ جمع نقدی و کارتخوان');
@@ -1196,6 +1213,10 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php endif; ?>
 <?php elseif(in_array($page,['branches','branch_users','bank_accounts'],true)): ?>
 <?php render_company_resources($page); ?>
+<?php elseif($page==='expenses'): ?>
+<?php if(expenses_ready())render_expenses((int)$tenant); ?>
+<?php elseif($page==='expense_receipt'): ?>
+<?php if(expenses_ready())render_expense_receipt((int)$tenant,(int)($_GET['id']??0)); ?>
 <?php elseif($page==='cashbox'): ?>
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
