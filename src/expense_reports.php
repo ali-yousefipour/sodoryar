@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 function expense_report_filters(array $input=[]): array {
     if(!$input)$input=$_GET;
-    $filter=array_fill_keys(['branch_id','user_id','category_id','date_from','date_to','method','bank_account_id','cash_register_id','approval_status','payment_status','amount_min','amount_max'],'');
+    $filter=array_fill_keys(['q','branch_id','user_id','category_id','date_from','date_to','method','bank_account_id','cash_register_id','approval_status','payment_status','amount_min','amount_max'],'');
     foreach($filter as $key=>$unused){
         if(isset($input[$key]) && !is_string($input[$key]))throw new RuntimeException('فیلتر هزینه نامعتبر است.');
         $filter[$key]=ascii_digits(trim((string)($input[$key]??'')));
     }
+    if(mb_strlen($filter['q'])>180)throw new RuntimeException('عبارت جستجوی هزینه طولانی است.');
     foreach(['branch_id','user_id','category_id','bank_account_id','cash_register_id'] as $key)
         if($filter[$key]!=='' && !filter_var($filter[$key],FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]))throw new RuntimeException('شناسه فیلتر هزینه معتبر نیست.');
     foreach(['date_from','date_to'] as $key){
@@ -50,6 +51,7 @@ function expense_report_source(int $tenant): array {
 }
 function expense_report_query(int $tenant,array $filter): array {
     [$sql,$params]=expense_report_source($tenant);
+    if(($filter['q']??'')!==''){$sql.=' AND (e.title LIKE ? OR e.document_number LIKE ? OR e.description LIKE ?)';array_push($params,...array_fill(0,3,'%'.$filter['q'].'%'));}
     foreach(['branch_id'=>'e.branch_id','user_id'=>'e.created_by','category_id'=>'e.category_id','approval_status'=>'e.approval_status'] as $key=>$column){
         if(($filter[$key]??'')!==''){$sql.=' AND '.$column.'=?';$params[]=$filter[$key];}
     }
@@ -80,7 +82,7 @@ function expense_report_data(int $tenant,array $filter,bool $all=false): array {
       COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN pay.employee_due ELSE 0 END),0) employee_due,
       COALESCE(SUM(CASE WHEN e.approval_status='approved' THEN GREATEST(e.total_amount-COALESCE(pay.paid_amount,0),0) ELSE 0 END),0) remaining".$sql,$params)->fetch();
     $total=(int)$summary['document_count'];$pages=max(1,intdiv($total+29,30));$page=min($pages,max(1,(int)($filter['report_page']??1)));
-    $rows=query("SELECT e.*,b.name branch_name,c.name category_name,c.accounting_type,COALESCE(u.full_name,'—') operator_name,
+    $rows=query("SELECT e.*,(SELECT COUNT(*) FROM expense_items ei WHERE ei.company_id=e.company_id AND ei.expense_id=e.id) item_count,b.name branch_name,c.name category_name,c.accounting_type,COALESCE(u.full_name,'—') operator_name,
       COALESCE(pay.paid_amount,0) paid_amount,COALESCE(pay.cash_paid,0) cash_paid,COALESCE(pay.bank_paid,0) bank_paid,
       COALESCE(pay.personal_paid,0) personal_paid,CASE WHEN e.approval_status='approved' THEN COALESCE(pay.employee_due,0) ELSE 0 END employee_due,
       GREATEST(e.total_amount-COALESCE(pay.paid_amount,0),0) remaining".$sql.' ORDER BY e.expense_date DESC,e.id DESC'.($all?'':' LIMIT 30 OFFSET '.(($page-1)*30)),$params)->fetchAll();
@@ -98,6 +100,7 @@ function render_expense_summary(array $summary): void {
 }
 function render_expense_filters(int $tenant,array $filter): void {
     echo '<form method="get" class="card form-grid"><input type="hidden" name="page" value="expenses">';
+    echo '<label>جستجوی سند هزینه<input name="q" maxlength="180" value="'.e($filter['q']??'').'"></label>';
     render_branch_report_select($tenant,$filter['branch_id']);
     $users=query('SELECT id,full_name name FROM users WHERE company_id=?'.(document_scope()==='own'?' AND id='.(int)user()['id']:'').' ORDER BY full_name',[$tenant])->fetchAll();
     $categories=query('SELECT id,name FROM expense_categories WHERE company_id=? ORDER BY name',[$tenant])->fetchAll();
