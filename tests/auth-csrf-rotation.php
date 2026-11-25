@@ -18,7 +18,7 @@ if (!hash_equals($after,(string)$_SESSION['csrf'])) {
 if (csrf_token()!==$after) {
     throw new RuntimeException('New CSRF token does not remain stable within a session.');
 }
-$controller=(string)file_get_contents(__DIR__.'/../public/index.php');
+$controller=str_replace("\r\n","\n",(string)file_get_contents(__DIR__.'/../public/index.php'));
 foreach ([
     'session_regenerate_id(true);'."\n".'                rotate_csrf_token();',
     "\$_SESSION['selected_company'] = (int)\$id; rotate_csrf_token();",

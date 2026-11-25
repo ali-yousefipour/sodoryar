@@ -11,6 +11,7 @@ if (!function_exists('public_operation_error')) {
 require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/expenses.php';
+require __DIR__ . '/_private/src/expense_workflow.php';
 require __DIR__ . '/_private/src/expense_settlement.php';
 require __DIR__ . '/_private/src/expense_returns.php';
 require __DIR__ . '/_private/src/expense_financial_forms.php';
@@ -52,7 +53,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['expenses','branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['expense_attachment','expenses','branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -811,6 +812,9 @@ if ($page === 'reports' || $page==='finance_center') require_permission('reports
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
+}
+if($page==='expense_attachment'&&$tenant){
+    try{expense_serve_attachment((int)$tenant,(int)($_GET['id']??0));}catch(Throwable $ex){http_response_code(404);$error=public_operation_error($ex);}
 }
 if ($page==='expenses' && ($_GET['export']??'')==='xlsx' && $tenant) {
     try { expense_export((int)$tenant); } catch(Throwable $ex) { error_log((string)$ex); $error=public_operation_error($ex); }

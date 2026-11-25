@@ -38,9 +38,14 @@ function expense_create(array $input): int {
     $date=jalali_to_gregorian_date((string)($input['expense_date']??''));$d=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
     $title=trim((string)($input['title']??''));$notes=trim((string)($input['notes']??''));
     $key=(string)($input['request_key']??'');
+    $mode=(string)($input['mode']??'submit');$edit=(int)($input['id']??0);$version=(int)($input['version']??0);
+    $workflow=expense_workflow_ready();
+    if(!in_array($mode,['draft','submit'],true)||(($edit>0||$mode==='draft')&&!$workflow))throw new RuntimeException('گردش پیش‌نویس نیازمند مهاجرت ۰۲۹ است.');
     if(!$category||!$d||$d->format('Y-m-d')!==$date||$date>date('Y-m-d')||$title===''||mb_strlen($title)>180||mb_strlen($notes)>4000||!preg_match('/^[a-f0-9]{64}$/D',$key))throw new RuntimeException('اطلاعات سند معتبر نیست.');
-    [$items,$total]=expense_items_normalize((array)($input['items']??[]));
-    $payments=(array)($input['payments']??[]);if(!$payments||count($payments)>30)throw new RuntimeException('روش پرداخت را مشخص کنید.');
+    [$items,$subtotal]=expense_items_normalize((array)($input['items']??[]));
+    [$total,$extra,$discount]=expense_totals($subtotal,$input['extra_amount']??'0',$input['discount_amount']??'0');
+    if(!$workflow&&($extra||$discount))throw new RuntimeException('تخفیف و هزینه جانبی نیازمند مهاجرت ۰۲۹ است.');
+    $payments=(array)($input['payments']??[]);if(($mode!=='draft'&&!$payments)||count($payments)>30)throw new RuntimeException('روش پرداخت را مشخص کنید.');
     $alloc=[];$sum=0;
     foreach($payments as $p){
         if(!is_array($p))throw new RuntimeException('پرداخت نامعتبر است.');
@@ -50,37 +55,50 @@ function expense_create(array $input): int {
         if(mb_strlen($tracking)>120||($method!=='personal'&&!$source))throw new RuntimeException('منبع پرداخت معتبر نیست.');
         $alloc[]=[$method,$amount,$method==='personal'?null:$source,$tracking];$sum+=$amount;
     }
-    if($sum!==$total)throw new RuntimeException('جمع پرداخت‌ها باید برابر مبلغ هزینه باشد.');
-    $hash=hash('sha256',json_encode([$branch,$category,$date,$title,$notes,$items,$alloc],JSON_THROW_ON_ERROR));
+    if($mode!=='draft'&&$sum!==$total)throw new RuntimeException('جمع پرداخت‌ها باید برابر مبلغ هزینه باشد.');
+    $hash=hash('sha256',json_encode([$branch,$category,$date,$title,$notes,$items,$alloc,$extra,$discount,$mode,$edit,$version],JSON_THROW_ON_ERROR));
     db()->beginTransaction();
     try{
         query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
         $old=query('SELECT id,request_hash FROM expenses WHERE company_id=? AND created_by=? AND request_key=?',[$tenant,$actor,$key])->fetch();
         if($old){if(!hash_equals($old['request_hash'],$hash))throw new RuntimeException('شناسه درخواست تکراری است.');db()->commit();return (int)$old['id'];}
+        if($workflow){
+            $old=query('SELECT expense_id,request_hash FROM expense_mutation_requests WHERE company_id=? AND request_key=?',[$tenant,$key])->fetch();
+            if($old){if(!hash_equals($old['request_hash'],$hash))throw new RuntimeException('درخواست تکراری مغایر است.');db()->commit();return (int)$old['expense_id'];}
+        }
         accounting_assert_write_open($tenant,$date);
         $cat=query('SELECT classification FROM expense_categories WHERE id=? AND company_id=? AND is_active=1',[$category,$tenant])->fetch();
         if(!$cat)throw new RuntimeException('دسته‌بندی معتبر نیست.');
-        query('INSERT INTO expenses(company_id,branch_id,category_id,created_by,expense_date,title,notes,classification,total_amount,request_key,request_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?)',[$tenant,$branch,$category,$actor,$date,$title,$notes,$cat['classification'],$total,$key,$hash]);
-        $id=(int)db()->lastInsertId();
+        $approval=expense_approval_status(expense_policy($tenant),$total,$mode);
+        if($edit>0){
+            $original=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$edit])->fetch();
+            if(!$original||(int)$original['created_by']!==$actor||!in_array($original['approval_status'],['draft','rejected'],true)||(int)$original['version']!==$version)throw new RuntimeException('فقط آخرین نسخه پیش‌نویس یا سند ردشده خودتان قابل ویرایش است.');
+            branch_require($tenant,$actor,(int)$original['branch_id']);
+            accounting_assert_write_open($tenant,$original['expense_date']);
+            if(query('SELECT id FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL LIMIT 1',[$tenant,$edit])->fetch())throw new RuntimeException('سند دارای پرداخت قطعی قابل ویرایش نیست.');
+            $id=$edit;
+            query('UPDATE expenses SET branch_id=?,category_id=?,expense_date=?,title=?,notes=?,classification=?,total_amount=?,approval_status=?,reviewed_by=NULL,reviewed_at=NULL,review_note=NULL,version=version+1 WHERE company_id=? AND id=?',[$branch,$category,$date,$title,$notes,$cat['classification'],$total,$approval,$tenant,$id]);
+            query('DELETE FROM expense_items WHERE company_id=? AND expense_id=?',[$tenant,$id]);
+            query('DELETE FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NULL',[$tenant,$id]);
+        }else{
+            query('INSERT INTO expenses(company_id,branch_id,category_id,created_by,expense_date,title,notes,classification,total_amount,request_key,request_hash,approval_status) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[$tenant,$branch,$category,$actor,$date,$title,$notes,$cat['classification'],$total,$key,$hash,$approval]);
+            $id=(int)db()->lastInsertId();
+        }
+        if($workflow)query('UPDATE expenses SET subtotal=?,extra_amount=?,discount_amount=? WHERE company_id=? AND id=?',[$subtotal,$extra,$discount,$tenant,$id]);
         foreach($items as $r)query('INSERT INTO expense_items(company_id,expense_id,title,description,quantity,unit,unit_price,line_total) VALUES(?,?,?,?,?,?,?,?)',array_merge([$tenant,$id],$r));
         foreach($alloc as [$method,$amount,$source,$tracking]){
             if($method==='cash'&&!query("SELECT s.id FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.id=? AND s.company_id=? AND s.operator_id=? AND s.status='open' AND r.branch_id=? AND r.is_active=1 FOR UPDATE",[$source,$tenant,$actor,$branch])->fetch())throw new RuntimeException('صندوق فعال متعلق به شما و شعبه نیست.');
             if($method==='bank'&&!query('SELECT id FROM company_bank_accounts WHERE id=? AND company_id=? AND is_active=1 AND (branch_id IS NULL OR branch_id=?)',[$source,$tenant,$branch])->fetch())throw new RuntimeException('حساب مجاز نیست.');
             query('INSERT INTO expense_payments(company_id,expense_id,method,amount,account_id,cash_shift_id,tracking) VALUES(?,?,?,?,?,?,?)',[$tenant,$id,$method,$amount,$method==='bank'?$source:null,$method==='cash'?$source:null,$tracking?:null]);
         }
-        expense_event($tenant,$id,'submitted');db()->commit();return $id;
+        if($approval==='approved')expense_post_payments($tenant,['id'=>$id,'branch_id'=>$branch,'created_by'=>$actor,'expense_date'=>$date],$actor);
+        if($workflow)query('INSERT INTO expense_mutation_requests(company_id,request_key,request_hash,expense_id) VALUES(?,?,?,?)',[$tenant,$key,$hash,$id]);
+        expense_event($tenant,$id,$edit>0?'draft.updated':($mode==='draft'?'draft.saved':'submitted'));db()->commit();return $id;
     }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
 }
-function expense_review(int $id,string $decision,string $reason): void {
-    require_admin();$tenant=tenant_id();$actor=(int)user()['id'];
-    if(!in_array($decision,['approved','rejected'],true)||mb_strlen($reason)>500||($decision==='rejected'&&mb_strlen($reason)<5))throw new RuntimeException('تصمیم یا دلیل معتبر نیست.');
-    db()->beginTransaction();
-    try{
-        query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
-        $x=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
-        if(!$x||$x['approval_status']!=='pending')throw new RuntimeException('سند در انتظار تأیید نیست.');
-        branch_require($tenant,$actor,(int)$x['branch_id']);
-        if($decision==='approved'){
+function expense_post_payments(int $tenant,array $x,int $actor): void {
+    if(!db()->inTransaction()||$tenant!==tenant_id()||$actor!==(int)user()['id'])throw new LogicException('Expense posting requires an authorized transaction');
+    $id=(int)$x['id'];
             accounting_assert_write_open($tenant,$x['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
             $rows=query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? ORDER BY id FOR UPDATE',[$tenant,$id])->fetchAll();
             foreach($rows as $p){
@@ -95,8 +113,19 @@ function expense_review(int $id,string $decision,string $reason): void {
                 }elseif($p['method']==='bank'&&!query('SELECT id FROM company_bank_accounts WHERE company_id=? AND id=? AND is_active=1 AND (branch_id IS NULL OR branch_id=?) FOR UPDATE',[$tenant,$p['account_id'],$x['branch_id']])->fetch())throw new RuntimeException('حساب پرداخت دیگر مجاز نیست.');
                 query('UPDATE expense_payments SET posted_at=NOW(),cash_adjustment_id=? WHERE company_id=? AND id=?',[$adjustment,$tenant,$p['id']]);
             }
-        }
-        query('UPDATE expenses SET approval_status=?,reviewed_by=?,reviewed_at=NOW(),review_note=? WHERE company_id=? AND id=?',[$decision,$actor,$reason,$tenant,$id]);
+}
+function expense_review(int $id,string $decision,string $reason): void {
+    require_login();require_permission('expenses.view');$tenant=tenant_id();$actor=(int)user()['id'];
+    if(!in_array($decision,['approved','rejected'],true)||mb_strlen($reason)>500||($decision==='rejected'&&mb_strlen($reason)<5))throw new RuntimeException('تصمیم یا دلیل معتبر نیست.');
+    db()->beginTransaction();
+    try{
+        query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
+        $x=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
+        if(!$x||$x['approval_status']!=='pending')throw new RuntimeException('سند در انتظار تأیید نیست.');
+        branch_require($tenant,$actor,(int)$x['branch_id']);
+        if(!expense_can_review($x))throw new RuntimeException('مجوز یا سقف تأیید این شعبه را ندارید.');
+        if($decision==='approved')expense_post_payments($tenant,$x,$actor);
+        query('UPDATE expenses SET approval_status=?,reviewed_by=?,reviewed_at=NOW(),review_note=?'.(expense_workflow_ready()?',version=version+1':'').' WHERE company_id=? AND id=?',[$decision,$actor,$reason,$tenant,$id]);
         expense_event($tenant,$id,$decision,$reason);db()->commit();
     }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
 }

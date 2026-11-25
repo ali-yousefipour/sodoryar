@@ -125,3 +125,24 @@
 - Schema: `database/migrations/026_expense_documents.sql`، `027_expense_reversals_reimbursements.sql`، `028_expense_returns.sql`؛ بررسی فقط خواندنی `database/verification/expenses_preflight.sql`.
 - آزمون: `integration/expense-ledger-smoke.php`، `integration/browser-financial-seed.php`، `tests/expense-money-validation.php`، `scripts/browser-expense-ledger-e2e.py`.
 - اعتبارسنجی و مستندات: `.github/workflows/deploy-shared-host.yml`، `scripts/validate-release.sh`، همین چک‌لیست.
+
+
+## ادامه با دسترسی فراهم‌شده توسط کاربر — ۱۴۰۵/۰۹/۰۵
+
+کاربر تب phpMyAdmin احرازهویت‌شده را فراهم کرد؛ مانع «نبود دسترسی Schema» در گزارش قبلی رفع شده است. هیچ رمز، cookie یا نشانی نشست در مخزن ذخیره نمی‌شود.
+
+- بانک مقصد در UI: `h301194_sodor`، سرور MySQL `8.0.46-cll-lve`، PHP هاست `8.4.28`.
+- ستون‌های هر هفت جدول هزینه از information_schema فقط خوانده شدند و با 026/027 شاخه منتخب مطابقت دارند. `expense_settlements` و `expense_reversals` وجود دارند؛ `expense_returns` هنوز وجود ندارد. 027 نباید کورکورانه اجرا شود.
+- پشتیبان کامل شامل ساختار و داده ۴۴ جدول با Export SQL/gzip دریافت شد؛ فایل محلی خصوصی: `C:/Users/Administrator/Downloads/h301194_sodor.sql.gz`، حجم 4,773,478 بایت؛ محتوای بازشده 39,513,166 بایت؛ gzip و پایان COMMIT بررسی شدند.
+- SHA256 پشتیبان: `78efc8dde1e3964d5e3f3023eb116da7c4e21a9f82c1781b8e1b85120428ca6a`.
+- فایل پشتیبان شامل داده خصوصی است و هرگز به Git، CI، artifact یا سرویس دیگری ارسال نمی‌شود. فقط metadata غیرشخصی در مستندات ثبت می‌شود.
+- PHP 8.4.26 محلی در `F:/taxi-system/.build-temp/presence-php/php.exe` پیدا شد؛ افزونه‌های موردنیاز در پوشه ext همان runtime موجودند. ادعای قبلی «PHP محلی موجود نیست» به معنی موجود نبودن در PATH بود و با این کشف اصلاح می‌شود.
+- ابزار MariaDB قابل‌حمل برای بازیابی جداگانه در مسیر خصوصی Temp در حال دریافت و تأیید SHA256 است. هنوز بازیابی پشتیبان واقعی موفق اعلام نشده و Migration عملیاتی اجرا نشده است.
+- هر دو workflow روی آخرین commit مستندات `6ac293c6c7d8d88c377a455c7c4ea250cc9dd1b8` موفق‌اند: PHP `45692248427` و release validation `45692252607`؛ deploy در PR اجرا نشده است.
+
+
+### گردش تکمیلی ۰۲۹ — در حال آزمایش
+
+Migration افزایشی `029_expense_workflow.sql` و سرویس `src/expense_workflow.php` اضافه شدند: پیش‌نویس با کنترل نسخه، ویرایش فقط پیش‌نویس/ردشده خود ثبت‌کننده، ارسال مجدد، سیاست none/all/threshold/branch، سقف مسئول شعبه با عضویت فعال و منع تأیید سند خود توسط مسئول، تخفیف و هزینه جانبی صحیح و پیوست خصوصی با شناسه تصادفی و MIME معتبر. فرم‌ها و مسیرهای Backend متصل‌اند. Unit محلی سیاست‌ها/سقف/محاسبات و lint موفق‌اند؛ Integration و مرورگر آخرین تغییرات باید مجدداً تأیید شوند. روی بانک واقعی هنوز ۰۲۸ یا ۰۲۹ اجرا نشده است.
+
+تست CSRF روی Windows به دلیل CRLF و مقایسه متن چندخطی شکست خورد؛ تنها نرمال‌سازی CRLF به LF در خواندن سورس تست اضافه شد، بدون حذف کنترل چرخش CSRF؛ اجرای مجدد موفق شد.
