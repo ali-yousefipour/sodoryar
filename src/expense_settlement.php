@@ -48,6 +48,8 @@ function expense_void(int $id,string $reason): void {
         if(!$x||!in_array($x['approval_status'],['approved','pending','rejected','draft'],true))throw new RuntimeException('سند قابل ابطال نیست.');
         accounting_assert_write_open($tenant,$x['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
         if(query('SELECT id FROM expense_settlements WHERE company_id=? AND expense_id=? LIMIT 1',[$tenant,$id])->fetch())throw new RuntimeException('ابتدا تسویه کارمند باید با سند اصلاحی برگشت داده شود.');
+        // An administrative cancellation is not evidence that funds were physically returned.
+        if($x['approval_status']==='approved' && query("SELECT id FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL AND method IN ('cash','bank') LIMIT 1 FOR UPDATE",[$tenant,$id])->fetch())throw new RuntimeException('ابطال پرداخت نقدی یا بانکی قطعی نیازمند سند مستقل و تأیید بازگشت واقعی وجه است.');
         if($x['approval_status']==='approved'){
             foreach(query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL ORDER BY id FOR UPDATE',[$tenant,$id])->fetchAll() as $p){
                 $adjustment=null;
