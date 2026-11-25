@@ -224,19 +224,9 @@ function document_scopes_ready(): bool {
 /** Financial document scope. No new restrictions until migration 011 is installed. */
 function document_scope(): string {
     $u=require_login();
-    if ($u['role']!=='operator') return 'company';
-    static $scope=null;
-    if ($scope!==null) return $scope;
-    try {
-        if (!document_scopes_ready()) return $scope='company';
-        $value=query('SELECT s.scope FROM user_document_scopes s JOIN users u ON u.id=s.user_id AND u.company_id=s.company_id WHERE s.user_id=? AND s.company_id=?',[$u['id'],$u['company_id']])->fetchColumn();
-        return $scope=$value==='own'?'own':'company';
-    } catch(PDOException $ex) {
-        error_log('Sodoryar document scope read error: '.$ex->getCode());
-        // When the migrated scope table exists but reading fails, fail closed.
-        http_response_code(503);
-        throw new RuntimeException('امکان بررسی محدوده دسترسی اسناد وجود ندارد.');
-    }
+    // Operators must never gain company-wide financial document visibility.
+    // Branch membership is an additional restriction, not an ownership override.
+    return $u['role']==='operator' ? 'own' : 'company';
 }
 function require_document_owner(int $ownerId): void {
     if (document_scope()==='own' && $ownerId!==(int)user()['id']) {

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
+require __DIR__ . '/_private/src/branches.php';
+require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
@@ -37,7 +39,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -598,6 +600,7 @@ try {
                     }
                 }
                 accounting_assert_write_open($tenant,$invoiceDate);
+                $issueBranch=branches_ready()?branch_require($tenant,$actor,$_POST['branch_id']??null):null;
                 $customer=register_missing_driver($tenant,$national,(array)($_POST['new_driver']??[]),true);
                 if (!query('SELECT id FROM customers WHERE id=? AND company_id=?',[$customer,$tenant])->fetch()) throw new RuntimeException('مشتری متعلق به شرکت نیست.');
                 $items=[];
@@ -613,6 +616,7 @@ try {
                 $ref=count($paymentRows)===1?$paymentRows[0]['tracking']:null;
                 $number = insert_invoice_with_short_number($tenant,$customer,(int)user()['id'],$total,$payment,$payment==='pos'?$ref:null,$invoiceDate);
                 $invoiceId = (int)db()->lastInsertId();
+                if ($issueBranch!==null) query('UPDATE invoices SET branch_id=? WHERE company_id=? AND id=?',[$issueBranch,$tenant,$invoiceId]);
                 foreach ($items as $item) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,$item['id'],$item['title'],$item['price']]);
                 foreach ($extras as $extra) query('INSERT INTO invoice_items(company_id,invoice_id,service_id,service_title,price) VALUES(?,?,?,?,?)',[$tenant,$invoiceId,null,$extra['title'],$extra['price']]);
                 if (invoice_payment_ledger_ready()) create_invoice_payment_rows($tenant,$invoiceId,(int)user()['id'],$paymentRows);
@@ -758,6 +762,7 @@ try {
                 (string)($_POST['date_to']??''));
             redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
         }
+        if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_post($page,$action);
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -774,6 +779,7 @@ try {
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page === 'companies' && is_super() && isset($_SESSION['selected_company'])) redirect('dashboard','برای مدیریت شرکت‌ها ابتدا به داشبورد مدیریت کل بازگردید.');
+if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_guard();
 if ($page === 'users') require_admin();
 if ($page === 'roles') { require_admin(); require_permission('roles.manage'); }
 if ($page === 'services' || $page==='service_rate_history') require_permission('services.view');
@@ -944,6 +950,9 @@ if ($tenant) {
     if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها و نظارت'];
     if (user()['role']!=='operator') {
         $navItems[]=['users','کاربران شرکت','users','کاربران و دسترسی'];
+        $navItems[]=['branches','مدیریت شعب','companies','تنظیمات و پیکربندی'];
+        $navItems[]=['bank_accounts','حساب‌های بانکی','commissions','تنظیمات و پیکربندی'];
+        $navItems[]=['branch_users','تخصیص کاربران به شعب','users','کاربران و دسترسی'];
         $navItems[]=['roles','نقش‌ها و مجوزها','users','کاربران و دسترسی'];
         if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
         $navItems[]=['templates','قالب چاپ','templates','تنظیمات و پیکربندی'];
@@ -1067,6 +1076,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"<?=!empty($_SESSION['invoice_start_next']) ? ' data-start-next="1"' : ''?>><?php unset($_SESSION['invoice_start_next']); ?><div class="invoice-workspace">
 <form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-wizard-v2" novalidate><header class="invoice-wizard-header"><div class="invoice-wizard-title"><h2 id="invoiceWizardTitle">صدور فاکتور جدید</h2><p data-wizard-status tabindex="-1" aria-live="polite"></p></div><ol class="invoice-wizard-steps" aria-label="مراحل صدور فاکتور"><li><span>۱</span><b>تاکسیران</b></li><li><span>۲</span><b>خدمات</b></li><li><span>۳</span><b>پرداخت</b></li><li><span>۴</span><b>تأیید نهایی</b></li></ol></header><div class="invoice-wizard-body"><input type="hidden" name="invoice_after_save" value="list"><?=csrf_field()?><input type="hidden" name="action" value="add"><input type="hidden" name="invoice_create_nonce" value="<?=e($_SESSION['invoice_create_nonce'] ??= bin2hex(random_bytes(16)))?>">
 <section data-wizard-stage="1" class="invoice-panel invoice-panel-details" aria-labelledby="invoiceDetailsTitle">
+<?php if(branches_ready()): $branchOptions=branch_choices($tenant,(int)user()['id']); ?><label for="invoiceBranch">شعبه<select id="invoiceBranch" name="branch_id" required><option value="">انتخاب شعبه</option><?php foreach($branchOptions as $branch): ?><option value="<?=e($branch['id'])?>" <?=count($branchOptions)===1 || (int)$branch['is_default']===1?'selected':''?>><?=e($branch['name'])?></option><?php endforeach; ?></select></label><?php endif; ?>
 <div class="invoice-panel-heading"><span class="invoice-step">۱</span><div><h2 id="invoiceDetailsTitle">اطلاعات فاکتور</h2><p>شناسه تاکسیران و تاریخ انجام خدمت</p></div></div>
 <div class="invoice-details-grid">
 <div class="invoice-driver-wrap"><label class="invoice-driver-field" for="invoiceDriverNational">کد ملی تاکسیران<input id="invoiceDriverNational" name="driver_national_code" data-driver-lookup data-driver-autocomplete inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="از رقم ششم جستجو می‌شود" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="invoiceDriverSuggestions" aria-describedby="invoiceDriverStatus" required autofocus><small id="invoiceDriverStatus" class="lookup-result" data-driver-result role="status" aria-live="polite">با ورود حداقل ۶ رقم، رانندگان مشابه نمایش داده می‌شوند.</small></label><div id="invoiceDriverSuggestions" class="invoice-driver-suggestions" data-driver-suggestions role="listbox" aria-label="رانندگان مشابه" hidden></div></div>
@@ -1167,6 +1177,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
 <?php endif; ?>
+<?php elseif(in_array($page,['branches','branch_users','bank_accounts'],true)): ?>
+<?php render_company_resources($page); ?>
 <?php elseif($page==='cashbox'): ?>
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
@@ -1284,6 +1296,15 @@ function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance):
     if (!isset($terminals[$tenant])) {
         $terminals[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
     }
+    $branchField='';
+    if (branches_ready()) {
+        $choices=branch_choices($tenant,(int)user()['id']);
+        $branchField='<label>شعبه دریافت‌کننده<select name="receiving_branch_id" required><option value="">انتخاب شعبه</option>';
+        foreach ($choices as $branch) {
+            $branchField.='<option value="'.(int)$branch['id'].'"'.((count($choices)===1 || (int)$branch['is_default']===1)?' selected':'').'>'.e($branch['name']).'</option>';
+        }
+        $branchField.='</select></label>';
+    }
     $id='invoiceCollect'.$invoiceId;
     $nonce=$_SESSION['invoice_collect_nonces'][$invoiceId]??=bin2hex(random_bytes(32));
     echo ' <button type="button" class="small secondary" data-dialog-open="'.e($id).'">دریافت مانده</button>';
@@ -1291,6 +1312,7 @@ function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance):
         .'<input type="hidden" name="action" value="collect_balance"><input type="hidden" name="invoice_id" value="'.(int)$invoiceId.'">'
         .'<input type="hidden" name="collect_nonce" value="'.e($nonce).'"><h2>ثبت دریافت جدید</h2>'
         .'<p>مانده قابل دریافت: <strong>'.money_toman($balance).'</strong></p>'
+        .$branchField
         .'<label>مبلغ دریافت (تومان)<input name="amount" type="text" inputmode="numeric" data-money-input required maxlength="22"></label>'
         .'<label>روش پرداخت<select name="payment_method" data-collect-method><option value="cash">نقدی</option><option value="pos">کارتخوان</option></select></label>'
         .'<label>دستگاه کارتخوان (در صورت استفاده)<select name="terminal"><option value="">بدون انتخاب دستگاه</option>';

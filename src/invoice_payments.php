@@ -66,8 +66,19 @@ function invoice_payment_rows(array $posted, int $total, bool $allowPartial=fals
     return $rows;
 }
 function create_invoice_payment_rows(int $tenant,int $invoiceId,int $creator,array $rows): void {
+    $branch=null;
+    if (function_exists('branches_ready') && branches_ready()) {
+        $branch=(int)query('SELECT branch_id FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$invoiceId])->fetchColumn();
+        branch_require($tenant,$creator,$branch);
+    }
     foreach ($rows as $row) {
         assert_unique_invoice_pos_receipt($tenant,$row);
+        if ($branch!==null) {
+            $cashShift=branch_payment_shift($tenant,$creator,$branch,$row);
+            query('INSERT INTO invoice_payments(company_id,invoice_id,branch_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,cash_shift_id) VALUES(?,?,?,?,?,?,?,?,NOW(),?,?)',
+                [$tenant,$invoiceId,$branch,$row['method'],$row['amount'],$row['terminal']??null,$row['tracking']?:null,$row['reference']?:null,$creator,$cashShift]);
+            continue;
+        }
         $terminal=$row['terminal']??null;
         if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
             throw new RuntimeException('کارتخوان انتخاب‌شده معتبر یا متعلق به این شرکت نیست.');
@@ -119,6 +130,14 @@ function invoice_followup_ready(): bool {
 function invoice_followup_record(int $tenant,int $invoiceId,int $creator,array $row,string $key): int {
     if (!invoice_followup_ready()) throw new RuntimeException('برای دریافت مانده، ابتدا مهاجرت دیتابیس ۰۱۷ را اجرا کنید.');
     if (!preg_match('/^[a-f0-9]{64}$/D',$key)) throw new RuntimeException('شناسه یکتای عملیات دریافت نامعتبر است.');
+    if (function_exists('branches_ready') && branches_ready()) {
+        $branch=branch_require($tenant,$creator,$_POST['receiving_branch_id']??null);
+        assert_unique_invoice_pos_receipt($tenant,$row);
+        $shift=branch_payment_shift($tenant,$creator,$branch,$row);
+        query('INSERT INTO invoice_payments(company_id,invoice_id,branch_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at,created_by,request_key,cash_shift_id) VALUES(?,?,?,?,?,?,?,?,NOW(),?,?,?)',
+            [$tenant,$invoiceId,$branch,$row['method'],$row['amount'],$row['terminal']??null,$row['tracking']?:null,$row['reference']?:null,$creator,$key,$shift]);
+        return (int)db()->lastInsertId();
+    }
     $terminal=$row['terminal']??null;
     if ($terminal!==null && !query('SELECT id FROM pos_settings WHERE id=? AND company_id=? AND is_active=1',[$terminal,$tenant])->fetch()) {
         throw new RuntimeException('دستگاه کارتخوان متعلق به شرکت یا فعال نیست.');

@@ -31,6 +31,10 @@ function cashbox_start_shift(int $tenant,int $operator,int $register,int $openin
         if(!query('SELECT id FROM cash_registers WHERE id=? AND company_id=? AND is_active=1 FOR UPDATE',[$register,$tenant])->fetch()) {
             throw new RuntimeException('صندوق انتخاب‌شده فعال یا متعلق به شرکت نیست.');
         }
+        if(function_exists('branches_ready') && branches_ready()) {
+            $branch=query('SELECT branch_id FROM cash_registers WHERE id=? AND company_id=?',[$register,$tenant])->fetchColumn();
+            branch_require($tenant,$operator,$branch);
+        }
         if(query("SELECT id FROM cash_shifts WHERE company_id=? AND (register_id=? OR operator_id=?)
                 AND status IN ('open','pending','rejected') LIMIT 1 FOR UPDATE",
             [$tenant,$register,$operator])->fetch()) {
@@ -108,7 +112,12 @@ function cashbox_review_shift(int $tenant,int $shift,int $actor,string $decision
 function cashbox_add_register(int $tenant,string $name): void {
     $name=trim($name);
     if($name===''||mb_strlen($name)>120) throw new RuntimeException('نام صندوق نامعتبر است.');
-    query('INSERT INTO cash_registers(company_id,name) VALUES(?,?)',[$tenant,$name]);
+    if(function_exists('branches_ready') && branches_ready()) {
+        $branch=branch_require($tenant,(int)user()['id'],$_POST['branch_id']??null);
+        query('INSERT INTO cash_registers(company_id,branch_id,name) VALUES(?,?,?)',[$tenant,$branch,$name]);
+    } else {
+        query('INSERT INTO cash_registers(company_id,name) VALUES(?,?)',[$tenant,$name]);
+    }
     audit('cashbox.register.create',$name);
 }
 

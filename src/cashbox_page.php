@@ -53,10 +53,21 @@ function render_cashbox(int $tenant): void {
         return;
     }
     $actor=(int)user()['id'];
-    $registers=query('SELECT id,name FROM cash_registers WHERE company_id=? AND is_active=1 ORDER BY name,id',[$tenant])->fetchAll();
+    $branchField='';
+    if (function_exists('branches_ready') && branches_ready()) {
+        $choices=branch_choices($tenant,$actor);
+        $ids=array_map(static fn($b)=>(int)$b['id'],$choices);
+        $registers=$ids?query("SELECT r.id,CONCAT(b.name,' — ',r.name) name FROM cash_registers r JOIN branches b ON b.id=r.branch_id AND b.company_id=r.company_id WHERE r.company_id=? AND r.is_active=1 AND r.branch_id IN (".implode(',',array_fill(0,count($ids),'?')).") ORDER BY b.branch_number,r.name",array_merge([$tenant],$ids))->fetchAll():[];
+        $branchField='<label>شعبه<select name="branch_id" required><option value="">انتخاب شعبه</option>';
+        foreach ($choices as $b) $branchField.='<option value="'.(int)$b['id'].'"'.((count($choices)===1 || (int)$b['is_default']===1)?' selected':'').'>'.e($b['name']).'</option>';
+        $branchField.='</select></label>';
+    } else {
+        $registers=query('SELECT id,name FROM cash_registers WHERE company_id=? AND is_active=1 ORDER BY name,id',[$tenant])->fetchAll();
+    }
     if(can('cashbox.manage')){
         echo '<div class="card"><h2>تعریف صندوق</h2><form class="form-grid" method="post">'.csrf_field()
            .'<input type="hidden" name="action" value="register"><label>نام صندوق<input name="name" maxlength="120" required></label>'
+           .$branchField
            .'<button type="submit">ثبت صندوق</button></form></div>';
     }
     if(can('cashbox.open')){
