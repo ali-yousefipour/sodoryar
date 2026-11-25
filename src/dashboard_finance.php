@@ -15,13 +15,15 @@ function dashboard_financial_snapshot(int $tenant): array {
     ];
     if(!invoice_payment_ledger_ready())return $empty;
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
+    $scope.=report_branch_sql($tenant,'i.branch_id',$_GET['branch_id']??'');
+    $receiptScope=(document_scope()==='own'?' AND p.created_by='.(int)user()['id']:'').report_branch_sql($tenant,'p.branch_id',$_GET['branch_id']??'');
     $activeInvoice=database_table_exists('invoice_voids')?
        ' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)':'';
     $receipt=query('SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_total,
         COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_total
         FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
         WHERE p.company_id=? AND p.voided_at IS NULL
-        AND p.paid_at>=? AND p.paid_at<?'.$scope.$activeInvoice,
+        AND p.paid_at>=? AND p.paid_at<?'.$receiptScope.$activeInvoice,
         [$tenant,$today.' 00:00:00',$tomorrow.' 00:00:00'])->fetch();
     $due=query('SELECT
         COALESCE(SUM(GREATEST(i.total_amount-COALESCE(pay.paid,0),0)),0) total_due,
@@ -43,7 +45,7 @@ function dashboard_financial_snapshot(int $tenant): array {
         $cashbox=query("SELECT
             COALESCE(SUM(s.status='open'),0) open_boxes,
             COALESCE(SUM(s.status='pending'),0) pending_boxes
-            FROM cash_shifts s WHERE s.company_id=?".$operatorScope,[$tenant])->fetch();
+            FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.company_id=?".$operatorScope.report_branch_sql($tenant,'r.branch_id',$_GET['branch_id']??''),[$tenant])->fetch();
         $empty['open_cashboxes']=(int)$cashbox['open_boxes'];
         $empty['pending_cashboxes']=(int)$cashbox['pending_boxes'];
     }
@@ -65,6 +67,8 @@ function dashboard_financial_snapshot(int $tenant): array {
 function dashboard_detail(int $tenant,string $key,string $today,string $monthStart): array {
     require_permission('reports.view');
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
+    $scope.=report_branch_sql($tenant,'i.branch_id',$_GET['branch_id']??'');
+    $receiptScope=(document_scope()==='own'?' AND p.created_by='.(int)user()['id']:'').report_branch_sql($tenant,'p.branch_id',$_GET['branch_id']??'');
     $valid=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
     $invoiceDate='COALESCE(i.invoice_date,DATE(i.created_at))';
     $customer=" LEFT JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id ";
@@ -81,7 +85,7 @@ function dashboard_detail(int $tenant,string $key,string $today,string $monthSta
     }elseif(in_array($key,['receipts_today','cash_today','pos_today'],true)){
         if(!invoice_payment_ledger_ready())return [[],[]];
         $headers=['شماره فاکتور','زمان وصول','تاکسیران','روش','شماره پیگیری','مبلغ (تومان)'];
-        $sql="SELECT i.invoice_number,p.paid_at,$person customer,p.payment_method,p.tracking_number,p.amount FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id".$customer."WHERE p.company_id=? AND p.voided_at IS NULL AND p.paid_at>=? AND p.paid_at<?".$scope.$valid;
+        $sql="SELECT i.invoice_number,p.paid_at,$person customer,p.payment_method,p.tracking_number,p.amount FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id".$customer."WHERE p.company_id=? AND p.voided_at IS NULL AND p.paid_at>=? AND p.paid_at<?".$receiptScope.$valid;
         $params=[$tenant,$today.' 00:00:00',$next.' 00:00:00'];
         if($key!=='receipts_today'){$sql.=' AND p.payment_method=?';$params[]=$key==='cash_today'?'cash':'pos';}
         foreach(query($sql.' ORDER BY p.paid_at DESC,p.id DESC',$params)->fetchAll() as $r)$rows[]=[display_financial_reference($r['invoice_number']),jalali_datetime($r['paid_at'],true),$r['customer'],$r['payment_method']==='cash'?'نقدی':'کارتخوان',display_financial_reference($r['tracking_number']??''),money($r['amount'])];
@@ -94,7 +98,7 @@ function dashboard_detail(int $tenant,string $key,string $today,string $monthSta
         if(!cashbox_ready())return [[],[]];
         $headers=['شناسه صندوق','اپراتور','زمان شروع','موجودی اولیه (تومان)'];
         $operatorScope=document_scope()==='own'||!can('cashbox.manage')?' AND s.operator_id='.(int)user()['id']:'';
-        foreach(query("SELECT s.id,s.operator_id,s.started_at,s.opening_cash,COALESCE(u.full_name,'—') operator_name FROM cash_shifts s LEFT JOIN users u ON u.id=s.operator_id AND (u.company_id=s.company_id OR u.role='superadmin') WHERE s.company_id=? AND s.status=?".$operatorScope.' ORDER BY s.id DESC',[$tenant,$key==='open_cashboxes'?'open':'pending'])->fetchAll() as $r)$rows[]=[fa_digits((string)$r['id']),$r['operator_name'],jalali_datetime($r['started_at'],true),money($r['opening_cash'])];
+        foreach(query("SELECT s.id,s.operator_id,s.started_at,s.opening_cash,COALESCE(u.full_name,'—') operator_name FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id LEFT JOIN users u ON u.id=s.operator_id AND (u.company_id=s.company_id OR u.role='superadmin') WHERE s.company_id=? AND s.status=?".$operatorScope.report_branch_sql($tenant,'r.branch_id',$_GET['branch_id']??'').' ORDER BY s.id DESC',[$tenant,$key==='open_cashboxes'?'open':'pending'])->fetchAll() as $r)$rows[]=[fa_digits((string)$r['id']),$r['operator_name'],jalali_datetime($r['started_at'],true),money($r['opening_cash'])];
     }elseif($key==='unreviewed_issues'){
         $headers=['نوع مغایرت','شماره فاکتور','جزئیات'];
         $issues=financial_control_exceptions($tenant,['date_from'=>(new DateTimeImmutable($today))->modify('-30 days')->format('Y-m-d'),'date_to'=>$today],100);

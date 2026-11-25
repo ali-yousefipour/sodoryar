@@ -174,7 +174,7 @@ apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 integration_assert(financial_issue_reviews_ready(),'Financial issue review journal failed to install');
 $health=sodoryar_finance_schema_checks();
-integration_assert(count($health)===7 && count(array_filter($health,static fn($check)=>$check['installed']))===7,
+integration_assert(count($health)===15 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7,
     'Finance schema health checks did not recognize the seven installed migrations');
 
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
@@ -267,9 +267,13 @@ try {
 integration_assert($duplicateBlocked,'Repeated receipt idempotency key was accepted');
 $receiptFilter=report_filters_default();
 $receiptFilter['user_id']=(string)$otherUserA;
+$receiptFilter['invoice_number']='CI-A-PARTIAL';
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
 $receipts=invoice_payment_report($companyA,$receiptFilter);
 integration_assert((int)$receipts['summary']['transaction_count']===1,
     'Receipt report operator filter must use the collecting operator, not invoice issuer');
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+integration_assert((int)invoice_payment_report($companyA,$receiptFilter)['summary']['transaction_count']===0,'Operator user filter exposed a colleague receipt');
 
 // A back-dated invoice entered later must belong to its service-date period.
 query('UPDATE invoices SET created_at=? WHERE id=? AND company_id=?',
@@ -496,3 +500,237 @@ try {create_invoice_payment_rows($companyB,$multiInvoice,$userB,[['method'=>'cas
 catch (PDOException $ex) {if($ex->getCode()!=='23000')throw $ex;$foreignPaymentRejected=true;}
 integration_assert($foreignPaymentRejected,'Cross-tenant invoice payment was accepted.');
 echo "PASS: migration 016 idempotency, legacy backfill, Persian amounts, multiple payments, tenant isolation.\\n";
+
+
+// Run the branch-aware path only after the legacy installation/backfill tests above.
+// Preserve original columns byte-for-byte; additive attribution must never repost money.
+$financialSnapshots=[];
+foreach(['invoices','invoice_items','invoice_payments','cash_shifts','cash_shift_adjustments'] as $table){
+    $rows=query('SELECT * FROM '.$table.' ORDER BY id')->fetchAll();
+    $financialSnapshots[$table]=['columns'=>$rows?array_keys($rows[0]):[], 'rows'=>$rows];
+}
+foreach(range(1,2) as $pass){
+    foreach(range(23,29) as $version){
+        $files=glob($root.'/database/migrations/'.sprintf('%03d',$version).'_*.sql');
+        integration_assert(count($files)===1,'Missing or duplicate branch migration '.$version);
+        apply_sql_fixture($files[0]);
+    }
+}
+foreach($financialSnapshots as $table=>$before){
+    if(!$before['columns']){integration_assert((int)query('SELECT COUNT(*) FROM '.$table)->fetchColumn()===0,'Migration posted an unexpected financial row');continue;}
+    $after=query('SELECT '.implode(',',array_map(static fn($column)=>'`'.$column.'`',$before['columns'])).' FROM '.$table.' ORDER BY id')->fetchAll();
+    if($before['rows']!==$after){
+        foreach($before['rows'] as $index=>$oldRow)foreach($oldRow as $column=>$value){
+            if($value!==($after[$index][$column]??null))throw new RuntimeException('Historical mismatch '.$table.' id='.$oldRow['id'].' column='.$column.' before='.json_encode($value).' after='.json_encode($after[$index][$column]??null));
+        }
+        throw new RuntimeException('Historical row count or column shape changed: '.$table);
+    }
+}
+require $root.'/src/branches.php';
+require $root.'/src/company_resources.php';
+integration_assert(branches_ready(),'Branch schema not recognized after migration');
+foreach([$companyA,$companyB] as $company){
+    $central=query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$company])->fetchAll();
+    integration_assert(count($central)===1,'Default branch missing or duplicated');
+    foreach(['invoices','invoice_payments','cash_registers'] as $table)
+        integration_assert((int)query('SELECT COUNT(*) FROM '.$table.' WHERE company_id=? AND (branch_id IS NULL OR branch_id<>?)',[$company,$central[0]['id']])->fetchColumn()===0,'Historical branch attribution failed: '.$table);
+}
+$centralA=(int)query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$companyA])->fetchColumn();
+$centralB=(int)query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$companyB])->fetchColumn();
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+$_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$managerA])->fetchColumn();
+$branch2=insert_fixture('INSERT INTO branches(company_id,branch_number,branch_code,name) VALUES(?,2,?,?)',[$companyA,'002','CI second branch']);
+$branch3=insert_fixture('INSERT INTO branches(company_id,branch_number,branch_code,name) VALUES(?,3,?,?)',[$companyA,'003','CI third branch']);
+integration_assert(count(branch_choices($companyA,$managerA))===3,'Manager branch choices missing');
+$foreignBranchRejected=false;
+try{branch_require($companyA,$managerA,$centralB);}catch(RuntimeException $ex){$foreignBranchRejected=true;}
+integration_assert($foreignBranchRejected,'Foreign company branch accepted');
+$sourceRegister=insert_fixture('INSERT INTO cash_registers(company_id,branch_id,name) VALUES(?,?,?)',[$companyA,$centralA,'CI branch source']);
+$destinationRegister=insert_fixture('INSERT INTO cash_registers(company_id,branch_id,name) VALUES(?,?,?)',[$companyA,$branch2,'CI branch destination']);
+$sourceShift=cashbox_start_shift($companyA,$managerA,$sourceRegister,1000);
+query('INSERT INTO user_branch_assignments(company_id,user_id,branch_id,is_active,is_default) VALUES(?,?,?,1,0)',[$companyA,$otherUserA,$branch2]);
+$_SESSION['user']=['id'=>$otherUserA,'company_id'=>$companyA,'full_name'=>'Other Operator','role'=>'operator'];
+$_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$otherUserA])->fetchColumn();
+$destinationShift=cashbox_start_shift($companyA,$otherUserA,$destinationRegister,0);
+integration_assert(count(branch_choices($companyA,$otherUserA))===2,'Multi-branch operator assignments failed');
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+$_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$userA])->fetchColumn();
+$unassignedBranchRejected=false;
+try{branch_require($companyA,$userA,$branch2);}catch(RuntimeException $ex){$unassignedBranchRejected=true;}
+integration_assert($unassignedBranchRejected,'Unassigned branch accepted for operator');
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
+$_SESSION['auth_version']=(int)query('SELECT auth_version FROM users WHERE id=?',[$managerA])->fetchColumn();
+$branchInvoice=insert_fixture('INSERT INTO invoices(company_id,branch_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date) VALUES(?,?,?,?,?,?,?,?)',[$companyA,$centralA,'CI-CROSS-BRANCH',$customerA,$managerA,1000,'cash',date('Y-m-d')]);
+$cashRow=['method'=>'cash','amount'=>400,'terminal'=>null,'tracking'=>'','reference'=>''];
+db()->beginTransaction();
+try{create_invoice_payment_rows($companyA,$branchInvoice,$managerA,[$cashRow]);db()->commit();}catch(Throwable $ex){db()->rollBack();throw $ex;}
+$wrongPosRejected=false;
+db()->beginTransaction();
+try{branch_payment_shift($companyA,$managerA,$branch2,['method'=>'pos','terminal'=>$terminalA]);}catch(RuntimeException $ex){$wrongPosRejected=true;}finally{db()->rollBack();}
+integration_assert($wrongPosRejected,'POS from another branch was accepted');
+$terminal2=insert_fixture('INSERT INTO pos_settings(company_id,brand,is_active) VALUES(?,?,1)',[$companyA,'CI second branch terminal']);
+query('INSERT INTO pos_branch_assignments(company_id,terminal_id,branch_id,effective_from) VALUES(?,?,?,DATE_SUB(NOW(),INTERVAL 1 DAY))',[$companyA,$terminal2,$branch2]);
+$_POST['receiving_branch_id']=$branch2;
+db()->beginTransaction();
+try{
+    query('SELECT id FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$companyA,$branchInvoice])->fetch();
+    invoice_followup_record($companyA,$branchInvoice,$managerA,['method'=>'pos','amount'=>600,'terminal'=>$terminal2,'tracking'=>'CI-BRANCH-COLLECTION','reference'=>''],str_repeat('c',64));
+    db()->commit();
+}catch(Throwable $ex){db()->rollBack();throw $ex;}
+unset($_POST['receiving_branch_id']);
+$branchFilter=report_filters_default();$branchFilter['branch_id']=(string)$branch2;$branchFilter['invoice_number']='CI-CROSS-BRANCH';
+integration_assert((int)invoice_report($companyA,$branchFilter)['summary']['total']===0,'Cross-branch collection increased receiving branch sales');
+integration_assert((int)invoice_payment_report($companyA,$branchFilter)['summary']['pos_paid']===600,'Receiving branch lost collection');
+$branchFilter['branch_id']=(string)$centralA;
+integration_assert((int)invoice_report($companyA,$branchFilter)['summary']['total']===1000,'Issuing branch lost original sales');
+integration_assert(invoice_payment_totals($companyA,$branchInvoice,1000)['remaining']===0,'Cross-branch collection did not settle invoice');
+$receiptCount=(int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn();
+cashbox_add_expense($companyA,$sourceShift,$managerA,100,'CI company cash expense',str_repeat('d',64));
+cashbox_add_expense($companyA,$sourceShift,$managerA,100,'CI company cash expense',str_repeat('d',64));
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)['outgoing']===100,'Expense duplicated or not deducted');
+$tooLarge=false;try{cashbox_add_expense($companyA,$sourceShift,$managerA,100000,'CI excessive expense',str_repeat('e',64));}catch(RuntimeException $ex){$tooLarge=true;}
+integration_assert($tooLarge,'Expense above available balance accepted');
+$transferId=cashbox_transfer($companyA,$sourceShift,$destinationShift,$managerA,200,'CI internal cash transfer',str_repeat('f',64));
+integration_assert(cashbox_transfer($companyA,$sourceShift,$destinationShift,$managerA,200,'CI internal cash transfer',str_repeat('f',64))===$transferId,'Transfer replay created another transfer');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)['outgoing']===300 && cashbox_shift_totals($companyA,$destinationShift)['incoming']===200,'Transfer legs not balanced');
+integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Expense or transfer created an invoice receipt');
+integration_assert((int)query('SELECT COUNT(*) FROM cash_shift_adjustments WHERE company_id=? AND transfer_id=?',[$companyA,$transferId])->fetchColumn()===2,'Transfer should contain exactly two movements');
+echo "PASS: migrations 023-029 repeated with exact historical preservation, branch authorization, cross-branch receipt attribution, expense and transfer idempotency.\n";
+
+apply_sql_fixture($root.'/database/migrations/030_pos_settlements.sql');
+apply_sql_fixture($root.'/database/migrations/030_pos_settlements.sql');
+require $root.'/src/pos_settlements.php';
+$bank=insert_fixture('INSERT INTO banks(name) VALUES(?)',['CI test bank']);
+$account=insert_fixture('INSERT INTO company_bank_accounts(company_id,branch_id,bank_id,title,account_number) VALUES(?,?,?,?,?)',[$companyA,$branch2,$bank,'CI documented bank account','12345']);
+query('INSERT INTO pos_account_registry(company_id,terminal_id,account_id,terminal_number) VALUES(?,?,?,?)',[$companyA,$terminal2,$account,'22222']);
+$payment=(int)query("SELECT id FROM invoice_payments WHERE company_id=? AND invoice_id=? AND payment_method='pos'",[$companyA,$branchInvoice])->fetchColumn();
+$settlement=pos_settlement_record($companyA,$managerA,$terminal2,$account,[$payment],600,date('Y-m-d'),'CI-BANK-REF',str_repeat('1',64));
+integration_assert(pos_settlement_record($companyA,$managerA,$terminal2,$account,[$payment],600,date('Y-m-d'),'CI-BANK-REF',str_repeat('1',64))===$settlement,'Bank settlement replay duplicated');
+$settledGuard=false;
+db()->beginTransaction();
+try{pos_assert_invoice_unsettled($companyA,$branchInvoice);}catch(RuntimeException $ex){$settledGuard=true;}finally{db()->rollBack();}
+integration_assert($settledGuard,'Settled invoice correction guard missing');
+integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Bank settlement duplicated receipts');
+echo "PASS: bank settlement exact reconciliation, replay and settled receipt protection.\n";
+
+integration_assert(count(array_filter(sodoryar_finance_schema_checks(),static fn($check)=>$check['installed']))===14,'Full multi-branch financial schema not recognized');
+
+
+// Expense documents use the existing cash ledger and never create invoice revenue.
+require $root.'/src/expense_settings.php';
+require $root.'/src/expenses.php';
+$expenseCashBefore=query('SELECT * FROM cash_shift_adjustments ORDER BY id')->fetchAll();
+$expenseCashColumns=implode(',',array_map(static fn($column)=>'`'.$column.'`',array_keys($expenseCashBefore[0])));
+$expenseSalesBefore=query('SELECT id,total_amount FROM invoices ORDER BY id')->fetchAll();
+apply_sql_fixture($root.'/database/migrations/031_expense_documents.sql');
+$legacyDocs=query("SELECT id,company_id,request_key FROM expenses WHERE document_number LIKE 'LEGACY-CASH-%' ORDER BY id")->fetchAll();
+apply_sql_fixture($root.'/database/migrations/031_expense_documents.sql');
+integration_assert($legacyDocs===query("SELECT id,company_id,request_key FROM expenses WHERE document_number LIKE 'LEGACY-CASH-%' ORDER BY id")->fetchAll(),'Legacy expense imported twice');
+integration_assert(count($legacyDocs)===1,'Explicit legacy cash expense not imported');
+integration_assert($expenseCashBefore===query('SELECT '.$expenseCashColumns.' FROM cash_shift_adjustments ORDER BY id')->fetchAll(),'Expense migration changed or reposted cash');
+integration_assert((int)query('SELECT COUNT(*) FROM expense_payments WHERE cash_adjustment_id IS NOT NULL')->fetchColumn()===1,'Legacy payment missing original cash adjustment');
+integration_assert((int)query('SELECT COUNT(*) FROM expense_items')->fetchColumn()===1,'Legacy expense item missing');
+function expense_test_user(int $id): void {
+    $u=query('SELECT id,company_id,full_name,role,auth_version FROM users WHERE id=?',[$id])->fetch();
+    $_SESSION['user']=$u;$_SESSION['auth_version']=(int)$u['auth_version'];
+}
+function expense_test_reject(callable $operation,string $message): void {
+    $rejected=false;try{$operation();}catch(RuntimeException $ex){$rejected=true;}
+    integration_assert($rejected,$message);
+}
+expense_test_user($managerA);
+expense_ensure_defaults($companyA);expense_ensure_defaults($companyA);
+integration_assert(count(expense_categories($companyA))===count(expense_default_categories()),'Expense categories duplicated');
+$expenseCategory=(int)query("SELECT id FROM expense_categories WHERE company_id=? AND accounting_type='expense' ORDER BY id LIMIT 1",[$companyA])->fetchColumn();
+$centralAccount=insert_fixture('INSERT INTO company_bank_accounts(company_id,branch_id,bank_id,title,account_number) VALUES(?,?,?,?,?)',[$companyA,$centralA,$bank,'CI central expense account','445566']);
+$expenseReviewer=insert_fixture('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$companyA,'ci_expense_reviewer',$pass,'Expense Reviewer','company_admin']);
+$expenseBase=['branch_id'=>$centralA,'expense_date'=>date('Y-m-d'),'category_id'=>$expenseCategory,'title'=>'CI documented company expense','items'=>[['title'=>'CI item','quantity'=>'1','unit'=>'عدد','unit_price'=>'100']],'payments'=>[],'mode'=>'submit'];
+$key=static fn(string $suffix):string=>hash('sha256','ci-expense-'.$suffix);
+query("UPDATE expense_policies SET approval_mode='none' WHERE company_id=?",[$companyA]);
+$cashInput=$expenseBase;$cashInput['payments']=[['method'=>'cash','amount'=>'100','cash_shift_id'=>$sourceShift]];
+$cashBefore=cashbox_shift_totals($companyA,$sourceShift);
+$cashExpense=expense_save($companyA,$managerA,$cashInput,$key('cash'));
+integration_assert(expense_save($companyA,$managerA,$cashInput,$key('cash'))===$cashExpense,'Expense retry duplicated document');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)['outgoing']===$cashBefore['outgoing']+100,'Cash expense was not posted exactly once');
+$changed=$cashInput;$changed['title']='Different payload';
+expense_test_reject(fn()=>expense_save($companyA,$managerA,$changed,$key('cash')),'Same request key accepted changed expense');
+expense_test_reject(fn()=>expense_save($companyA,$managerA,array_merge($expenseBase,['branch_id'=>$centralB]),$key('foreign-branch')),'Other company branch accepted');
+$badAccount=$expenseBase;$badAccount['payments']=[['method'=>'bank','amount'=>'100','bank_account_id'=>$account]];
+expense_test_reject(fn()=>expense_save($companyA,$managerA,$badAccount,$key('wrong-branch-bank')),'Other branch bank account accepted');
+$bankInput=$expenseBase;$bankInput['payments']=[['method'=>'bank','amount'=>'100','bank_account_id'=>$centralAccount]];
+$bankExpense=expense_save($companyA,$managerA,$bankInput,$key('bank'));
+integration_assert((int)query("SELECT SUM(amount) FROM expense_bank_movements WHERE company_id=? AND expense_id=? AND direction='out'",[$companyA,$bankExpense])->fetchColumn()===100,'Bank expense movement missing');
+$personalInput=$expenseBase;$personalInput['payments']=[['method'=>'personal','amount'=>'100']];
+$personalBefore=cashbox_shift_totals($companyA,$sourceShift);
+$personalExpense=expense_save($companyA,$managerA,$personalInput,$key('personal'));
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)===$personalBefore,'Personal expense spent company cash');
+$personalPayment=(int)query("SELECT id FROM expense_payments WHERE company_id=? AND expense_id=? AND method='personal'",[$companyA,$personalExpense])->fetchColumn();
+$reimbursement=['expense_id'=>$personalExpense,'payment_id'=>$personalPayment,'amount'=>'40','method'=>'cash','cash_shift_id'=>$sourceShift,'paid_date'=>date('Y-m-d')];
+$reimbursementId=expense_reimburse($companyA,$managerA,$reimbursement,$key('reimburse-cash'));
+integration_assert(expense_reimburse($companyA,$managerA,$reimbursement,$key('reimburse-cash'))===$reimbursementId,'Employee reimbursement retry duplicated');
+expense_test_reject(fn()=>expense_reimburse($companyA,$managerA,array_merge($reimbursement,['amount'=>'61']),$key('reimburse-too-much')),'Reimbursement exceeded employee liability');
+$bankReimbursement=array_merge($reimbursement,['method'=>'bank','amount'=>'60','bank_account_id'=>$centralAccount]);
+expense_reimburse($companyA,$managerA,$bankReimbursement,$key('reimburse-bank'));
+integration_assert((int)query('SELECT SUM(amount) FROM employee_reimbursements WHERE company_id=? AND expense_id=?',[$companyA,$personalExpense])->fetchColumn()===100,'Employee liability repayment incorrect');
+expense_test_reject(fn()=>expense_void($companyA,$personalExpense,$managerA,'CI cannot void reimbursed expense'),'Reimbursed expense voided without reversing reimbursements');
+$mixedInput=$expenseBase;$mixedInput['items'][0]['unit_price']='150';$mixedInput['payments']=[['method'=>'cash','amount'=>'50','cash_shift_id'=>$sourceShift],['method'=>'bank','amount'=>'50','bank_account_id'=>$centralAccount],['method'=>'personal','amount'=>'50']];
+$mixedExpense=expense_save($companyA,$managerA,$mixedInput,$key('mixed'));
+integration_assert((int)query('SELECT COUNT(*) FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL',[$companyA,$mixedExpense])->fetchColumn()===3,'Mixed expense missing payment legs');
+$beforeVoid=cashbox_shift_totals($companyA,$sourceShift);
+expense_void($companyA,$mixedExpense,$managerA,'CI void mixed document');
+expense_void($companyA,$mixedExpense,$managerA,'CI void mixed document retry');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)['incoming']===$beforeVoid['incoming']+50,'Cash void reversal missing or duplicated');
+integration_assert((int)query("SELECT SUM(CASE WHEN direction='out' THEN amount ELSE -amount END) FROM expense_bank_movements WHERE company_id=? AND expense_id=?",[$companyA,$mixedExpense])->fetchColumn()===0,'Bank void reversal unbalanced');
+query("UPDATE expense_policies SET approval_mode='all' WHERE company_id=?",[$companyA]);
+$pendingBefore=cashbox_shift_totals($companyA,$sourceShift);
+$pendingExpense=expense_save($companyA,$managerA,$cashInput,$key('pending'));
+integration_assert(expense_require_document($companyA,$pendingExpense)['approval_status']==='pending' && cashbox_shift_totals($companyA,$sourceShift)===$pendingBefore,'Pending expense posted before approval');
+expense_test_reject(fn()=>expense_review($companyA,$pendingExpense,$managerA,'approved','CI self approval blocked'),'Expense creator approved own expense');
+expense_test_user($expenseReviewer);
+expense_review($companyA,$pendingExpense,$expenseReviewer,'approved','CI independent approval');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)['outgoing']===$pendingBefore['outgoing']+100,'Approval did not post once');
+expense_test_reject(fn()=>expense_review($companyA,$pendingExpense,$expenseReviewer,'approved','CI duplicate approval blocked'),'Duplicate expense approval accepted');
+expense_test_user($managerA);
+$rejectedExpense=expense_save($companyA,$managerA,$expenseBase,$key('reject'));
+expense_test_user($expenseReviewer);expense_review($companyA,$rejectedExpense,$expenseReviewer,'rejected','CI missing supporting receipt');
+integration_assert(expense_require_document($companyA,$rejectedExpense)['approval_status']==='rejected','Expense rejection failed');
+expense_test_user($managerA);
+$draftInput=$expenseBase;$draftInput['mode']='draft';
+$draftExpense=expense_save($companyA,$managerA,$draftInput,$key('draft-create'));
+$draftEdited=$draftInput;$draftEdited['id']=$draftExpense;$draftEdited['version']=1;$draftEdited['title']='CI edited draft';
+integration_assert(expense_save($companyA,$managerA,$draftEdited,$key('draft-edit'))===$draftExpense,'Draft edit created another expense');
+integration_assert((int)expense_require_document($companyA,$draftExpense)['version']===2,'Draft edit version not advanced');
+expense_test_reject(fn()=>expense_save($companyA,$managerA,$draftEdited,$key('draft-stale')),'Stale draft edit accepted');
+integration_assert(expense_save($companyA,$managerA,$draftInput,$key('draft-create'))===$draftExpense,'Old create replay after draft edit duplicated expense');
+query("INSERT INTO user_permissions(user_id,permission_key) VALUES(?,'expenses.view')",[$userA]);
+expense_test_user($userA);
+expense_test_reject(fn()=>expense_require_document($companyA,$cashExpense),'Operator accessed another user expense');
+expense_test_user($userB);
+expense_test_reject(fn()=>expense_require_document($companyB,$cashExpense),'Other company accessed expense');
+expense_test_user($managerA);
+integration_assert($expenseSalesBefore===query('SELECT id,total_amount FROM invoices ORDER BY id')->fetchAll(),'Expense module changed invoice sales');
+integration_assert((int)query('SELECT COUNT(*) FROM invoice_payments WHERE company_id=?',[$companyA])->fetchColumn()===$receiptCount,'Expense module created invoice receipts');
+echo "PASS: expense migration replay/legacy preservation, exact cash/bank/personal/mixed payments, approval/rejection, reimbursements, draft versions, request replay, void reversals, ownership and unchanged sales.\n";
+
+$partialExpense=expense_save($companyA,$managerA,$expenseBase,$key('partial-pay-document'));
+// At this stage approval policy is all; approve through a different authorized reviewer.
+expense_test_user($expenseReviewer);expense_review($companyA,$partialExpense,$expenseReviewer,'approved','CI partial payment approval');expense_test_user($managerA);
+$payInput=['method'=>'bank','amount'=>'40','bank_account_id'=>$centralAccount,'paid_date'=>date('Y-m-d')];
+expense_add_payment($companyA,$partialExpense,$managerA,$payInput,$key('partial-pay'));
+expense_add_payment($companyA,$partialExpense,$managerA,$payInput,$key('partial-pay'));
+integration_assert((int)query('SELECT SUM(amount) FROM expense_payments WHERE company_id=? AND expense_id=?',[$companyA,$partialExpense])->fetchColumn()===40,'Partial payment replay duplicated outflow');
+expense_test_reject(fn()=>expense_add_payment($companyA,$partialExpense,$managerA,array_merge($payInput,['amount'=>'61']),$key('partial-overpay')),'Partial payment above remaining allowed');
+
+integration_assert(count(array_filter(sodoryar_finance_schema_checks(),static fn($check)=>$check['installed']))===15,'Expense document schema readiness missing');
+
+query("UPDATE expense_policies SET approval_mode='none' WHERE company_id=?",[$companyA]);
+$beforeFailure=cashbox_shift_totals($companyA,$sourceShift);
+$opening=(int)query('SELECT opening_cash FROM cash_shifts WHERE company_id=? AND id=?',[$companyA,$sourceShift])->fetchColumn();
+$available=$opening+$beforeFailure['cash']+$beforeFailure['incoming']-$beforeFailure['outgoing'];
+$atomic=$expenseBase;$atomic['items'][0]['unit_price']=(string)($available+1);
+$atomic['payments']=[['method'=>'cash','amount'=>'1','cash_shift_id'=>$sourceShift],['method'=>'cash','amount'=>(string)$available,'cash_shift_id'=>$sourceShift]];
+$beforeDocuments=(int)query('SELECT COUNT(*) FROM expenses WHERE company_id=?',[$companyA])->fetchColumn();
+expense_test_reject(fn()=>expense_save($companyA,$managerA,$atomic,$key('atomic-overdraft')),'Overdraft during second cash payment accepted');
+integration_assert(cashbox_shift_totals($companyA,$sourceShift)===$beforeFailure,'Failed second payment left first cash outflow');
+integration_assert((int)query('SELECT COUNT(*) FROM expenses WHERE company_id=?',[$companyA])->fetchColumn()===$beforeDocuments,'Failed posting left expense document');
+echo "PASS: expense multi-payment failure rolled back document and all cash movements.\n";

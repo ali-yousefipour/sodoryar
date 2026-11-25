@@ -10,7 +10,15 @@ function sodoryar_finance_schema_checks(): array {
         'قفل دوره مالی (۰۱۹)'=>['financial_period_locks'],
         'تاریخچه تعرفه (۰۲۰)'=>['service_rate_versions'],
         'تنظیمات شخصی (۰۲۱)'=>['user_preferences'],
-        'رسیدگی به مغایرت‌ها (۰۲۲)'=>['financial_issue_reviews']
+        'رسیدگی به مغایرت‌ها (۰۲۲)'=>['financial_issue_reviews'],
+        'ثبت یکتای فاکتور (۰۲۳)'=>['invoice_create_requests'],
+        'ساختار شعب (۰۲۴)'=>['branches','user_branch_assignments','pos_branch_assignments','invoices.branch_id','invoice_payments.branch_id','cash_registers.branch_id'],
+        'حساب بانکی (۰۲۵)'=>['company_bank_accounts','pos_account_registry'],
+        'هزینه نقدی (۰۲۶)'=>['cash_shift_adjustments.expense_branch_id','cash_shift_adjustments.expense_token'],
+        'انتقال داخلی (۰۲۷)'=>['cash_transfers','cash_shift_adjustments.transfer_id'],
+        'مشخصات کارتخوان (۰۲۸)'=>['pos_account_registry.merchant_number','pos_account_registry.serial_number'],
+        'تطبیق بانکی (۰۳۰)'=>['pos_bank_settlements','pos_bank_settlement_items'],
+        'اسناد هزینه (۰۳۱)'=>['expenses','expense_items','expense_payments','expense_requests','employee_reimbursements','expense_bank_movements','expense_attachments','cash_shift_adjustments.expense_document_id']
     ];
     $tables=query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
     $known=array_fill_keys($tables,true);
@@ -23,7 +31,10 @@ function sodoryar_finance_schema_checks(): array {
     foreach($tableChecks as $label=>$needs){
         $missing=[];
         foreach($needs as $thing){
-            if(in_array($thing,['request_key','cash_shift_id'],true)) {
+            if(str_contains($thing,'.')) {
+                [$table,$column]=explode('.',$thing,2);
+                if(!isset($known[$table]) || !query('SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[$table,$column])->fetchColumn())$missing[]=$thing;
+            }elseif(in_array($thing,['request_key','cash_shift_id'],true)) {
                 if(!isset($cols[$thing]))$missing[]=$thing;
             }elseif(!isset($known[$thing]))$missing[]=$thing;
         }

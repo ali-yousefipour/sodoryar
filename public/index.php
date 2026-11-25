@@ -15,6 +15,7 @@ require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
 require __DIR__ . '/_private/src/reporting.php';
 require __DIR__ . '/_private/src/invoice_payments.php';
+require __DIR__ . '/_private/src/pos_settlements.php';
 require __DIR__ . '/_private/src/invoice_numbers.php';
 require __DIR__ . '/_private/src/invoice_management.php';
 require __DIR__ . '/_private/src/global_search.php';
@@ -31,6 +32,10 @@ require __DIR__ . '/_private/src/financial_issue_reviews.php';
 require __DIR__ . '/_private/src/dashboard_finance.php';
 require __DIR__ . '/_private/src/finance_schema_health.php';
 require __DIR__ . '/_private/src/default_services.php';
+require __DIR__ . '/_private/src/expense_settings.php';
+require __DIR__ . '/_private/src/expenses.php';
+require __DIR__ . '/_private/src/expense_reports.php';
+require __DIR__ . '/_private/src/expense_page.php';
 
 /** Call inside an open transaction before disabling or demoting a company manager. */
 function lock_active_company_admins(int $tenant): int {
@@ -46,7 +51,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['expenses','expense_receipt','expense_attachment','branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -240,7 +245,9 @@ try {
             try {
                 query('INSERT INTO companies(name,slug) VALUES(?,?)',[$name,$slug]);
                 $companyId=(int)db()->lastInsertId();
+                company_initialize_branches($companyId);
                 query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$companyId,$manager,password_hash($managerPass,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                company_assign_new_user_branch($companyId,(int)db()->lastInsertId());
                 initialize_company_catalog($companyId,$name);
                 audit('company.create',$slug,$companyId);
                 db()->commit();
@@ -285,6 +292,8 @@ try {
                         query($sql,array_merge($params,[$managerId,$id,'company_admin']));
                     } else {
                         query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$id,$managerUsername,password_hash($managerPassword,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                        $managerId=(int)db()->lastInsertId();
+                        company_assign_new_user_branch((int)$id,$managerId);
                     }
                     audit('company.update',$slug,$id);
                     audit($manager?'company.manager.update':'company.manager.create',(string)($managerId?:db()->lastInsertId()),$id);
@@ -324,6 +333,7 @@ try {
             try {
             query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$tenant,$username,password_hash($password,PASSWORD_DEFAULT),$fullName,$role]);
             $newUserId=(int)db()->lastInsertId();
+            company_assign_new_user_branch($tenant,$newUserId);
             save_user_details($newUserId,(array)($_POST['details']??[]));
             if ($role==='operator') {
                 foreach($newPermissions as $permission) {
@@ -684,6 +694,7 @@ try {
                 accounting_assert_write_open($tenant,$invoice['financial_date']);
                 if (invoice_payment_ledger_ready()) {
                     cashbox_assert_payments_mutable($tenant,(int)$id);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                     $active=get_invoice_payment_rows($tenant,(int)$id);
                     if (count($active)!==1 || (int)$active[0]['amount']!==(int)$invoice['total_amount']) {
                         throw new RuntimeException('برای اصلاح چندتراکنشی از عملیات تخصصی مالی استفاده کنید؛ جایگزینی یکباره مجاز نیست.');
@@ -718,6 +729,7 @@ try {
                 }
                 accounting_assert_write_open($tenant,$invoice['financial_date']);
                 cashbox_assert_payments_mutable($tenant,(int)$id);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                 $oldPayments=get_invoice_payment_rows($tenant,(int)$id);
                 if (!$oldPayments) throw new RuntimeException('فاکتور فاقد سابقه پرداخت است و نیاز به بررسی مالی دارد.');
                 $posted=(array)($_POST['payments']??[]);
@@ -753,6 +765,7 @@ try {
                 $locked=query('SELECT id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$locked) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 accounting_assert_write_open($tenant,$locked['financial_date']);
+                pos_assert_invoice_unsettled($tenant,(int)$id);
                 query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
                 audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
                 db()->commit();
@@ -770,6 +783,7 @@ try {
             redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
         }
         if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_post($page,$action);
+        if ($page==='expenses') expense_handle_post($action);
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -804,6 +818,17 @@ if ($page === 'reports' || $page==='finance_center') require_permission('reports
 $tenant = null;
 if (!in_array($page,['login','companies'],true) && (!is_super() || isset($_SESSION['selected_company']))) {
     $tenant = tenant_id();
+}
+if(in_array($page,['expenses','expense_receipt','expense_attachment'],true)){
+    expense_require_permission('view');
+    if(!expenses_ready()){$error='ابتدا مهاجرت ۰۳۱ هزینه‌ها و وابستگی‌های آن را نصب کنید.';}
+    elseif($page==='expense_attachment'){
+        try{expense_serve_attachment((int)$tenant,(int)($_GET['id']??0));}catch(Throwable $ex){http_response_code(403);exit('پیوست موجود یا مجاز نیست.');}
+    }
+    elseif($page==='expense_receipt'){
+        try{expense_require_document((int)$tenant,(int)($_GET['id']??0));}catch(Throwable $ex){http_response_code(403);exit('سند هزینه موجود یا مجاز نیست.');}
+    }
+    elseif($page==='expenses' && in_array($_GET['export']??'',['excel','xlsx','csv'],true))expense_report_export((int)$tenant,expense_report_filters($_GET),($_GET['export']==='excel'?'xlsx':(string)$_GET['export']));
 }
 $companyName = $tenant ? (query('SELECT name FROM companies WHERE id=?',[$tenant])->fetchColumn() ?: '') : '';
 if ($page==='finance_center' && ($_GET['preset_export']??'')==='excel' && $tenant) {
@@ -867,7 +892,7 @@ $flash = $_SESSION['flash'] ?? ''; unset($_SESSION['flash']);
 if ($page==='login') [$captchaFirst,$captchaSecond]=login_captcha_new();
 ?><!doctype html>
 <html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><?php if($page!=='login'): ?><meta name="csrf-token" content="<?=e(csrf_token())?>"><?php endif; ?>
-<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/app.css'),0,16))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='dashboard'): ?><link rel="stylesheet" href="assets/dashboard-detail.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.css'),0,16))?>"><script src="assets/dashboard-detail.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoices'): ?><script src="assets/invoice-payments.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-payments.js'),0,16))?>" defer></script><link rel="stylesheet" href="assets/invoice-wizard.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.css'),0,16))?>"><script src="assets/service-rates.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/service-rates.js'),0,16))?>" defer></script><script src="assets/invoice-wizard.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoice_manager'): ?><script src="assets/invoice-manager.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-manager.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?><link rel="stylesheet" href="assets/design-system-audit.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/design-system-audit.css'),0,16))?>"><link rel="stylesheet" href="assets/global-search.css?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.css'))?>"></head><body>
+<title><?=e($page==='login'?'ورود | برنامه مدیریت خدمات کارگزاریهای تاکسیرانی':'برنامه مدیریت خدمات کارگزاریهای تاکسیرانی | '.$companyName)?></title><meta name="theme-color" content="#26234D"><meta name="application-name" content="صدوریار"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" type="image/png" href="/assets/sodoryar-logo.png"><link rel="stylesheet" href="assets/app.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/app.css'),0,16))?>"><link rel="stylesheet" href="assets/refinements.css?v=<?=e((string)filemtime(__DIR__.'/assets/refinements.css'))?>"><link rel="stylesheet" href="assets/workspace-v2.css?v=<?=e((string)filemtime(__DIR__.'/assets/workspace-v2.css'))?>"><link rel="stylesheet" href="assets/invoice-redesign.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-redesign.css'),0,16))?>"><link rel="stylesheet" href="assets/ux-unified.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/ux-unified.css'),0,16))?>"><link rel="stylesheet" href="assets/print-engine.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/print-engine.css'),0,16))?>"><link rel="stylesheet" href="assets/iam-ux.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/iam-ux.css'),0,16))?>"><?php if ($page!=='login'): ?><link rel="stylesheet" href="assets/workspace-refresh.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/workspace-refresh.css'),0,16))?>"><?php endif; ?><?php if ($page==='dashboard'): ?><link rel="stylesheet" href="assets/dashboard-detail.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.css'),0,16))?>"><script src="assets/dashboard-detail.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/dashboard-detail.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoices'): ?><script src="assets/invoice-payments.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-payments.js'),0,16))?>" defer></script><link rel="stylesheet" href="assets/invoice-wizard.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.css'),0,16))?>"><script src="assets/service-rates.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/service-rates.js'),0,16))?>" defer></script><script src="assets/invoice-wizard.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-wizard.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='invoice_manager'): ?><script src="assets/invoice-manager.js?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/invoice-manager.js'),0,16))?>" defer></script><?php endif; ?><?php if ($page==='login'): ?><link rel="stylesheet" href="assets/login-experience.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/login-experience.css'),0,16))?>"><?php endif; ?><link rel="stylesheet" href="assets/design-system-audit.css?v=<?=e(substr(hash_file('sha256',__DIR__.'/assets/design-system-audit.css'),0,16))?>"><link rel="stylesheet" href="assets/global-search.css?v=<?=e((string)filemtime(__DIR__.'/assets/global-search.css'))?>"><?php if(in_array($page,['expenses','expense_receipt'],true)): ?><link rel="stylesheet" href="assets/expenses.css?v=<?=e((string)filemtime(__DIR__.'/assets/expenses.css'))?>"><?php if($page==='expenses'): ?><script src="assets/expenses.js?v=<?=e((string)filemtime(__DIR__.'/assets/expenses.js'))?>" defer></script><?php endif; endif; ?></head><body>
 <?php if ($page==='login'): ?>
 <main class="login-wrap" id="mainContent">
   <div class="login-layout">
@@ -947,6 +972,7 @@ if ($tenant) {
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
     if (can('invoices.create')) $navItems[]=['invoices','صدور فاکتور جدید','invoices','عملیات روزانه'];
     if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
+    if (can('expenses.view')) $navItems[]=['expenses','هزینه‌ها','invoices','عملیات و صدور'];
     if (can('cashbox.view')) $navItems[]=['cashbox','صندوق و تسویه روزانه','commissions','عملیات روزانه'];
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
     if (can('periods.manage')) $navItems[]=['finance_health','سلامت ساختار مالی','settings','تنظیمات و پیکربندی'];
@@ -1013,7 +1039,8 @@ foreach(query('SELECT * FROM companies ORDER BY id DESC')->fetchAll() as $c): $a
 <?php elseif($page==='dashboard'): ?>
 <section class="dashboard-hero"><div><span class="hero-eyebrow">مرکز کنترل خدمات</span><h1>داشبورد <?=e($companyName ?: 'صدوریار')?></h1><p>نمای یکپارچه فعالیت‌های شرکت، وضعیت خدمات و امور مالی</p></div><div class="hero-actions"><?php if(can('invoices.create')): ?><a class="hero-button" href="?page=invoices">+ صدور فاکتور جدید</a><?php endif; ?><a class="hero-secondary" href="?page=profile">حساب کاربری</a></div></section>
 <?php if(!can('reports.view')): ?><div class="card"><h2>خوش آمدید</h2><p class="muted">برای مشاهده گزارش‌های مالی، مدیر شرکت باید دسترسی مربوط را برای حساب شما فعال کند.</p></div><?php else: ?>
-<?php $validInvoice=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':''; $dashboardOwn=document_scope()==='own'; $dashboardScopeSql=$dashboardOwn?' AND user_id=?':''; $dashboardScopeParams=$dashboardOwn?[user()['id']]:[]; $stats=query('SELECT (SELECT COUNT(*) FROM customers WHERE company_id=?) customers,(SELECT COUNT(*) FROM services WHERE company_id=? AND is_active=1) services,(SELECT COUNT(*) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') revenue',array_merge([$tenant,$tenant,$tenant],$dashboardScopeParams,[$tenant],$dashboardScopeParams))->fetch(); ?>
+<?php echo '<form method="get" class="card form-grid"><input type="hidden" name="page" value="dashboard">'; render_branch_report_select((int)$tenant,$_GET['branch_id']??''); echo '<button>نمایش شعبه</button></form>'; ?>
+<?php $validInvoice=database_table_exists('invoice_voids')?' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.invoice_id=invoices.id AND v.company_id=invoices.company_id)':''; $dashboardOwn=document_scope()==='own'; $dashboardBranchSql=report_branch_sql((int)$tenant,'invoices.branch_id',$_GET['branch_id']??''); $dashboardScopeSql=($dashboardOwn?' AND user_id=?':'').$dashboardBranchSql; $dashboardScopeParams=$dashboardOwn?[user()['id']]:[]; $stats=query('SELECT (SELECT COUNT(*) FROM customers WHERE company_id=?) customers,(SELECT COUNT(*) FROM services WHERE company_id=? AND is_active=1) services,(SELECT COUNT(*) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') invoices,(SELECT COALESCE(SUM(total_amount),0) FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice.') revenue',array_merge([$tenant,$tenant,$tenant],$dashboardScopeParams,[$tenant],$dashboardScopeParams))->fetch(); ?>
 <?php [$todayJy,$todayJm]=gregorian_to_jalali((int)date('Y'),(int)date('n'),(int)date('j')); $jalaliMonthStart=jalali_to_gregorian_date(sprintf('%04d-%02d-01',$todayJy,$todayJm)); $dashboardToday=date('Y-m-d'); $period=query('SELECT COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=? THEN 1 ELSE 0 END),0) today_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at)) BETWEEN ? AND ? THEN 1 ELSE 0 END),0) month_count,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at))=? THEN total_amount ELSE 0 END),0) today_total,COALESCE(SUM(CASE WHEN COALESCE(invoice_date, DATE(created_at)) BETWEEN ? AND ? THEN total_amount ELSE 0 END),0) month_total FROM invoices WHERE company_id=?'.$dashboardScopeSql.$validInvoice,array_merge([$dashboardToday,$jalaliMonthStart,$dashboardToday,$dashboardToday,$jalaliMonthStart,$dashboardToday,$tenant],$dashboardScopeParams))->fetch(); ?>
 <div class="stats"><?php
 render_dashboard_stat('today_count','خدمات ثبت‌شده امروز',$period['today_count']);
@@ -1021,7 +1048,7 @@ render_dashboard_stat('month_count','خدمات ماه جاری',$period['month_
 render_dashboard_stat('today_total','فروش امروز',$period['today_total'],'تومان؛ تاریخ صدور فاکتور');
 render_dashboard_stat('month_total','فروش ماه جاری',$period['month_total'],'تومان؛ تاریخ صدور فاکتور');
 ?></div>
-<?php $financeNow=dashboard_financial_snapshot((int)$tenant); ?>
+<?php $financeNow=dashboard_financial_snapshot((int)$tenant); if(expenses_ready() && can('expenses.view'))render_expense_dashboard((int)$tenant); ?>
 <?php if($financeNow['ledger_ready']): ?>
 <div class="stats finance-dashboard-stats"><?php
 render_dashboard_stat('receipts_today','کل دریافتی قطعی امروز',$financeNow['receipts_today'],'تومان؛ جمع نقدی و کارتخوان');
@@ -1095,7 +1122,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <section data-wizard-stage="3" class="invoice-panel invoice-multipayment" id="invoicePaymentPanel">
 <div class="invoice-panel-heading"><span class="invoice-step">۳</span><div><h2>جزئیات پرداخت فاکتور</h2><p>یک پرداخت یا چند تراکنش نقدی و کارتخوان</p></div></div>
 <div class="payment-mode-group" role="group" aria-label="نوع پرداخت"><button type="button" class="secondary" data-payment-mode="cash" aria-pressed="true">نقدی</button><button type="button" class="secondary" data-payment-mode="pos" aria-pressed="false">کارتخوان</button><button type="button" class="secondary" data-payment-mode="multi" aria-pressed="false">ترکیبی / چندتراکنشی</button></div>
-<select id="invoiceTerminalOptions" hidden aria-hidden="true"><option value="">بدون انتخاب دستگاه</option><?php foreach(query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll() as $terminal): ?><option value="<?=e($terminal['id'])?>"><?=e($terminal['brand'])?> (<?=e(fa_digits($terminal['id']))?>)</option><?php endforeach; ?></select>
+<select id="invoiceTerminalOptions" hidden aria-hidden="true"><option value="">انتخاب دستگاه</option><?php $invoiceTerminals=branches_ready()?branch_terminal_choices($tenant,(int)user()['id']):query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll(); foreach($invoiceTerminals as $terminal): ?><option value="<?=e($terminal['id'])?>" data-branches="<?=e($terminal['branch_ids']??'')?>"><?=e($terminal['brand'])?><?=!empty($terminal['bank_name'])?' — '.e($terminal['bank_name']):''?><?=!empty($terminal['terminal_number'])?' — …'.e(fa_digits(substr($terminal['terminal_number'],-4))):''?></option><?php endforeach; ?></select>
 <div id="invoicePaymentRows" class="invoice-payment-rows"></div><button type="button" class="secondary" id="invoiceAddPayment" hidden>+ افزودن پرداخت</button><label class="choice"><input type="checkbox" name="allow_partial" value="1" id="invoiceAllowPartial"> صدور فاکتور با مانده بدهی (پرداخت جزئی)</label><label class="choice"><input type="checkbox" id="invoiceNoInitialPayment"> صدور بدون دریافت اولیه</label>
 <div class="invoice-payment-summary" aria-live="polite"><span>مبلغ فاکتور: <strong data-payable-total>۰</strong></span><span>جمع دریافتی: <strong data-payment-paid>۰</strong></span><span>مانده: <strong data-payment-remaining>۰</strong></span><span>تعداد تراکنش: <strong data-payment-count>۱</strong></span></div><p id="invoicePaymentError" class="invoice-payment-error" role="alert" hidden></p></section>
 <section data-wizard-stage="4" class="invoice-panel" hidden><h2>بررسی نهایی فاکتور</h2><div data-wizard-review></div></section></div><p data-wizard-error role="alert" class="invoice-wizard-error"></p><div class="invoice-form-footer"><div class="invoice-footer-summary"><span>مبلغ فاکتور (تومان)</span><strong data-wizard-total>۰</strong></div><div class="invoice-footer-actions"><button type="button" class="secondary" data-wizard-cancel>انصراف</button><button type="button" class="secondary" data-wizard-prev hidden>مرحله قبل</button><button type="button" data-wizard-next>مرحله بعد</button><button type="submit" class="invoice-submit" hidden>ذخیره فاکتور</button><?php if(can('invoices.view') && can('invoices.print')): ?><button type="submit" data-print="1" hidden>ذخیره و چاپ</button><?php endif; ?><button type="submit" data-save-next="1" hidden>ذخیره و ثبت سند جدید</button></div></div></form></div></dialog>
@@ -1186,6 +1213,10 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php endif; ?>
 <?php elseif(in_array($page,['branches','branch_users','bank_accounts'],true)): ?>
 <?php render_company_resources($page); ?>
+<?php elseif($page==='expenses'): ?>
+<?php if(expenses_ready())render_expenses((int)$tenant); ?>
+<?php elseif($page==='expense_receipt'): ?>
+<?php if(expenses_ready())render_expense_receipt((int)$tenant,(int)($_GET['id']??0)); ?>
 <?php elseif($page==='cashbox'): ?>
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
@@ -1265,7 +1296,7 @@ function render_invoices(int $tenant, int $limit): void {
 function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $total,array $payments): void {
     static $terminalLists=[];
     if (!isset($terminalLists[$tenant])) {
-        $terminalLists[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
+        $terminalLists[$tenant]=query(branches_ready()?"SELECT p.id,p.brand,GROUP_CONCAT(a.branch_id) branch_ids FROM pos_settings p JOIN pos_branch_assignments a ON a.terminal_id=p.id AND a.company_id=p.company_id WHERE p.company_id=? AND p.is_active=1 AND a.effective_from<=NOW() AND (a.effective_until IS NULL OR a.effective_until>NOW()) GROUP BY p.id,p.brand ORDER BY p.brand,p.id":'SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
     }
     $dialogId='invoiceReplace'.$invoiceId;
     echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialogId).'">ویرایش تراکنش‌ها</button>';

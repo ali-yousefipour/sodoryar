@@ -23,6 +23,7 @@
       if(!dialog.open)dialog.showModal();
       try{
         const url=new URL(location.href);url.search='';url.searchParams.set('page','dashboard_detail');url.searchParams.set('key',card.dataset.dashboardDetail);
+        const branch=new URL(location.href).searchParams.get('branch_id');if(branch)url.searchParams.set('branch_id',branch);
         const response=await fetch(url,{signal:request.signal,credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
         if(!response.ok)throw Error('HTTP '+response.status);
         const data=await response.json();if(request.signal.aborted)return;

@@ -1,13 +1,81 @@
 <?php
 declare(strict_types=1);
 
+
+/** Historical branches stay reportable after deactivation; membership never grants document ownership. */
+function report_branch_choices(int $tenant): array {
+    if (!function_exists('branches_ready') || !branches_ready()) return [];
+    if (in_array(user()['role'],['company_admin','superadmin'],true))
+        return query('SELECT id,name FROM branches WHERE company_id=? ORDER BY branch_number',[$tenant])->fetchAll();
+    return query('SELECT b.id,b.name FROM branches b JOIN user_branch_assignments a ON a.branch_id=b.id AND a.company_id=b.company_id WHERE b.company_id=? AND a.user_id=? AND a.is_active=1 ORDER BY b.branch_number',[$tenant,(int)user()['id']])->fetchAll();
+}
+function report_branch_sql(int $tenant,string $column,mixed $requested=null): string {
+    if (!function_exists('branches_ready') || !branches_ready()) {
+        if ($requested!==null && $requested!=='') throw new RuntimeException('ساختار شعب آماده نیست.');
+        return '';
+    }
+    if (!in_array($column,['i.branch_id','p.branch_id','invoices.branch_id','r.branch_id'],true)) throw new LogicException('Invalid branch report column');
+    $choices=report_branch_choices($tenant);
+    $ids=array_map(static fn($row)=>(int)$row['id'],$choices);
+    if ($requested!==null && $requested!=='') {
+        $id=filter_var($requested,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if (!$id || !in_array($id,$ids,true)) throw new RuntimeException('شعبه گزارش معتبر یا مجاز نیست.');
+        return ' AND '.$column.'='.(int)$id;
+    }
+    if (in_array(user()['role'],['company_admin','superadmin'],true)) return '';
+    return $ids?' AND '.$column.' IN ('.implode(',',$ids).')':' AND 1=0';
+}
+function render_branch_report_select(int $tenant,mixed $selected=''): void {
+    if (!function_exists('branches_ready') || !branches_ready()) return;
+    echo '<label>شعبه<select name="branch_id"><option value="">تمام شعب مجاز</option>';
+    foreach(report_branch_choices($tenant) as $branch) echo '<option value="'.(int)$branch['id'].'"'.((string)$selected===(string)$branch['id']?' selected':'').'>'.e($branch['name']).'</option>';
+    echo '</select></label>';
+}
+
+/** Resource predicates use EXISTS so one receipt can never multiply report totals. */
+function report_payment_resources(array $filter,string $alias='p'): array {
+    if (!in_array($alias,['p','pm'],true)) throw new LogicException('Invalid receipt alias');
+    $sql='';$params=[];
+    foreach(['terminal_id','bank_id','cash_register_id'] as $key){
+        $value=$filter[$key]??'';
+        if($value==='')continue;
+        $id=filter_var($value,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+        if(!$id)throw new RuntimeException('فیلتر دستگاه، بانک یا صندوق نامعتبر است.');
+        if($key==='terminal_id')$sql.=' AND '.$alias.'.terminal_id=?';
+        elseif($key==='bank_id'){
+            if(!database_table_exists('pos_account_registry') || !database_table_exists('company_bank_accounts'))throw new RuntimeException('ساختار حساب بانکی آماده نیست.');
+            $sql.=' AND EXISTS (SELECT 1 FROM pos_account_registry pr JOIN company_bank_accounts ba ON ba.id=pr.account_id AND ba.company_id=pr.company_id WHERE pr.company_id='.$alias.'.company_id AND pr.terminal_id='.$alias.'.terminal_id AND ba.bank_id=?)';
+        }else{
+            if(!function_exists('cashbox_ready') || !cashbox_ready())throw new RuntimeException('ساختار صندوق آماده نیست.');
+            $sql.=' AND EXISTS (SELECT 1 FROM cash_shifts cs WHERE cs.company_id='.$alias.'.company_id AND cs.id='.$alias.'.cash_shift_id AND cs.register_id=?)';
+        }
+        $params[]=$id;
+    }
+    return [$sql,$params];
+}
+function render_payment_resource_filters(int $tenant,array $filter): void {
+    $terminalScope='';
+    if(function_exists('branches_ready') && branches_ready())$terminalScope=' AND EXISTS (SELECT 1 FROM pos_branch_assignments p WHERE p.company_id=t.company_id AND p.terminal_id=t.id'.report_branch_sql($tenant,'p.branch_id',$filter['branch_id']??'').')';
+    $lists=['terminal_id'=>['کارتخوان',query('SELECT t.id,t.brand name FROM pos_settings t WHERE t.company_id=?'.$terminalScope.' ORDER BY t.brand,t.id',[$tenant])->fetchAll()]];
+    if(database_table_exists('company_bank_accounts'))$lists['bank_id']=['بانک حساب فعلی کارتخوان',query('SELECT DISTINCT b.id,b.name FROM banks b JOIN company_bank_accounts a ON a.bank_id=b.id WHERE a.company_id=? ORDER BY b.name',[$tenant])->fetchAll()];
+    if(function_exists('cashbox_ready') && cashbox_ready()){
+        $branchScope=report_branch_sql($tenant,'r.branch_id',$filter['branch_id']??'');
+        $lists['cash_register_id']=['صندوق نقدی',query('SELECT r.id,r.name FROM cash_registers r WHERE r.company_id=?'.$branchScope.' ORDER BY r.name',[$tenant])->fetchAll()];
+    }
+    foreach($lists as $key=>[$label,$rows]){
+        echo '<label>'.e($label).'<select name="'.e($key).'"><option value="">همه</option>';
+        foreach($rows as $row)echo '<option value="'.(int)$row['id'].'"'.((string)($filter[$key]??'')===(string)$row['id']?' selected':'').'>'.e($row['name']).'</option>';
+        echo '</select></label>';
+    }
+}
+
 function report_filters_default(): array {
-    return array_fill_keys(['date_from','date_to','national_code','invoice_number','payment_type','user_id'],'');
+    return array_fill_keys(['date_from','date_to','national_code','invoice_number','payment_type','user_id','branch_id','terminal_id','bank_id','cash_register_id'],'');
 }
 
 function report_filters(): array {
     $filters=[];
-    foreach (['date_from','date_to','national_code','invoice_number','payment_type','user_id'] as $key) {
+    foreach (['date_from','date_to','national_code','invoice_number','payment_type','user_id','branch_id','terminal_id','bank_id','cash_register_id'] as $key) {
         $filters[$key]=ascii_digits(trim((string)($_GET[$key]??'')));
     }
     foreach (['date_from','date_to'] as $dateKey) {
@@ -21,6 +89,8 @@ function report_filters(): array {
     if (mb_strlen($filters['invoice_number'])>60) throw new RuntimeException('شماره فاکتور طولانی است.');
     if ($filters['payment_type']!=='' && !in_array($filters['payment_type'],['cash','pos'],true)) throw new RuntimeException('نوع پرداخت نامعتبر است.');
     if ($filters['user_id']!=='' && (!ctype_digit($filters['user_id']) || (int)$filters['user_id']<1)) throw new RuntimeException('شناسه کاربر نامعتبر است.');
+    report_branch_sql((int)tenant_id(),'i.branch_id',$filters['branch_id']);
+    report_payment_resources($filters);
     return $filters;
 }
 
@@ -28,15 +98,24 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
     $sql='FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role=\'superadmin\') WHERE i.company_id=?';
     if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
     $params=[$tenant];
+    $sql.=report_branch_sql($tenant,'i.branch_id',$filter['branch_id']??'');
     if (document_scope()==='own') { $sql.=' AND i.user_id=?'; $params[]=(int)user()['id']; }
     if ($filter['date_from']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))>=?'; $params[]=$filter['date_from']; }
     if ($filter['date_to']!=='') { $sql.=' AND COALESCE(i.invoice_date, DATE(i.created_at))<=?'; $params[]=$filter['date_to']; }
     if ($filter['national_code']!=='') { $sql.=' AND c.national_code LIKE ?'; $params[]=$filter['national_code'].'%'; }
     if ($filter['invoice_number']!=='') { $sql.=' AND i.invoice_number LIKE ?'; $params[]='%'.$filter['invoice_number'].'%'; }
     $ledger=database_table_exists('invoice_payments');
-    if ($filter['payment_type']!=='') {
-        $sql.=$ledger?' AND EXISTS (SELECT 1 FROM invoice_payments pm WHERE pm.company_id=i.company_id AND pm.invoice_id=i.id AND pm.voided_at IS NULL AND pm.payment_method=?)':' AND i.payment_type=?';
-        $params[]=$filter['payment_type'];
+    [$resourceSql,$resourceParams]=report_payment_resources($filter,'pm');
+    if ($filter['payment_type']!=='' || $resourceSql!=='') {
+        if($ledger){
+            $sql.=' AND EXISTS (SELECT 1 FROM invoice_payments pm WHERE pm.company_id=i.company_id AND pm.invoice_id=i.id AND pm.voided_at IS NULL'.$resourceSql;
+            array_push($params,...$resourceParams);
+            if($filter['payment_type']!==''){$sql.=' AND pm.payment_method=?';$params[]=$filter['payment_type'];}
+            $sql.=')';
+        }else{
+            if($resourceSql!=='')throw new RuntimeException('دفتر دریافت‌ها آماده نیست.');
+            $sql.=' AND i.payment_type=?';$params[]=$filter['payment_type'];
+        }
     }
     if ($filter['user_id']!=='') { $sql.=' AND i.user_id=?'; $params[]=(int)$filter['user_id']; }
     $total=query('SELECT COUNT(*) qty,COALESCE(SUM(i.total_amount),0) total '.$sql,$params)->fetch();
@@ -46,6 +125,8 @@ function invoice_report(int $tenant, array $filter, int $limit=200): array {
         $sourceSql='SELECT i.id,i.company_id '.$sql;
         $aggregateSql='SELECT COALESCE(SUM(CASE WHEN p.payment_method=\'cash\' THEN p.amount ELSE 0 END),0) cash_paid,COALESCE(SUM(CASE WHEN p.payment_method=\'pos\' THEN p.amount ELSE 0 END),0) pos_paid,COUNT(p.id) transaction_count FROM ('.$sourceSql.') matched JOIN invoice_payments p ON p.invoice_id=matched.id AND p.company_id=matched.company_id AND p.voided_at IS NULL';
         $aggregateParams=$params;
+        [$paidResourceSql,$paidResourceParams]=report_payment_resources($filter);
+        $aggregateSql.=$paidResourceSql;array_push($aggregateParams,...$paidResourceParams);
         if ($filter['payment_type']!=='') { $aggregateSql.=' AND p.payment_method=?'; $aggregateParams[]=$filter['payment_type']; }
         $aggregate=query($aggregateSql,$aggregateParams)->fetch();
         $total=array_merge($total,$aggregate);
@@ -81,8 +162,11 @@ function invoice_payment_report(int $tenant,array $filter,int $limit=200): array
     ];
     $sql=' FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=p.created_by AND (u.company_id=i.company_id OR u.role=\'superadmin\') WHERE p.company_id=? AND p.voided_at IS NULL';
     $params=[$tenant];
+    [$resourceSql,$resourceParams]=report_payment_resources($filter);
+    $sql.=$resourceSql;array_push($params,...$resourceParams);
+    $sql.=report_branch_sql($tenant,'p.branch_id',$filter['branch_id']??'');
     if (database_table_exists('invoice_voids')) $sql.=' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.invoice_id=i.id AND v.company_id=i.company_id)';
-    if (document_scope()==='own') {$sql.=' AND i.user_id=?';$params[]=(int)user()['id'];}
+    if (document_scope()==='own') {$sql.=' AND p.created_by=?';$params[]=(int)user()['id'];}
     if ($filter['date_from']!=='') {$sql.=' AND p.paid_at>=?';$params[]=$filter['date_from'].' 00:00:00';}
     if ($filter['date_to']!=='') {$sql.=' AND p.paid_at<?';$params[]=(new DateTimeImmutable($filter['date_to']))->modify('+1 day')->format('Y-m-d').' 00:00:00';}
     if ($filter['national_code']!=='') {$sql.=' AND c.national_code LIKE ?';$params[]=$filter['national_code'].'%';}
@@ -105,6 +189,8 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
     $dateTo=$filter['date_to']!==''?$filter['date_to']:(new DateTimeImmutable('today'))->format('Y-m-d');
     $toExclusive=(new DateTimeImmutable($dateTo))->modify('+1 day')->format('Y-m-d');
     $scope=document_scope()==='own'?' AND i.user_id='.(int)user()['id']:'';
+    $scope.=report_branch_sql($tenant,'i.branch_id',$filter['branch_id']??($_GET['branch_id']??''));
+    $paymentScope=(document_scope()==='own'?' AND p.created_by='.(int)user()['id']:'').report_branch_sql($tenant,'p.branch_id',$filter['branch_id']??($_GET['branch_id']??''));
     $issues=[];
     $active=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)':'';
     $overpaid=query(
@@ -124,7 +210,7 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
          JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
          WHERE p.company_id=? AND p.payment_method=\'pos\' AND p.voided_at IS NULL
            AND (p.tracking_number IS NULL OR p.tracking_number=\'\')
-           AND p.paid_at>=? AND p.paid_at<?'.$scope.$active.'
+           AND p.paid_at>=? AND p.paid_at<?'.$paymentScope.$active.'
          ORDER BY p.id DESC LIMIT '.(int)$limit,
         [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
     )->fetchAll();
@@ -143,7 +229,7 @@ function financial_control_exceptions(int $tenant,array $filter,int $limit=100):
          FROM invoice_payments p JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id
          WHERE p.company_id=? AND p.payment_method='pos' AND p.voided_at IS NULL
            AND p.terminal_id IS NOT NULL AND p.tracking_number IS NOT NULL AND p.tracking_number<>''
-           AND p.paid_at>=? AND p.paid_at<?".$scope.$valid."
+           AND p.paid_at>=? AND p.paid_at<?".$paymentScope.$valid."
          GROUP BY p.terminal_id,p.tracking_number,DATE(p.paid_at) HAVING COUNT(*)>1
          ORDER BY payment_day DESC,p.terminal_id,p.tracking_number LIMIT ".(int)$limit,
         [$tenant,$dateFrom.' 00:00:00',$toExclusive.' 00:00:00']
@@ -230,6 +316,8 @@ function render_report_filters(string $page, array $filter, bool $invoice=true):
     foreach($users as $u) echo '<option value="'.e($u['id']).'"'.($filter['user_id']===(string)$u['id']?' selected':'').'>'.e($u['full_name']).'</option>';
     echo '</select></label>';
     if ($invoice) {
+        render_branch_report_select((int)tenant_id(),$filter['branch_id']??'');
+        render_payment_resource_filters((int)tenant_id(),$filter);
         echo '<label>نوع پرداخت<select name="payment_type"><option value="">همه</option><option value="cash"'.($filter['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($filter['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label>';
         echo '<label>کد ملی راننده<input name="national_code" inputmode="numeric" maxlength="10" value="'.e($filter['national_code']).'"></label>';
         echo '<label>شماره فاکتور<input name="invoice_number" maxlength="60" value="'.e($filter['invoice_number']).'"></label>';

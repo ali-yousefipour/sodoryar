@@ -34,3 +34,13 @@ function branch_payment_shift(int $tenant,int $actor,int $branch,array $row): ?i
     if (!$shift) throw new RuntimeException('ابتدا صندوق نقدی همین شعبه را باز کنید.');
     return (int)$shift['id'];
 }
+
+/** Expose only terminals assigned to branches the issuer may use. */
+function branch_terminal_choices(int $tenant,int $actor): array {
+    $ids=array_map(static fn($b)=>(int)$b['id'],branch_choices($tenant,$actor));
+    if(!$ids)return [];
+    $registry=database_table_exists('pos_account_registry') && database_table_exists('company_bank_accounts');
+    $extra=$registry?",k.name bank_name,r.terminal_number":",NULL bank_name,NULL terminal_number";
+    $joins=$registry?' LEFT JOIN pos_account_registry r ON r.terminal_id=p.id AND r.company_id=p.company_id LEFT JOIN company_bank_accounts ba ON ba.id=r.account_id AND ba.company_id=r.company_id LEFT JOIN banks k ON k.id=ba.bank_id':'';
+    return query("SELECT p.id,p.brand,GROUP_CONCAT(a.branch_id) branch_ids".$extra." FROM pos_settings p JOIN pos_branch_assignments a ON a.terminal_id=p.id AND a.company_id=p.company_id".$joins." WHERE p.company_id=? AND p.is_active=1 AND a.effective_from<=NOW() AND (a.effective_until IS NULL OR a.effective_until>NOW()) AND a.branch_id IN (".implode(',',array_fill(0,count($ids),'?')).") GROUP BY p.id,p.brand".($registry?',k.name,r.terminal_number':'')." ORDER BY p.brand,p.id",array_merge([$tenant],$ids))->fetchAll();
+}

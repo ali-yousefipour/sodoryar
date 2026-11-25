@@ -104,7 +104,7 @@ PREPARE branch_stmt FROM @ddl; EXECUTE branch_stmt; DEALLOCATE PREPARE branch_st
 UPDATE invoices i JOIN branches b ON b.company_id=i.company_id AND b.branch_number=1
 SET i.branch_id=b.id WHERE i.branch_id IS NULL;
 UPDATE invoice_payments p JOIN branches b ON b.company_id=p.company_id AND b.branch_number=1
-SET p.branch_id=b.id WHERE p.branch_id IS NULL;
+SET p.branch_id=b.id,p.updated_at=p.updated_at WHERE p.branch_id IS NULL;
 UPDATE cash_registers r JOIN branches b ON b.company_id=r.company_id AND b.branch_number=1
 SET r.branch_id=b.id WHERE r.branch_id IS NULL;
 
