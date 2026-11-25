@@ -8,6 +8,8 @@ function expense_scope(int $tenant): array {
 function expense_handle_post(string $action): never {
     if($action==='create'){$id=expense_create($_POST);if(isset($_POST['print'])){header('Location: ?page=expenses&detail='.$id.'&print=1');exit;}redirect('expenses','هزینه در انتظار تأیید ثبت شد.');}
     if($action==='review'){expense_review((int)($_POST['id']??0),(string)($_POST['decision']??''),trim((string)($_POST['reason']??'')));redirect('expenses','تصمیم ثبت شد.');}
+    if($action==='settle'){expense_settle((int)($_POST['id']??0),$_POST);redirect('expenses','تسویه ثبت شد.');}
+    if($action==='void'){expense_void((int)($_POST['id']??0),trim((string)($_POST['reason']??'')));redirect('expenses','سند با حفظ سوابق باطل شد.');}
     if($action==='category'){
         require_admin();$tenant=tenant_id();$name=trim((string)($_POST['name']??''));$class=(string)($_POST['classification']??'');
         if($name===''||mb_strlen($name)>160||!in_array($class,['expense','asset','inventory','prepayment'],true))throw new RuntimeException('دسته‌بندی نامعتبر است.');
@@ -44,6 +46,7 @@ function render_expenses(int $tenant): void {
         <table><thead><tr><th>قلم</th><th>تعداد</th><th>واحد</th><th>قیمت واحد</th><th>جمع</th></tr></thead><tbody><?php foreach($items as $i):?><tr><td><?=e($i['title'])?></td><td><?=fa_digits($i['quantity'])?></td><td><?=e($i['unit'])?></td><td><?=money_toman($i['unit_price'])?></td><td><?=money_toman($i['line_total'])?></td></tr><?php endforeach;?></tbody></table>
         <h3>جمع: <?=money_toman($x['total_amount'])?></h3><table><thead><tr><th>روش</th><th>مبلغ</th><th>پیگیری</th></tr></thead><tbody><?php foreach($payments as $p):?><tr><td><?=e(expense_method($p['method']))?></td><td><?=money_toman($p['amount'])?></td><td><?=e($p['tracking']??'—')?></td></tr><?php endforeach;?></tbody></table></div>
         <?php if(expense_manager()&&$x['approval_status']==='pending'):?><form method="post" class="card form-grid"><?=csrf_field()?><input type="hidden" name="action" value="review"><input type="hidden" name="id" value="<?=e($detail)?>"><label>توضیح تصمیم<input name="reason" maxlength="500"></label><button name="decision" value="approved">تأیید و ثبت آثار مالی</button><button name="decision" value="rejected">رد هزینه</button></form><?php endif;?>
+        <?php render_expense_financial_actions($tenant,$x); ?>
         <?php if(isset($_GET['print'])):?><script>window.addEventListener('load',()=>window.print());</script><?php endif;return;
     }
     $rows=expense_rows($tenant);
