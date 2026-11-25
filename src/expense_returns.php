@@ -12,7 +12,7 @@ function expense_return(int $id,array $input): void {
     $tenant=tenant_id();$actor=(int)user()['id'];
     $kind=$input['kind']??'';$target=filter_var($input['target']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     $key=(string)($input['request_key']??'');$amount=invoice_payment_amount($input['amount']??'');
-    $reason=trim((string)($input['reason']??''));$reference=trim((string)($input['reference']??''));
+    $reason=trim((string)($input['reason']??''));$reference=ascii_digits(trim((string)($input['reference']??'')));
     $shift=filter_var($input['cash_shift_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]])?:null;
     if(($input['refund_confirmed']??null)!=='1'||!in_array($kind,['payment','settlement'],true)||!$target
         ||!preg_match('/^[a-f0-9]{64}$/D',$key)||mb_strlen($reason)<5||mb_strlen($reason)>500
@@ -32,6 +32,7 @@ function expense_return(int $id,array $input): void {
         if($x['approval_status']!=='approved')throw new RuntimeException('برگشت فقط برای سند تأییدشده مجاز است.');
         $row=query('SELECT * FROM '.$table.' WHERE company_id=? AND expense_id=? AND id=? FOR UPDATE',[$tenant,$id,$target])->fetch();
         if(!$row||!in_array($row['method'],['cash','bank'],true)||($kind==='payment'&&$row['posted_at']===null))throw new RuntimeException('پرداخت قطعی قابل برگشت نیست.');
+        if(query('SELECT id FROM expense_returns WHERE company_id=? AND '.$column.'=? AND reference=?',[$tenant,$target,$reference])->fetch())throw new RuntimeException('این رسید برگشت قبلاً ثبت شده است.');
         $returned=(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND '.$column.'=?',[$tenant,$target])->fetchColumn();
         if($amount>(int)$row['amount']-$returned)throw new RuntimeException('مبلغ برگشت بیشتر از مانده پرداخت است.');
         $date=date('Y-m-d');accounting_assert_write_open($tenant,$date);

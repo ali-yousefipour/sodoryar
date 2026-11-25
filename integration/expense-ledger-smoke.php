@@ -48,12 +48,13 @@ $refund=['kind'=>'payment','target'=>$payment,'amount'=>'200000','cash_shift_id'
 expense_expect_blocked(fn()=>expense_return($expense,array_replace($refund,['refund_confirmed'=>'0'])),'Unconfirmed refund accepted');
 expense_return($expense,$refund);expense_return($expense,$refund);
 integration_assert(expense_test_balance($companyA,$shift)===1700000,'Partial refund or retry posted incorrectly');
+expense_expect_blocked(fn()=>expense_return($expense,array_replace($refund,['request_key'=>bin2hex(random_bytes(32))])),'Same receipt with new request key accepted');
 expense_expect_blocked(fn()=>expense_return($expense,array_replace($refund,['amount'=>'1'])),'Changed retry accepted');
 expense_expect_blocked(fn()=>expense_return($expense,array_replace($refund,['request_key'=>bin2hex(random_bytes(32)),'amount'=>'300001'])),'Excess refund accepted');
 // The original closed shift is immutable; actual receipts enter a new open shift.
 query("UPDATE cash_shifts SET status='approved',closed_at=NOW() WHERE company_id=? AND id=?",[$companyA,$shift]);
 $nextShift=insert_fixture("INSERT INTO cash_shifts(company_id,register_id,operator_id,opening_cash,started_at) VALUES(?,?,?,?,NOW())",[$companyA,$register,$userA,0]);
-expense_return($expense,array_replace($refund,['amount'=>'300000','cash_shift_id'=>$nextShift,'request_key'=>bin2hex(random_bytes(32))]));
+expense_return($expense,array_replace($refund,['amount'=>'300000','cash_shift_id'=>$nextShift,'reference'=>'CI second cash receipt','request_key'=>bin2hex(random_bytes(32))]));
 integration_assert(expense_test_balance($companyA,$nextShift)===300000,'Closed-shift refund did not reach new owned shift');
 $inflows=(string)query("SELECT SUM(amount) FROM cash_shift_adjustments WHERE company_id=? AND direction='in'",[$companyA])->fetchColumn();
 expense_void($expense,'CI all payments returned');
@@ -69,7 +70,7 @@ $settlementRefund=array_replace($refund,['kind'=>'settlement','target'=>$settlem
 expense_return($personal,$settlementRefund);expense_return($personal,$settlementRefund);
 integration_assert(expense_employee_due($companyA,$personal)===100000,'Partial settlement return did not restore liability exactly once');
 expense_expect_blocked(fn()=>expense_void($personal,'CI still settled'),'Outstanding employee settlement could be voided');
-expense_return($personal,array_replace($settlementRefund,['amount'=>'100000','request_key'=>bin2hex(random_bytes(32))]));
+expense_return($personal,array_replace($settlementRefund,['amount'=>'100000','reference'=>'CI final settlement receipt','request_key'=>bin2hex(random_bytes(32))]));
 integration_assert(expense_employee_due($companyA,$personal)===200000,'Full settlement return liability incorrect');
 expense_void($personal,'CI full settlement returned');
 $bank=insert_fixture('INSERT INTO banks(name,bank_code) VALUES(?,?)',['CI Bank','CI-EXPENSE']);

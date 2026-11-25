@@ -24,6 +24,7 @@ def main():
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('console', lambda msg: errors.append(msg.text) if msg.type == 'error' and 'Content Security Policy' in msg.text else None)
+        page.set_viewport_size({'width': 1440, 'height': 844})
         page.goto(f'{ORIGIN}/?page=expenses')
         expect(page.get_by_role('link', name='هزینه‌ها', exact=True)).to_be_visible()
         page.locator('#expenseOpen').click()

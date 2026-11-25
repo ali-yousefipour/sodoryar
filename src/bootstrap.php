@@ -247,7 +247,7 @@ function permission_groups(): array {
         'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
         'bills'=>'فیش‌ها و قبوض', 'reports'=>'گزارش‌های مالی', 'activity'=>'گزارش فعالیت‌ها',
         'commissions'=>'پورسانت', 'pos'=>'کارتخوان‌ها', 'cashbox'=>'صندوق و تسویه', 'periods'=>'دوره مالی', 'users'=>'کاربران',
-        'roles'=>'مدیریت نقش‌ها'
+        'roles'=>'مدیریت نقش‌ها', 'expenses'=>'هزینه‌ها'
     ];
     $groups=[];
     foreach(permission_catalog() as $key=>$label) {

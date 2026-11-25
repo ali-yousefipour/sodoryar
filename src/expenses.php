@@ -1,7 +1,14 @@
 <?php
 declare(strict_types=1);
 function expenses_ready(): bool {
-    return branches_ready() && (int)query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('expenses','expense_items','expense_payments','expense_categories','expense_events','company_bank_accounts')")->fetchColumn()===6;
+    if(!branches_ready() || (int)query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('expenses','expense_items','expense_payments','expense_categories','expense_events','company_bank_accounts')")->fetchColumn()!==6)return false;
+    // Another development branch uses the same table names with an incompatible schema.
+    return (int)query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND (
+        (TABLE_NAME='expenses' AND COLUMN_NAME IN ('request_hash','classification','review_note')) OR
+        (TABLE_NAME='expense_items' AND COLUMN_NAME='quantity') OR
+        (TABLE_NAME='expense_payments' AND COLUMN_NAME IN ('account_id','tracking')) OR
+        (TABLE_NAME='expense_events' AND COLUMN_NAME='event_type') OR
+        (TABLE_NAME='expense_categories' AND COLUMN_NAME='classification'))")->fetchColumn()===8;
 }
 function expense_manager(): bool {return in_array(user()['role'],['company_admin','superadmin'],true);}
 function expense_items_normalize(array $input): array {
