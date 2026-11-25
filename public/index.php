@@ -240,7 +240,9 @@ try {
             try {
                 query('INSERT INTO companies(name,slug) VALUES(?,?)',[$name,$slug]);
                 $companyId=(int)db()->lastInsertId();
+                company_initialize_branches($companyId);
                 query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$companyId,$manager,password_hash($managerPass,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                company_assign_new_user_branch($companyId,(int)db()->lastInsertId());
                 initialize_company_catalog($companyId,$name);
                 audit('company.create',$slug,$companyId);
                 db()->commit();
@@ -285,6 +287,8 @@ try {
                         query($sql,array_merge($params,[$managerId,$id,'company_admin']));
                     } else {
                         query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$id,$managerUsername,password_hash($managerPassword,PASSWORD_DEFAULT),$managerName,'company_admin']);
+                        $managerId=(int)db()->lastInsertId();
+                        company_assign_new_user_branch((int)$id,$managerId);
                     }
                     audit('company.update',$slug,$id);
                     audit($manager?'company.manager.update':'company.manager.create',(string)($managerId?:db()->lastInsertId()),$id);
@@ -324,6 +328,7 @@ try {
             try {
             query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$tenant,$username,password_hash($password,PASSWORD_DEFAULT),$fullName,$role]);
             $newUserId=(int)db()->lastInsertId();
+            company_assign_new_user_branch($tenant,$newUserId);
             save_user_details($newUserId,(array)($_POST['details']??[]));
             if ($role==='operator') {
                 foreach($newPermissions as $permission) {

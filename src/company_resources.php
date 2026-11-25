@@ -4,6 +4,23 @@ function company_resources_guard(): int {
     require_admin();
     return tenant_id();
 }
+/** New tenant resources participate in the caller's company/user transaction. */
+function company_initialize_branches(int $tenant): void {
+    if(!branches_ready()) return;
+    if(!db()->inTransaction()) throw new LogicException('Company branch provisioning requires a transaction.');
+    if(!query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch()) throw new RuntimeException('شرکت معتبر نیست.');
+    query("INSERT INTO branches(company_id,branch_number,branch_code,name,is_default,is_active) SELECT ?,1,'001','شعبه مرکزی',1,1 WHERE NOT EXISTS (SELECT 1 FROM branches WHERE company_id=? AND branch_number=1)",[$tenant,$tenant]);
+    $branch=query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$tenant])->fetchColumn();
+    query("INSERT INTO cash_registers(company_id,branch_id,name) SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM cash_registers WHERE company_id=? AND branch_id=?)",[$tenant,$branch,'صندوق پیش‌فرض شعبه 1 #'.$branch,$tenant,$branch]);
+}
+function company_assign_new_user_branch(int $tenant,int $userId): void {
+    if(!branches_ready()) return;
+    if(!db()->inTransaction()) throw new LogicException('User branch assignment requires a transaction.');
+    if(!query('SELECT id FROM users WHERE id=? AND company_id=? FOR UPDATE',[$userId,$tenant])->fetch()) throw new RuntimeException('کاربر متعلق به شرکت نیست.');
+    $branch=query('SELECT id FROM branches WHERE company_id=? AND is_active=1 ORDER BY is_default DESC,branch_number LIMIT 1',[$tenant])->fetchColumn();
+    if(!$branch) throw new RuntimeException('ابتدا شعبه فعال پیش‌فرض شرکت را تعریف کنید.');
+    query('INSERT INTO user_branch_assignments(company_id,user_id,branch_id,is_default,is_active) VALUES(?,?,?,1,1)',[$tenant,$userId,$branch]);
+}
 function company_branch_fields(array $input): array {
     $fields=['name'=>180,'manager_name'=>180,'phone'=>30,'mobile'=>30,'province'=>100,'city'=>100,'address'=>2000,'postal_code'=>20,'notes'=>4000];
     $values=[];

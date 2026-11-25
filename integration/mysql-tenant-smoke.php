@@ -267,9 +267,12 @@ try {
 integration_assert($duplicateBlocked,'Repeated receipt idempotency key was accepted');
 $receiptFilter=report_filters_default();
 $receiptFilter['user_id']=(string)$otherUserA;
+$_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
 $receipts=invoice_payment_report($companyA,$receiptFilter);
 integration_assert((int)$receipts['summary']['transaction_count']===1,
     'Receipt report operator filter must use the collecting operator, not invoice issuer');
+$_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'Operator A','role'=>'operator'];
+integration_assert((int)invoice_payment_report($companyA,$receiptFilter)['summary']['transaction_count']===0,'Operator user filter exposed a colleague receipt');
 
 // A back-dated invoice entered later must belong to its service-date period.
 query('UPDATE invoices SET created_at=? WHERE id=? AND company_id=?',

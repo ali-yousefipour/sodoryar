@@ -203,6 +203,26 @@ def main() -> None:
             if paper_class == "receipt-thermal":
                 assert pages >= 2, "Long thermal receipt did not paginate"
             print(f"Chrome {paper_class}: PDF page width {width:.1f}pt; {pages} page(s)")
+        page.emulate_media(media="screen")
+        page.set_content("""<form id="invoiceCreateForm"><select id="invoiceBranch"><option value="1">One</option><option value="2">Two</option></select>
+        <label data-service-option><input type="checkbox" checked data-service-price="1000"></label><div id="extraInvoiceItems"></div>
+        <button type="button" data-payment-mode="pos">POS</button><button type="button" id="invoiceAddPayment">Add</button>
+        <select id="invoiceTerminalOptions" hidden><option value="">Select</option><option value="11" data-branches="1">First</option><option value="22" data-branches="2">Second</option></select>
+        <div id="invoicePaymentRows"></div><p id="invoicePaymentError" hidden></p>
+        <span data-payable-total></span><span data-payment-paid></span><span data-payment-remaining></span><span data-payment-count></span></form>""")
+        page.add_script_tag(content=(ROOT / "public/assets/invoice-payments.js").read_text(encoding="utf-8"))
+        page.evaluate("document.dispatchEvent(new Event('DOMContentLoaded'))")
+        page.locator('[data-payment-mode="pos"]').click()
+        terminal=page.locator('select[name$="[terminal]"]')
+        terminal.select_option('11')
+        amount_before=page.locator('input[name$="[amount]"]').input_value()
+        page.locator('#invoiceBranch').select_option('2')
+        assert terminal.input_value()=="", "Changing branch retained invalid terminal"
+        assert terminal.locator('option[value="11"]').evaluate("el => el.disabled"), "Foreign branch terminal remained selectable"
+        assert page.locator('input[name$="[amount]"]').input_value()==amount_before, "Changing branch lost draft payment amount"
+        terminal.select_option('22')
+        assert terminal.input_value()=="22"
+        print("PASS: branch change clears invalid POS selection and preserves draft payment amount")
         assert not errors, "Browser JavaScript errors: " + "; ".join(errors)
         browser.close()
     print("PASS: Chromium invoice amounts, invalid input, busy-state recovery, responsive forms, modal, Jalali date, print widths and pagination")
