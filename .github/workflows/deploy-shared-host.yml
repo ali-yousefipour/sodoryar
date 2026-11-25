@@ -31,9 +31,7 @@ jobs:
         run: |
           composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
           composer check-platform-reqs --no-dev
-          if ! git ls-files --error-unmatch composer.lock >/dev/null 2>&1; then
-            php -r 'echo "COMPOSER_LOCK_BASE64=".base64_encode(file_get_contents("composer.lock"))."\n";'
-          fi
+          composer audit --no-dev
       - name: Validate source and regression tests without production access
         run: bash scripts/validate-release.sh
       - name: Set up Python for Chromium UI and print checks
@@ -75,7 +73,7 @@ jobs:
           php-version: '8.4'
           extensions: pdo_mysql, mbstring, zip, gd
           coverage: none
-      - name: Verify migrations and two-company financial isolation
+      - name: Install locked PDF runtime for database and browser checks
         # Dependencies are installed here too because this job runs on a separate runner.
         run: composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
       - name: Verify expense migrations and financial isolation

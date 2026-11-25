@@ -7,6 +7,7 @@ import pathlib
 import re
 import shutil
 import zipfile
+import xml.etree.ElementTree as ET
 from playwright.sync_api import expect, sync_playwright
 
 spec = importlib.util.spec_from_file_location('financial_e2e', pathlib.Path(__file__).with_name('browser-financial-e2e.py'))
@@ -122,6 +123,39 @@ def main():
         page.wait_for_function('window.__expensePrinted === true')
         expect(page.get_by_role('link', name='receipt.png', exact=True)).to_be_visible()
         expect(page.get_by_text('CI corrected draft with receipt', exact=False).first).to_be_visible()
+        # Every report exports the same complete totals shown in its filtered UI.
+        page.goto(f'{ORIGIN}/?page=expense_reports')
+        report_types = page.locator('select[name="report"] option').evaluate_all('(options) => options.map(o => o.value)')
+        assert len(report_types) == 19
+        ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+        for report_type in report_types:
+            response = page.goto(f'{ORIGIN}/?page=expense_reports&report={report_type}')
+            assert response.status == 200
+            expect(page.locator('.expense-report-print h2')).to_be_visible()
+            assert page.locator('.alert.error').count() == 0, page.locator('body').inner_text()
+            footer = page.locator('.expense-report-print tfoot th').all_text_contents()
+            download = page.request.get(f'{ORIGIN}/?page=expense_reports&report={report_type}&export=xlsx')
+            assert download.status == 200
+            with zipfile.ZipFile(io.BytesIO(download.body())) as archive:
+                sheet = ET.fromstring(archive.read('xl/worksheets/sheet1.xml'))
+                last = sheet.findall('s:sheetData/s:row', ns)[-1].findall('s:c', ns)
+                assert len(last) == len(footer)
+                for cell, displayed in zip(last, footer):
+                    text = cell.findtext('s:v', namespaces=ns) if cell.get('t') == 'n' else cell.findtext('s:is/s:t', default='', namespaces=ns)
+                    if cell.get('t') == 'n':
+                        expected = displayed.translate(financial.NUMBERS).replace('٬', '').replace(',', '').strip()
+                        assert text == expected, (report_type, text, expected)
+                    else:
+                        assert text == displayed.strip(), (report_type, text, displayed)
+            pdf_response = page.request.get(f'{ORIGIN}/?page=expense_reports&report={report_type}&export=pdf')
+            assert pdf_response.status == 200 and pdf_response.body().startswith(b'%PDF-'), report_type
+            assert b'/FontFile2' in pdf_response.body(), 'PDF did not embed its Persian font'
+            if report_type == 'daily':
+                (OUTPUT / 'expense-independent-report.pdf').write_bytes(pdf_response.body())
+            for width in (320, 390, 768, 1440):
+                page.set_viewport_size({'width': width, 'height': 844})
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), f'{report_type} report overflow at {width}'
+        page.screenshot(path=str(OUTPUT / 'expense-reports-desktop.png'), full_page=True)
         assert not errors, errors
         foreign_context.close()
         context.close()

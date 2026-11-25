@@ -4,10 +4,10 @@ function expense_extensions_ready(): bool {
     return (int)query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('expense_settlements','expense_reversals')")->fetchColumn()===2;
 }
 function expense_employee_due(int $tenant,int $id): int {
-    $personal=(int)query("SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE company_id=? AND expense_id=? AND method='personal' AND posted_at IS NOT NULL",[$tenant,$id])->fetchColumn();
-    $settled=(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_settlements WHERE company_id=? AND expense_id=?',[$tenant,$id])->fetchColumn();
-    $returned=expense_returns_ready()?(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND settlement_id IS NOT NULL',[$tenant,$id])->fetchColumn():0;
-    return $personal-$settled+$returned;
+    $returned=expense_returns_ready()?'COALESCE((SELECT SUM(r.amount) FROM expense_returns r WHERE r.company_id=e.company_id AND r.expense_id=e.id AND r.settlement_id IS NOT NULL),0)':'0';
+    // Net in DECIMAL before converting: repeated settlement/return cycles can make gross totals exceed PHP_INT_MAX.
+    $due=(string)query("SELECT COALESCE((SELECT SUM(p.amount) FROM expense_payments p WHERE p.company_id=e.company_id AND p.expense_id=e.id AND p.method='personal' AND p.posted_at IS NOT NULL),0)-COALESCE((SELECT SUM(s.amount) FROM expense_settlements s WHERE s.company_id=e.company_id AND s.expense_id=e.id),0)+".$returned.' FROM expenses e WHERE e.company_id=? AND e.id=?',[$tenant,$id])->fetchColumn();
+    return $due===''||$due==='0'?0:invoice_payment_amount($due);
 }
 /** A cash entry must share the existing shift lock and must not reopen closed shifts. */
 function expense_cash_entry(int $tenant,int $branch,int $shift,int $amount,string $direction,string $reason,?int $owner=null): int {
@@ -52,8 +52,8 @@ function expense_void(int $id,string $reason): void {
         if(!$x||!in_array($x['approval_status'],['approved','pending','rejected','draft'],true))throw new RuntimeException('سند قابل ابطال نیست.');
         branch_require($tenant,$actor,(int)$x['branch_id']);
         accounting_assert_write_open($tenant,$x['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
-        $settled=(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_settlements WHERE company_id=? AND expense_id=?',[$tenant,$id])->fetchColumn();
-        $returned=expense_returns_ready()?(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND settlement_id IS NOT NULL',[$tenant,$id])->fetchColumn():0;
+        $settled=(string)query('SELECT COALESCE(SUM(amount),0) FROM expense_settlements WHERE company_id=? AND expense_id=?',[$tenant,$id])->fetchColumn();
+        $returned=expense_returns_ready()?(string)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND settlement_id IS NOT NULL',[$tenant,$id])->fetchColumn():'0';
         if($settled!==$returned)throw new RuntimeException('ابتدا مانده تسویه کارمند باید با سند برگشت واقعی دریافت شود.');
         // An administrative cancellation is not evidence that funds were physically returned.
         if($x['approval_status']==='approved'){

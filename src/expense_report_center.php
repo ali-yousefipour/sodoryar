@@ -70,22 +70,24 @@ function expense_center_read_rows(int $tenant,array $filter): array {
             $method=$type==='movements'?" AND p.method IN ('cash','bank')":' AND p.method=?';
             if($type!=='movements')$args[]=$type;
             if($filter['method']!==''){$method.=' AND p.method=?';$args[]=$filter['method'];}
-            $rows=query('SELECT '.$names.",p.posted_at date,p.id entry_id,p.method,p.amount,p.tracking reference,p.account_id,\n              'payment' kind,'out' direction".$joins.' JOIN expense_payments p ON p.expense_id=e.id AND p.company_id=e.company_id WHERE '.$where.' AND p.posted_at IS NOT NULL'.$method.' ORDER BY p.id DESC LIMIT 10001',$args)->fetchAll();
+            $rows=query('SELECT '.$names.",p.posted_at date,p.id entry_id,p.method,p.amount,p.tracking reference,p.account_id,p.cash_shift_id,\n              'payment' kind,'out' direction".$joins.' JOIN expense_payments p ON p.expense_id=e.id AND p.company_id=e.company_id WHERE '.$where.' AND p.posted_at IS NOT NULL'.$method.' ORDER BY p.id DESC LIMIT 10001',$args)->fetchAll();
         }
         if(in_array($type,['settlements','movements'],true)){
             [$where,$args]=expense_center_where($tenant,$filter,'DATE(s.created_at)');
             if($filter['method']!==''){$where.=' AND s.method=?';$args[]=$filter['method'];}
-            $rows=array_merge($rows,query('SELECT '.$names.",s.created_at date,s.id entry_id,s.method,s.amount,CAST(s.id AS CHAR) reference,s.account_id,'settlement' kind,'out' direction".$joins.' JOIN expense_settlements s ON s.expense_id=e.id AND s.company_id=e.company_id WHERE '.$where.' ORDER BY s.id DESC LIMIT 10001',$args)->fetchAll());
+            $rows=array_merge($rows,query('SELECT '.$names.",s.created_at date,s.id entry_id,s.method,s.amount,CAST(s.id AS CHAR) reference,s.account_id,s.cash_shift_id,'settlement' kind,'out' direction".$joins.' JOIN expense_settlements s ON s.expense_id=e.id AND s.company_id=e.company_id WHERE '.$where.' ORDER BY s.id DESC LIMIT 10001',$args)->fetchAll());
         }
         if(in_array($type,['returns','settlement_returns','movements'],true)&&expense_returns_ready()){
             [$where,$args]=expense_center_where($tenant,$filter,'r.return_date');
             $target=$type==='returns'?' AND r.payment_id IS NOT NULL':($type==='settlement_returns'?' AND r.settlement_id IS NOT NULL':'');
             if($filter['method']!==''){$target.=' AND r.method=?';$args[]=$filter['method'];}
-            $rows=array_merge($rows,query('SELECT '.$names.",r.return_date date,r.id entry_id,r.method,r.amount,r.reference,r.account_id,IF(r.settlement_id IS NULL,'payment.return','settlement.return') kind,'in' direction".$joins.' JOIN expense_returns r ON r.expense_id=e.id AND r.company_id=e.company_id WHERE '.$where.$target.' ORDER BY r.id DESC LIMIT 10001',$args)->fetchAll());
+            $rows=array_merge($rows,query('SELECT '.$names.",r.return_date date,r.id entry_id,r.method,r.amount,r.reference,r.account_id,r.cash_shift_id,IF(r.settlement_id IS NULL,'payment.return','settlement.return') kind,'in' direction".$joins.' JOIN expense_returns r ON r.expense_id=e.id AND r.company_id=e.company_id WHERE '.$where.$target.' ORDER BY r.id DESC LIMIT 10001',$args)->fetchAll());
         }
         // Personal payment recognizes a liability; it is not a cash/bank outflow.
         if($type==='movements')$rows=array_values(array_filter($rows,fn($r)=>$r['method']!=='personal'));
-        foreach($rows as &$row){$row['method']=expense_method($row['method']);$row['amount']=$row['direction']==='in'?'-'.$row['amount']:$row['amount'];$row['direction']=$row['direction']==='in'?'ورود وجه':'خروج وجه';$row['date']=substr($row['date'],0,10);$row['kind']=['payment'=>'پرداخت هزینه','settlement'=>'تسویه کارکنان','payment.return'=>'برگشت هزینه','settlement.return'=>'برگشت تسویه'][$row['kind']];}unset($row);
+        $accounts=query('SELECT id,title FROM company_bank_accounts WHERE company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
+        $shifts=query('SELECT sh.id,cr.name FROM cash_shifts sh JOIN cash_registers cr ON cr.id=sh.register_id AND cr.company_id=sh.company_id WHERE sh.company_id=?',[$tenant])->fetchAll(PDO::FETCH_KEY_PAIR);
+        foreach($rows as &$row){$row['source']=$row['account_id']!==null?($accounts[$row['account_id']]??'حساب').' #'.fa_digits($row['account_id']):($row['cash_shift_id']!==null?($shifts[$row['cash_shift_id']]??'صندوق').' #'.fa_digits($row['cash_shift_id']):'شخصی');$row['method']=expense_method($row['method']);$row['amount']=$row['direction']==='in'?'-'.$row['amount']:$row['amount'];$row['direction']=$row['direction']==='in'?'ورود وجه':'خروج وجه';$row['date']=substr($row['date'],0,10);$row['kind']=['payment'=>'پرداخت هزینه','settlement'=>'تسویه کارکنان','payment.return'=>'برگشت هزینه','settlement.return'=>'برگشت تسویه'][$row['kind']];}unset($row);
     }else{
         [$where,$args]=expense_center_where($tenant,$filter);
         if(in_array($type,['pending','rejected','void'],true)){$where.=' AND e.approval_status=?';$args[]=$type;}
@@ -117,8 +119,8 @@ function expense_center_read_rows(int $tenant,array $filter): array {
                     foreach(['branch'=>'i.branch_id','user_id'=>'i.user_id'] as $key=>$column)if($filter[$key]!==''){$salesWhere.=' AND '.$column.'=?';$params[]=$filter[$key];}
                     foreach(['from_iso'=>'>=','to_iso'=>'<='] as $key=>$op)if($filter[$key]!==''){$salesWhere.=' AND COALESCE(i.invoice_date,DATE(i.created_at))'.$op.'?';$params[]=$filter[$key];}
                     if(database_table_exists('invoice_voids'))$salesWhere.=' AND NOT EXISTS(SELECT 1 FROM invoice_voids v WHERE v.company_id=i.company_id AND v.invoice_id=i.id)';
-                    foreach(query('SELECT i.branch_id,b.name branch,COALESCE(SUM(i.total_amount),0) sales FROM invoices i JOIN branches b ON b.id=i.branch_id AND b.company_id=i.company_id WHERE '.$salesWhere.' GROUP BY i.branch_id,b.name',$params)->fetchAll() as $sale){
-                        $key=(string)$sale['branch_id'];if(!isset($groups[$key]))$groups[$key]=['branch'=>$sale['branch'],'qty'=>0,'amount'=>0,'sales'=>0];
+                    foreach(query('SELECT i.branch_id,b.name branch,COALESCE(SUM(i.total_amount),0) sales FROM invoices i LEFT JOIN branches b ON b.id=i.branch_id AND b.company_id=i.company_id WHERE '.$salesWhere.' GROUP BY i.branch_id,b.name',$params)->fetchAll() as $sale){
+                        $key=(string)$sale['branch_id'];if(!isset($groups[$key]))$groups[$key]=['branch'=>$sale['branch']??'بدون انتساب شعبه','qty'=>0,'amount'=>0,'sales'=>0];
                         $groups[$key]['sales']=expense_report_add(0,$sale['sales']);
                     }
                     foreach($groups as &$group)$group['performance']=expense_report_add($group['sales'],-$group['amount']);unset($group);
@@ -140,7 +142,7 @@ function expense_center_columns(string $type): array {
         'categories'=>['category'=>'دسته‌بندی','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
         'users'=>['user'=>'ثبت‌کننده','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
         'comparison','performance'=>['branch'=>'شعبه','sales'=>'فروش معتبر (تومان)','amount'=>'هزینه جاری (تومان)','performance'=>'فروش منهای هزینه جاری (تومان)'],
-        'cash','bank','personal','settlements','returns','settlement_returns','movements'=>['date'=>'تاریخ گردش','document_id'=>'سند هزینه','entry_id'=>'شناسه گردش','branch'=>'شعبه','user'=>'ثبت‌کننده هزینه','title'=>'عنوان','kind'=>'نوع گردش','method'=>'روش','direction'=>'جهت','amount'=>'خروج خالص وجه (تومان)','reference'=>'مرجع'],
+        'cash','bank','personal','settlements','returns','settlement_returns','movements'=>['date'=>'تاریخ گردش','document_id'=>'سند هزینه','entry_id'=>'شناسه گردش','branch'=>'شعبه','user'=>'ثبت‌کننده هزینه','title'=>'عنوان','kind'=>'نوع گردش','method'=>'روش','source'=>'حساب / صندوق','direction'=>'جهت','amount'=>'خروج خالص وجه (تومان)','reference'=>'مرجع'],
         'items'=>['date'=>'تاریخ','document_id'=>'سند','branch'=>'شعبه','item'=>'کالا / خدمت','description'=>'شرح','qty'=>'تعداد','unit'=>'واحد','unit_price'=>'قیمت واحد (تومان)','amount'=>'مبلغ ردیف (تومان)'],
         default=>['date'=>'تاریخ','document_id'=>'سند','branch'=>'شعبه','category'=>'دسته‌بندی','user'=>'ثبت‌کننده','title'=>'عنوان','status'=>'وضعیت','amount'=>$type==='liabilities'?'بدهی به کارمند (تومان)':'مبلغ سند (تومان)'],
     };
