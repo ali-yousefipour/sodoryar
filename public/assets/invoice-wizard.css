@@ -101,3 +101,7 @@
 }
 @media(max-width:380px){#invoiceWizard .invoice-payment-row{grid-template-columns:minmax(0,1fr)}#invoiceWizard .payment-mode-group button{font-size:11px!important}#invoiceWizard .invoice-service-summary{grid-template-columns:minmax(0,1fr)}.invoice-page-actions{grid-template-columns:minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){#invoiceWizard *{scroll-behavior:auto!important;transition:none!important}}
+
+/* The third submit action remains distinct and fits narrow RTL footers. */
+#invoiceWizard .invoice-footer-actions [data-save-next]{background:#28715c!important;color:#fff!important;border:1px solid #28715c!important}
+@media(max-width:760px){#invoiceWizard .invoice-footer-actions [data-save-next]{grid-column:1/-1}}

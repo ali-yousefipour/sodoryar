@@ -283,12 +283,22 @@ def main() -> None:
         manager_a.locator('#invoiceCreateForm input[name="payments[0][amount]"]').fill("15000")
         expect(manager_a.locator("[data-payment-remaining]")).to_contain_text("۳۰٬۰۰۰")
         manager_a.locator("[data-wizard-next]").click()
-        manager_a.locator('[data-print="1"]').click()
-        manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
-        partial_id = re.search(r"[?&]id=(\d+)", manager_a.url)
-        assert partial_id, "Partially paid invoice did not produce a receipt"
-        expect(manager_a.locator(".receipt")).to_contain_text("۳۰٬۰۰۰")
-        manager_a.goto(f"{ORIGIN}/?page=invoices")
+        old_nonce=manager_a.locator('[name="invoice_create_nonce"]').input_value()
+        old_count=manager_a.locator('[data-dialog-open^="invoiceCollect"]').count()
+        manager_a.locator('[data-save-next="1"]').click()
+        expect(manager_a.locator("#invoiceWizard")).to_be_visible(timeout=15000)
+        expect(manager_a.locator(".invoice-wizard-steps li[aria-current=step]")).to_contain_text("تاکسیران")
+        expect(manager_a.locator("#invoiceDriverNational")).to_have_value("")
+        expect(manager_a.locator("[data-wizard-total]")).to_have_text("۰")
+        assert manager_a.locator('[name="invoice_create_nonce"]').input_value()!=old_nonce
+        assert manager_a.locator('[name="service_ids[]"]:checked').count()==0
+        assert not manager_a.locator("#invoiceAllowPartial").is_checked()
+        expect(manager_a.locator('[data-save-next="1"]')).not_to_be_visible()
+        manager_a.locator("[data-wizard-cancel]").click()
+        candidates=manager_a.locator('[data-dialog-open^="invoiceCollect"]')
+        assert candidates.count()==old_count+1
+        partial_id=re.search(r"invoiceCollect([0-9]+)",candidates.first.get_attribute("data-dialog-open"))
+        assert partial_id
         collect_button=manager_a.locator(f'[data-dialog-open="invoiceCollect{partial_id.group(1)}"]')
         expect(collect_button).to_be_visible()
         collect_button.click()
