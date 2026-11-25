@@ -174,7 +174,7 @@ apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 integration_assert(financial_issue_reviews_ready(),'Financial issue review journal failed to install');
 $health=sodoryar_finance_schema_checks();
-integration_assert(count($health)===14 && count(array_filter($health,static fn($check)=>$check['installed']))===7,
+integration_assert(count($health)===14 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7,
     'Finance schema health checks did not recognize the seven installed migrations');
 
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');
