@@ -3,11 +3,17 @@ declare(strict_types=1);
 
 /** Branch selection is always scoped to the authenticated tenant and actor. */
 function branches_ready(): bool {
-    return database_table_exists('branches') && database_table_exists('user_branch_assignments')
-        && database_table_exists('pos_branch_assignments')
-        && (bool)query("SHOW COLUMNS FROM invoices LIKE 'branch_id'")->fetch()
-        && (bool)query("SHOW COLUMNS FROM invoice_payments LIKE 'branch_id'")->fetch();
+    static $ready=null;
+    if ($ready!==null) return $ready;
+    $tables=['branches','user_branch_assignments','pos_branch_assignments','banks'];
+    $columns=['invoices','invoice_payments','cash_registers'];
+    $tableCount=(int)query("SELECT COUNT(DISTINCT TABLE_NAME) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE='BASE TABLE' AND TABLE_NAME IN (?,?,?,?)",$tables)->fetchColumn();
+    $columnCount=(int)query("SELECT COUNT(DISTINCT TABLE_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME='branch_id' AND TABLE_NAME IN (?,?,?)",$columns)->fetchColumn();
+    $ready=$tableCount===count($tables) && $columnCount===count($columns);
+    if(!$ready) error_log('Sodoryar branch schema readiness: tables='.$tableCount.'/4 columns='.$columnCount.'/3');
+    return $ready;
 }
+
 function branch_choices(int $tenant,int $actor): array {
     if ($tenant!==tenant_id() || $actor!==(int)user()['id']) throw new RuntimeException('دسترسی نامعتبر است.');
     if (in_array(user()['role'],['company_admin','superadmin'],true))
