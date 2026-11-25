@@ -267,6 +267,7 @@ try {
 integration_assert($duplicateBlocked,'Repeated receipt idempotency key was accepted');
 $receiptFilter=report_filters_default();
 $receiptFilter['user_id']=(string)$otherUserA;
+$receiptFilter['invoice_number']='CI-A-PARTIAL';
 $_SESSION['user']=['id'=>$managerA,'company_id'=>$companyA,'full_name'=>'Cashbox Manager','role'=>'company_admin'];
 $receipts=invoice_payment_report($companyA,$receiptFilter);
 integration_assert((int)$receipts['summary']['transaction_count']===1,
