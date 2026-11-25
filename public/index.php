@@ -10,6 +10,8 @@ if (!function_exists('public_operation_error')) {
 
 require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/company_resources.php';
+require __DIR__ . '/_private/src/expenses.php';
+require __DIR__ . '/_private/src/expenses_page.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
@@ -46,7 +48,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['expenses','branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -770,6 +772,7 @@ try {
             redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
         }
         if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_post($page,$action);
+        if ($page==='expenses') expense_handle_post($action);
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -947,6 +950,7 @@ if ($tenant) {
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
     if (can('invoices.create')) $navItems[]=['invoices','صدور فاکتور جدید','invoices','عملیات روزانه'];
     if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
+    $navItems[]=['expenses','هزینه‌ها','commissions','عملیات روزانه'];
     if (can('cashbox.view')) $navItems[]=['cashbox','صندوق و تسویه روزانه','commissions','عملیات روزانه'];
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
     if (can('periods.manage')) $navItems[]=['finance_health','سلامت ساختار مالی','settings','تنظیمات و پیکربندی'];
@@ -1186,6 +1190,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php endif; ?>
 <?php elseif(in_array($page,['branches','branch_users','bank_accounts'],true)): ?>
 <?php render_company_resources($page); ?>
+<?php elseif($page==='expenses'): ?>
+<?php render_expenses(tenant_id()); ?>
 <?php elseif($page==='cashbox'): ?>
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
