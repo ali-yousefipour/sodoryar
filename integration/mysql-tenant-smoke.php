@@ -519,7 +519,12 @@ foreach(range(1,2) as $pass){
 foreach($financialSnapshots as $table=>$before){
     if(!$before['columns']){integration_assert((int)query('SELECT COUNT(*) FROM '.$table)->fetchColumn()===0,'Migration posted an unexpected financial row');continue;}
     $after=query('SELECT '.implode(',',array_map(static fn($column)=>'`'.$column.'`',$before['columns'])).' FROM '.$table.' ORDER BY id')->fetchAll();
-    integration_assert($before['rows']===$after,'Migration changed historical financial data in '.$table);
+    if($before['rows']!==$after){
+        foreach($before['rows'] as $index=>$oldRow)foreach($oldRow as $column=>$value){
+            if($value!==($after[$index][$column]??null))throw new RuntimeException('Historical mismatch '.$table.' id='.$oldRow['id'].' column='.$column.' before='.json_encode($value).' after='.json_encode($after[$index][$column]??null));
+        }
+        throw new RuntimeException('Historical row count or column shape changed: '.$table);
+    }
 }
 require $root.'/src/branches.php';
 require $root.'/src/company_resources.php';
