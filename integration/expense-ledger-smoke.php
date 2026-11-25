@@ -10,6 +10,7 @@ require $root.'/src/expense_returns.php';
 require $root.'/src/expenses_page.php';
 require $root.'/src/expense_financial_forms.php';
 require $root.'/src/expense_reports.php';
+require $root.'/src/expense_report_center.php';
 foreach(range(1,2) as $pass)foreach(range(23,29) as $version){
     $files=glob($root.'/database/migrations/'.sprintf('%03d',$version).'_*.sql');
     integration_assert(count($files)===1,'Missing or ambiguous expense migration '.$version);
@@ -119,5 +120,15 @@ query('UPDATE user_branch_assignments SET is_active=1 WHERE company_id=? AND use
 $_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'CI expense manager','role'=>'company_admin'];
 expense_policy_save($companyA,['approval_mode'=>'all','approval_threshold'=>'0']);
 integration_assert((string)query('SELECT SUM(total_amount) FROM invoices WHERE company_id=?',[$companyA])->fetchColumn()===$salesBefore,'Workflow operations changed invoice sales');
+$expectedCost=(int)query("SELECT COALESCE(SUM(total_amount),0) FROM expenses WHERE company_id=? AND approval_status='approved' AND classification='expense'",[$companyA])->fetchColumn();
+foreach(array_keys(expense_report_catalog()) as $reportType){
+    $reportFilter=expense_center_filters(['report'=>$reportType]);$reportRows=expense_center_rows($companyA,$reportFilter);
+    $reportTotals=expense_center_totals($reportRows,expense_center_columns($reportType));
+    if(in_array($reportType,['daily','monthly','branches','categories','users','comparison','performance'],true))integration_assert(($reportTotals['amount']??0)===$expectedCost,'Grouped report disagrees with operating cost: '.$reportType);
+    if($reportType==='movements')integration_assert(($reportTotals['amount']??0)===0,'Cash/bank outflows and actual refunds do not reconcile');
+}
+$dueReport=expense_center_rows($companyA,expense_center_filters(['report'=>'liabilities']));
+integration_assert(count($dueReport)>0&&array_sum(array_column($dueReport,'amount'))===$expectedCost,'Employee liability report disagrees with approved personal expenses');
+echo "PASS: all 19 report queries, exact grouped cost/employee liabilities and reconciled real cash/bank movements.\n";
 echo "PASS: draft/edit/version/retry/resubmit, automatic/threshold policies, exact discount/extra and branch review ceilings.\n";
 echo "PASS: expense migrations twice, cash reconciliation, refunds, employee liability, retries, closed shifts, bank account and tenant boundaries.\n";

@@ -194,7 +194,8 @@ function export_excel_xlsx(string $name, array $headers, array $rows, array $num
         $result='<row r="'.$number.'">';
         foreach(array_values($cells) as $index=>$value) {
             $cell=chr(65+$index).$number;
-            if (!$header && in_array($index,$numericColumns,true) && is_numeric($value)) {
+            // Excel stores only 15 significant integer digits; larger financial values must stay exact text.
+            if (!$header && in_array($index,$numericColumns,true) && is_numeric($value) && !preg_match('/^-?[0-9]{16,}$/D',(string)$value)) {
                 $result.='<c r="'.$cell.'" s="2" t="n"><v>'.$xml($value).'</v></c>';
             } else {
                 $result.='<c r="'.$cell.'" s="'.($header?'1':'0').'" t="inlineStr"><is><t xml:space="preserve">'.$xml($value).'</t></is></c>';

@@ -27,6 +27,13 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_mysql, zip, gd
           coverage: none
+      - name: Install locked PDF runtime dependencies
+        run: |
+          composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
+          composer check-platform-reqs --no-dev
+          if ! git ls-files --error-unmatch composer.lock >/dev/null 2>&1; then
+            php -r 'echo "COMPOSER_LOCK_BASE64=".base64_encode(file_get_contents("composer.lock"))."\n";'
+          fi
       - name: Validate source and regression tests without production access
         run: bash scripts/validate-release.sh
       - name: Set up Python for Chromium UI and print checks
@@ -69,6 +76,9 @@ jobs:
           extensions: pdo_mysql, mbstring, zip, gd
           coverage: none
       - name: Verify migrations and two-company financial isolation
+        # Dependencies are installed here too because this job runs on a separate runner.
+        run: composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
+      - name: Verify expense migrations and financial isolation
         run: php integration/expense-ledger-smoke.php
       - name: Install MariaDB client for isolated backup and recovery verification
         run: sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client
@@ -91,6 +101,7 @@ jobs:
           mkdir -p "$site/_private/src"
           cp -a public/. "$site/"
           cp -a src/. "$site/_private/src/"
+          cp -a vendor "$site/_private/vendor"
           php -S 127.0.0.1:8089 -t "$site" > "$RUNNER_TEMP/sodoryar-php-e2e.log" 2>&1 &
           server_pid=$!
           trap 'status=$?; if [ "$status" -ne 0 ]; then tail -n 100 "$RUNNER_TEMP/sodoryar-php-e2e.log" || true; fi; kill "$server_pid" 2>/dev/null || true' EXIT
@@ -125,6 +136,17 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Configure PHP for locked PDF dependencies
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
+      - name: Install verified production dependencies
+        run: |
+          test -s composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress --optimize-autoloader
+          composer check-platform-reqs --no-dev
       - name: Validate isolated Sodoryar target and public origin before upload
         env:
           FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '.' }}
@@ -156,6 +178,7 @@ jobs:
           mkdir -p deploy-payload/public deploy-payload/_private/src
           cp -a public/. deploy-payload/public/
           cp -a src/. deploy-payload/_private/src/
+          cp -a vendor deploy-payload/_private/vendor
           cp -a deploy/private.htaccess deploy-payload/_private/.htaccess
           cp .env.example deploy-payload/_private/.env.example
           test -s deploy-payload/public/index.php

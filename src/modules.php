@@ -87,7 +87,7 @@ function register_missing_driver(int $tenant, string $nationalCode, array $field
 
 function module_page_permission(string $page): ?string {
     return [
-        'expenses'=>'expenses.view', 'expense_attachment'=>'expenses.view',
+        'expense_reports'=>'expenses.view', 'expenses'=>'expenses.view', 'expense_attachment'=>'expenses.view',
         'bills'=>'bills.view', 'commissions'=>'commissions.view',
         'pos'=>'pos.view', 'activity'=>'activity.view',
     ][$page] ?? null;

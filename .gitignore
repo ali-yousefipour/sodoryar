@@ -1,6 +1,8 @@
 /.env
 /storage/*.log
 /storage/*.sql
+/storage/pdf-cache/
+/storage/expense-attachments/
 /vendor/
 *.sql.gz
 /.idea/

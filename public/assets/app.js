@@ -503,6 +503,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   document.querySelectorAll('[data-print-receipt]').forEach(button=>button.addEventListener('click',()=>window.print()));
   if(document.querySelector('[data-expense-auto-print]')) window.addEventListener('load',()=>window.print(),{once:true});
+  const expenseReportForm=document.querySelector('[data-expense-report-form]');
+  expenseReportForm?.querySelector('[name="report"]')?.addEventListener('change',()=>{
+    expenseReportForm.querySelectorAll('[name="columns[]"],[name="sort"]').forEach(input=>input.disabled=true);
+  });
   document.querySelectorAll('[data-driver-lookup]:not([data-driver-autocomplete])').forEach(input=>{
     const result=input.closest('label').querySelector('[data-driver-result]');
     const manual=input.closest('form')?.querySelector('[data-driver-manual]');

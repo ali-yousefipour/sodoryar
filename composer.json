@@ -1,0 +1,18 @@
+{
+  "name": "sodoryar/application",
+  "description": "Persian multi-tenant invoicing and expense application",
+  "type": "project",
+  "require": {
+    "php": "~8.4.0",
+    "ext-gd": "*",
+    "ext-mbstring": "*",
+    "ext-pdo_mysql": "*",
+    "ext-zip": "*",
+    "mpdf/mpdf": "^8.2.5"
+  },
+  "config": {
+    "allow-plugins": false,
+    "sort-packages": true,
+    "platform": { "php": "8.4.0" }
+  }
+}
