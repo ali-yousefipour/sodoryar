@@ -17,6 +17,7 @@ foreach(range(1,2) as $pass)foreach(range(23,29) as $version){
     apply_sql_fixture($files[0]);
 }
 integration_assert(expenses_ready()&&expense_extensions_ready()&&expense_returns_ready(),'Expense schema not ready');
+integration_assert(count(array_filter(sodoryar_finance_schema_checks(),static fn($check)=>$check['installed']))===14,'Finance health did not detect all migrated expense stages');
 query("UPDATE users SET role='company_admin' WHERE company_id=? AND id=?",[$companyA,$userA]);
 $_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'CI expense manager','role'=>'company_admin'];
 $branch=(int)query('SELECT id FROM branches WHERE company_id=? AND is_default=1',[$companyA])->fetchColumn();
