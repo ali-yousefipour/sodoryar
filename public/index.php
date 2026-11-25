@@ -1288,6 +1288,15 @@ function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance):
     if (!isset($terminals[$tenant])) {
         $terminals[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
     }
+    $branchField='';
+    if (branches_ready()) {
+        $choices=branch_choices($tenant,(int)user()['id']);
+        $branchField='<label>شعبه دریافت‌کننده<select name="receiving_branch_id" required><option value="">انتخاب شعبه</option>';
+        foreach ($choices as $branch) {
+            $branchField.='<option value="'.(int)$branch['id'].'"'.((count($choices)===1 || (int)$branch['is_default']===1)?' selected':'').'>'.e($branch['name']).'</option>';
+        }
+        $branchField.='</select></label>';
+    }
     $id='invoiceCollect'.$invoiceId;
     $nonce=$_SESSION['invoice_collect_nonces'][$invoiceId]??=bin2hex(random_bytes(32));
     echo ' <button type="button" class="small secondary" data-dialog-open="'.e($id).'">دریافت مانده</button>';
@@ -1295,6 +1304,7 @@ function render_invoice_collect_dialog(int $tenant,int $invoiceId,int $balance):
         .'<input type="hidden" name="action" value="collect_balance"><input type="hidden" name="invoice_id" value="'.(int)$invoiceId.'">'
         .'<input type="hidden" name="collect_nonce" value="'.e($nonce).'"><h2>ثبت دریافت جدید</h2>'
         .'<p>مانده قابل دریافت: <strong>'.money_toman($balance).'</strong></p>'
+        .$branchField
         .'<label>مبلغ دریافت (تومان)<input name="amount" type="text" inputmode="numeric" data-money-input required maxlength="22"></label>'
         .'<label>روش پرداخت<select name="payment_method" data-collect-method><option value="cash">نقدی</option><option value="pos">کارتخوان</option></select></label>'
         .'<label>دستگاه کارتخوان (در صورت استفاده)<select name="terminal"><option value="">بدون انتخاب دستگاه</option>';
