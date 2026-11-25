@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise expense posting and real settlement returns only on disposable localhost data."""
 import importlib.util
+import base64
 import io
 import pathlib
 import re
@@ -86,11 +87,46 @@ def main():
         foreign_context, foreign = financial.log_in(browser, 'ci_manager_b')
         foreign.goto(f'{ORIGIN}/?page=expenses&detail={detail}')
         expect(foreign.get_by_text('سند یافت نشد یا دسترسی مجاز نیست.', exact=True)).to_be_visible()
+        # The receipt remains private and draft edits preserve identity before submission.
+        page.goto(f'{ORIGIN}/?page=expenses')
+        page.locator('#expenseOpen').click()
+        page.get_by_label('عنوان', exact=True).fill('CI editable draft with receipt')
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7e8AAAAASUVORK5CYII=')
+        page.locator('input[name="receipt"]').set_input_files({'name': 'receipt.png', 'mimeType': 'image/png', 'buffer': png})
+        page.locator('#expenseNext').click()
+        page.locator('#expenseItems input[name$="[title]"]').fill('Draft tea')
+        page.locator('[data-price]').fill('۱۰۰٬۰۰۰')
+        page.locator('#expenseExtra').fill('۲۰٬۰۰۰')
+        page.locator('#expenseDiscount').fill('۵٬۰۰۰')
+        page.locator('#expenseNext').click()
+        page.locator('[data-method]').select_option('personal')
+        page.locator('#expenseNext').click()
+        expect(page.locator('#expensePreview')).to_contain_text('۱۱۵٬۰۰۰')
+        page.locator('#expenseDraft').click()
+        expect(page.get_by_text('پیش‌نویس هزینه ذخیره شد.', exact=True)).to_be_visible()
+        page.locator('tr').filter(has_text='CI editable draft with receipt').get_by_role('link', name='جزئیات و چاپ').click()
+        draft_detail = re.search(r'detail=(\d+)', page.url).group(1)
+        attachment = page.get_by_role('link', name='receipt.png', exact=True).get_attribute('href')
+        attachment_response = page.request.get(f'{ORIGIN}/{attachment}')
+        assert attachment_response.status == 200 and attachment_response.body() == png
+        assert foreign.request.get(f'{ORIGIN}/{attachment}').status == 404, 'Cross-tenant receipt download leaked'
+        page.get_by_role('link', name='ویرایش و ارسال مجدد هزینه').click()
+        expect(page.locator('#expenseDialog')).to_be_visible()
+        expect(page.get_by_label('عنوان', exact=True)).to_have_value('CI editable draft with receipt')
+        page.get_by_label('عنوان', exact=True).fill('CI corrected draft with receipt')
+        for _ in range(3):
+            page.locator('#expenseNext').click()
+        page.add_init_script('window.print = () => { window.__expensePrinted = true; };')
+        page.locator('#expensePrint').click()
+        page.wait_for_url(lambda url: f'detail={draft_detail}' in url and 'print=1' in url)
+        page.wait_for_function('window.__expensePrinted === true')
+        expect(page.get_by_role('link', name='receipt.png', exact=True)).to_be_visible()
+        expect(page.get_by_text('CI corrected draft with receipt', exact=False).first).to_be_visible()
         assert not errors, errors
         foreign_context.close()
         context.close()
         browser.close()
-    print('PASS: expense wizard, approval, bank reimbursement/partial return, liability, XLSX, print, responsive UI, tenant isolation and JavaScript/CSP checks')
+    print('PASS: expense wizard, approval, bank reimbursement/partial return, draft edit/resubmit, private receipt, discount/extra, save/print, liability, XLSX, responsive UI, tenant isolation and JavaScript/CSP checks')
 
 
 if __name__ == '__main__':
