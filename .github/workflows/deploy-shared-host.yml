@@ -107,6 +107,7 @@ jobs:
             exit 1
           fi
           python scripts/browser-financial-e2e.py
+          python scripts/browser-expense-ledger-e2e.py
       - name: Save disposable browser QA screenshots and print sample
         if: always()
         uses: actions/upload-artifact@v4

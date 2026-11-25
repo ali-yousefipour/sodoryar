@@ -14,7 +14,7 @@ function render_expense_financial_actions(int $tenant,array $x): void {
     ?>
     <?php if($approved||$settlements):?>
     <section class="card"><h2>تسویه هزینه کارکنان</h2><p>مانده قابل بازپرداخت به <?=e($x['full_name'])?>: <strong><?=money_toman($due)?></strong></p>
-    <?php if($settlements):?><div style="overflow:auto"><table><thead><tr><th>شماره تسویه</th><th>تاریخ</th><th>روش</th><th>منبع</th><th>مبلغ</th></tr></thead><tbody><?php foreach($settlements as $s):?><tr><td><?=e(fa_digits($s['id']))?></td><td><?=e(jalali_datetime($s['created_at']))?></td><td><?=e(expense_method($s['method']))?></td><td><?=e($s['account_title']??$s['register_name']??'—')?></td><td><?=money_toman($s['amount'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif;?>
+    <?php if($settlements):?><div class="table-wrap"><table><thead><tr><th>شماره تسویه</th><th>تاریخ</th><th>روش</th><th>منبع</th><th>مبلغ</th></tr></thead><tbody><?php foreach($settlements as $s):?><tr><td><?=e(fa_digits($s['id']))?></td><td><?=e(jalali_datetime($s['created_at']))?></td><td><?=e(expense_method($s['method']))?></td><td><?=e($s['account_title']??$s['register_name']??'—')?></td><td><?=money_toman($s['amount'])?></td></tr><?php endforeach;?></tbody></table></div><?php endif;?>
     <?php if(expense_manager()&&$approved&&$due>0):
         $banks=query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 AND (branch_id IS NULL OR branch_id=?) ORDER BY title',[$tenant,$branch])->fetchAll();
         $cash=query("SELECT s.id,r.name title FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.company_id=? AND s.operator_id=? AND s.status='open' AND r.is_active=1 AND r.branch_id=? ORDER BY r.name",[$tenant,$actor,$branch])->fetchAll();
@@ -37,7 +37,7 @@ function render_expense_financial_actions(int $tenant,array $x): void {
     <label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
     <label><input type="checkbox" required> ابطال و آثار مالی آن را تأیید می‌کنم.</label><button type="submit">ثبت ابطال</button></form></details></section>
     <?php endif;?>
-    <section class="card"><h2>تاریخچه سند</h2><div style="overflow:auto"><table><thead><tr><th>تاریخ</th><th>رویداد</th><th>کاربر</th><th>توضیح</th></tr></thead><tbody>
+    <section class="card"><h2>تاریخچه سند</h2><div class="table-wrap"><table><thead><tr><th>تاریخ</th><th>رویداد</th><th>کاربر</th><th>توضیح</th></tr></thead><tbody>
     <?php $labels=['submitted'=>'ثبت هزینه','approved'=>'تأیید','rejected'=>'رد','settled'=>'تسویه','void'=>'ابطال'];foreach(query('SELECT ev.*,u.full_name FROM expense_events ev LEFT JOIN users u ON u.id=ev.actor_id WHERE ev.company_id=? AND ev.expense_id=? ORDER BY ev.id',[$tenant,$id])->fetchAll() as $ev):?><tr><td><?=e(jalali_datetime($ev['created_at']))?></td><td><?=e($labels[$ev['event_type']]??$ev['event_type'])?></td><td><?=e($ev['full_name']??'—')?></td><td><?=e($ev['reason']??'—')?></td></tr><?php endforeach;?></tbody></table></div></section>
     <?php
 }

@@ -60,7 +60,7 @@ function render_expense_returns(int $tenant,array $x): void {
     ?>
     <section class="card"><h2>برگشت واقعی وجه</h2>
     <?php if(!$returns):?><p>دریافت برگشت وجه برای این سند ثبت نشده است.</p><?php else:?>
-    <div class="table-scroll"><table><thead><tr><th>شماره</th><th>تاریخ</th><th>نوع سند اولیه</th><th>روش</th><th>مبلغ</th><th>مرجع</th><th>دلیل</th></tr></thead><tbody>
+    <div class="table-wrap"><table><thead><tr><th>شماره</th><th>تاریخ</th><th>نوع سند اولیه</th><th>روش</th><th>مبلغ</th><th>مرجع</th><th>دلیل</th></tr></thead><tbody>
     <?php foreach($returns as $r):?><tr><td><?=fa_digits($r['id'])?></td><td><?=e(jalali_datetime($r['return_date'],true))?></td><td><?=$r['settlement_id']!==null?'تسویه کارکنان':'پرداخت هزینه'?> <?=fa_digits($r['settlement_id']??$r['payment_id'])?></td><td><?=e(expense_method($r['method']))?></td><td><?=money_toman($r['amount'])?></td><td><?=e($r['reference'])?></td><td><?=e($r['reason'])?></td></tr><?php endforeach;?>
     </tbody></table></div><?php endif;?>
     <?php if(expense_manager()&&$x['approval_status']==='approved'):
