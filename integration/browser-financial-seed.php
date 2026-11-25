@@ -15,7 +15,16 @@ foreach (['ci-tenant-a'=>'a','ci-tenant-b'=>'b'] as $slug=>$suffix) {
     if ($tenant<1) throw new RuntimeException('Missing disposable company fixture: '.$slug);
     query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',
         [$tenant,'ci_manager_'.$suffix,$hash,'CI E2E Manager '.strtoupper($suffix),'company_admin']);
+    $manager=(int)db()->lastInsertId();
+    $branch=(int)query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$tenant])->fetchColumn();
+    if(!$branch)throw new RuntimeException('Missing migrated central branch for browser fixture');
+    query('INSERT INTO user_branch_assignments(company_id,user_id,branch_id,is_default,is_active) VALUES(?,?,?,1,1)',[$tenant,$manager,$branch]);
+    query('INSERT INTO cash_registers(company_id,branch_id,name) VALUES(?,?,?)',[$tenant,$branch,'CI E2E register '.$suffix]);
+    $register=(int)db()->lastInsertId();
+    query("INSERT INTO cash_shifts(company_id,register_id,operator_id,opening_cash,started_at,status) VALUES(?,?,?,0,NOW(),'open')",[$tenant,$register,$manager]);
     query('INSERT INTO pos_settings(company_id,brand,is_active) VALUES(?,?,1)',[$tenant,'CI E2E Terminal']);
+    $terminal=(int)db()->lastInsertId();
+    query('INSERT INTO pos_branch_assignments(company_id,terminal_id,branch_id,effective_from) VALUES(?,?,?,NOW())',[$tenant,$terminal,$branch]);
     query('INSERT INTO services(company_id,title,price,is_active) VALUES(?,?,?,1)',
         [$tenant,'CI E2E Service '.strtoupper($suffix),$suffix==='a'?45000:99999]);
 }
