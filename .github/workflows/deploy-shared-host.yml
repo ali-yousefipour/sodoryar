@@ -69,7 +69,7 @@ jobs:
           extensions: pdo_mysql, mbstring, zip, gd
           coverage: none
       - name: Verify migrations and two-company financial isolation
-        run: php integration/mysql-tenant-smoke.php
+        run: php integration/expense-ledger-smoke.php
       - name: Install MariaDB client for isolated backup and recovery verification
         run: sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client
       - name: Verify complete restore and financial checksums on disposable database

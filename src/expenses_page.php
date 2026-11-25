@@ -6,9 +6,11 @@ function expense_scope(int $tenant): array {
     return [$sql,$args];
 }
 function expense_handle_post(string $action): never {
+    require_permission('expenses.view');
     if($action==='create'){$id=expense_create($_POST);if(isset($_POST['print'])){header('Location: ?page=expenses&detail='.$id.'&print=1');exit;}redirect('expenses','هزینه در انتظار تأیید ثبت شد.');}
     if($action==='review'){expense_review((int)($_POST['id']??0),(string)($_POST['decision']??''),trim((string)($_POST['reason']??'')));redirect('expenses','تصمیم ثبت شد.');}
     if($action==='settle'){expense_settle((int)($_POST['id']??0),$_POST);redirect('expenses','تسویه ثبت شد.');}
+    if($action==='return'){expense_return((int)($_POST['id']??0),$_POST);redirect('expenses','دریافت برگشت وجه با حفظ سند اولیه ثبت شد.');}
     if($action==='void'){expense_void((int)($_POST['id']??0),trim((string)($_POST['reason']??'')));redirect('expenses','سند با حفظ سوابق باطل شد.');}
     if($action==='category'){
         require_admin();$tenant=tenant_id();$name=trim((string)($_POST['name']??''));$class=(string)($_POST['classification']??'');
@@ -32,6 +34,7 @@ function expense_rows(int $tenant,int $limit=500): array {
     return query('SELECT e.*,b.name branch_name,c.name category_name,u.full_name FROM expenses e JOIN branches b ON b.id=e.branch_id AND b.company_id=e.company_id JOIN expense_categories c ON c.id=e.category_id AND c.company_id=e.company_id JOIN users u ON u.id=e.created_by AND u.company_id=e.company_id WHERE '.$where.' ORDER BY e.expense_date DESC,e.id DESC LIMIT '.$limit,$args)->fetchAll();
 }
 function render_expenses(int $tenant): void {
+    require_permission('expenses.view');
     if(!expenses_ready()){echo '<div class="card">ساختار هزینه‌ها آماده نیست؛ مهاجرت ۰۲۶ بررسی شود.</div>';return;}
     $actor=(int)user()['id'];$branches=branch_choices($tenant,$actor);
     $cats=query('SELECT * FROM expense_categories WHERE company_id=? ORDER BY name',[$tenant])->fetchAll();
@@ -48,14 +51,14 @@ function render_expenses(int $tenant): void {
         <h3>جمع: <?=money_toman($x['total_amount'])?></h3><table><thead><tr><th>روش</th><th>مبلغ</th><th>پیگیری</th></tr></thead><tbody><?php foreach($payments as $p):?><tr><td><?=e(expense_method($p['method']))?></td><td><?=money_toman($p['amount'])?></td><td><?=e($p['tracking']??'—')?></td></tr><?php endforeach;?></tbody></table></div>
         <?php if(expense_manager()&&$x['approval_status']==='pending'):?><form method="post" class="card form-grid"><?=csrf_field()?><input type="hidden" name="action" value="review"><input type="hidden" name="id" value="<?=e($detail)?>"><label>توضیح تصمیم<input name="reason" maxlength="500"></label><button name="decision" value="approved">تأیید و ثبت آثار مالی</button><button name="decision" value="rejected">رد هزینه</button></form><?php endif;?>
         <?php render_expense_financial_actions($tenant,$x); ?>
-        <?php if(isset($_GET['print'])):?><script>window.addEventListener('load',()=>window.print());</script><?php endif;return;
+        <?php if(isset($_GET['print'])):?><span data-expense-auto-print hidden></span><?php endif;return;
     }
     $rows=expense_rows($tenant);
     $reportLink='?'.http_build_query(array_merge(array_intersect_key($_GET,array_flip(['q','branch','from','to','status'])),['page'=>'expenses','export'=>'xlsx']));
     $shifts=query("SELECT s.id,r.name,r.branch_id FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.company_id=? AND s.operator_id=? AND s.status='open' AND r.is_active=1",[$tenant,$actor])->fetchAll();
     $accounts=query('SELECT id,title,branch_id FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll();
     ?>
-    <section class="card"><h2>هزینه‌ها</h2><?php if(expense_manager()||can('reports.export')):?><a href="<?=e($reportLink)?>">خروجی اکسل نتایج</a><?php endif;?> <button type="button" data-print-receipt>چاپ گزارش / PDF</button><?php if($branches&&!is_super()):?><button type="button" id="expenseOpen">ثبت هزینه جدید</button><?php else:?><p>برای ثبت هزینه، کاربر شرکت باید به شعبه فعال تخصیص داشته باشد.</p><?php endif;?>
+    <section class="card"><h2>هزینه‌ها</h2><?php if(can('expenses.export')):?><a href="<?=e($reportLink)?>">خروجی اکسل نتایج</a><?php endif;?> <button type="button" data-print-receipt>چاپ گزارش</button><?php if($branches&&!is_super()&&can('expenses.create')):?><button type="button" id="expenseOpen">ثبت هزینه جدید</button><?php else:?><p>برای ثبت هزینه، کاربر شرکت باید به شعبه فعال تخصیص داشته باشد.</p><?php endif;?>
     <form method="get" class="form-grid"><input type="hidden" name="page" value="expenses"><label>جستجو<input name="q" value="<?=e($_GET['q']??'')?>"></label><label>شعبه<select name="branch"><option value="0">همه شعب مجاز</option><?php foreach($branches as $b):?><option value="<?=e($b['id'])?>" <?=((int)($_GET['branch']??0)===(int)$b['id'])?'selected':''?>><?=e($b['name'])?></option><?php endforeach;?></select></label><label>از تاریخ شمسی<input name="from" placeholder="۱۴۰۵/۰۸/۰۱" value="<?=e($_GET['from']??'')?>"></label><label>تا تاریخ شمسی<input name="to" value="<?=e($_GET['to']??'')?>"></label><label>وضعیت<select name="status"><option value="">همه</option><?php foreach(['pending','approved','rejected','void'] as $s):?><option value="<?=e($s)?>" <?=($_GET['status']??'')===$s?'selected':''?>><?=e(expense_status($s))?></option><?php endforeach;?></select></label><button>فیلتر</button></form>
     <div style="overflow:auto"><table><thead><tr><th>سند</th><th>تاریخ</th><th>شعبه</th><th>عنوان</th><th>دسته‌بندی</th><th>کاربر</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach($rows as $x):?><tr><td><?=fa_digits($x['id'])?></td><td><?=e(jalali_datetime($x['expense_date'],true))?></td><td><?=e($x['branch_name'])?></td><td><?=e($x['title'])?></td><td><?=e($x['category_name'])?></td><td><?=e($x['full_name'])?></td><td><?=money_toman($x['total_amount'])?></td><td><?=e(expense_status($x['approval_status']))?></td><td><a href="?page=expenses&amp;detail=<?=e($x['id'])?>">جزئیات و چاپ</a></td></tr><?php endforeach;?></tbody></table></div><small>حداکثر ۵۰۰ سند آخر مطابق فیلتر</small></section>
     <?php if(expense_manager()):?><details class="card"><summary>مدیریت دسته‌بندی‌ها</summary><?php foreach($cats as $c):?><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="category"><input type="hidden" name="id" value="<?=e($c['id'])?>"><input type="hidden" name="classification" value="<?=e($c['classification'])?>"><label>نام<input name="name" value="<?=e($c['name'])?>" required></label><label><input type="checkbox" name="active" <?=$c['is_active']?'checked':''?>> فعال</label><button>ذخیره</button></form><?php endforeach;?><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="category"><label>نام جدید<input name="name" required></label><label>طبقه‌بندی<select name="classification"><option value="expense">هزینه جاری</option><option value="asset">دارایی</option><option value="inventory">موجودی</option><option value="prepayment">پیش‌پرداخت</option></select></label><button>افزودن</button></form></details><?php endif;?>

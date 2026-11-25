@@ -12,6 +12,7 @@ require __DIR__ . '/_private/src/branches.php';
 require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/expenses.php';
 require __DIR__ . '/_private/src/expense_settlement.php';
+require __DIR__ . '/_private/src/expense_returns.php';
 require __DIR__ . '/_private/src/expense_financial_forms.php';
 require __DIR__ . '/_private/src/expense_reports.php';
 require __DIR__ . '/_private/src/expenses_page.php';
@@ -956,7 +957,7 @@ if ($tenant) {
     if (can('services.view')) $navItems[]=['services','خدمات و تعرفه‌ها','services','عملیات و صدور'];
     if (can('invoices.create')) $navItems[]=['invoices','صدور فاکتور جدید','invoices','عملیات روزانه'];
     if (can('invoices.view')) $navItems[]=['invoice_manager','مدیریت و گزارش فاکتورها','reports','عملیات روزانه'];
-    $navItems[]=['expenses','هزینه‌ها','commissions','عملیات روزانه'];
+    if (can('expenses.view')) $navItems[]=['expenses','هزینه‌ها','commissions','عملیات روزانه'];
     if (can('cashbox.view')) $navItems[]=['cashbox','صندوق و تسویه روزانه','commissions','عملیات روزانه'];
     if (can('periods.manage')) $navItems[]=['periods','قفل دوره‌های مالی','reports','گزارش‌ها و نظارت'];
     if (can('periods.manage')) $navItems[]=['finance_health','سلامت ساختار مالی','settings','تنظیمات و پیکربندی'];

@@ -29,13 +29,13 @@ function render_expense_financial_actions(int $tenant,array $x): void {
         </form></details>
         <?php endforeach;endif;?></section>
     <?php endif;?>
+    <?php render_expense_returns($tenant,$x); ?>
     <?php if(expense_manager()&&in_array($x['approval_status'],['approved','pending','rejected','draft'],true)):?>
     <section class="card"><h2>ابطال سند هزینه</h2>
-    <?php if($settlements):?><p>این سند دارای تسویه کارکنان است. ابطال تا زمان ثبت برگشت معتبر تسویه مسدود است.</p>
-    <?php else:?><details><summary>ابطال با حفظ تاریخچه</summary><p>ابطال اداری به معنی بازگشت وجه نیست. ابطال پرداخت نقدی یا بانکی قطعی تا ثبت سند مستقل برگشت واقعی وجه مسدود است.</p>
+    <details><summary>ابطال با حفظ تاریخچه</summary><p>ابتدا تمام پرداخت‌های نقدی، بانکی و تسویه کارکنان را با تأیید دریافت واقعی وجه برگشت دهید. ابطال سند هیچ وجهی به صندوق یا بانک اضافه نمی‌کند.</p>
     <form method="post" action="?page=expenses&amp;detail=<?=e($id)?>" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="void"><input type="hidden" name="id" value="<?=e($id)?>">
     <label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
-    <label><input type="checkbox" required> ابطال و آثار مالی آن را تأیید می‌کنم.</label><button type="submit">ثبت ابطال</button></form></details><?php endif;?></section>
+    <label><input type="checkbox" required> ابطال و آثار مالی آن را تأیید می‌کنم.</label><button type="submit">ثبت ابطال</button></form></details></section>
     <?php endif;?>
     <section class="card"><h2>تاریخچه سند</h2><div style="overflow:auto"><table><thead><tr><th>تاریخ</th><th>رویداد</th><th>کاربر</th><th>توضیح</th></tr></thead><tbody>
     <?php $labels=['submitted'=>'ثبت هزینه','approved'=>'تأیید','rejected'=>'رد','settled'=>'تسویه','void'=>'ابطال'];foreach(query('SELECT ev.*,u.full_name FROM expense_events ev LEFT JOIN users u ON u.id=ev.actor_id WHERE ev.company_id=? AND ev.expense_id=? ORDER BY ev.id',[$tenant,$id])->fetchAll() as $ev):?><tr><td><?=e(jalali_datetime($ev['created_at']))?></td><td><?=e($labels[$ev['event_type']]??$ev['event_type'])?></td><td><?=e($ev['full_name']??'—')?></td><td><?=e($ev['reason']??'—')?></td></tr><?php endforeach;?></tbody></table></div></section>

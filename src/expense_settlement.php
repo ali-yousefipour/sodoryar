@@ -6,11 +6,14 @@ function expense_extensions_ready(): bool {
 function expense_employee_due(int $tenant,int $id): int {
     $personal=(int)query("SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE company_id=? AND expense_id=? AND method='personal' AND posted_at IS NOT NULL",[$tenant,$id])->fetchColumn();
     $settled=(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_settlements WHERE company_id=? AND expense_id=?',[$tenant,$id])->fetchColumn();
-    return $personal-$settled;
+    $returned=expense_returns_ready()?(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND settlement_id IS NOT NULL',[$tenant,$id])->fetchColumn():0;
+    return $personal-$settled+$returned;
 }
 /** A cash entry must share the existing shift lock and must not reopen closed shifts. */
 function expense_cash_entry(int $tenant,int $branch,int $shift,int $amount,string $direction,string $reason,?int $owner=null): int {
     if(!db()->inTransaction())throw new LogicException('Transaction required');
+    if($amount<=0||!in_array($direction,['in','out'],true))throw new RuntimeException('گردش صندوق نامعتبر است.');
+    branch_require($tenant,(int)user()['id'],$branch);
     $s=query("SELECT s.* FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id WHERE s.id=? AND s.company_id=? AND s.status='open' AND r.branch_id=? AND r.is_active=1 FOR UPDATE",[$shift,$tenant,$branch])->fetch();
     if(!$s||($owner!==null&&(int)$s['operator_id']!==$owner))throw new RuntimeException('صندوق فعال و مجاز نیست.');
     $t=cashbox_shift_totals($tenant,$shift);
@@ -29,6 +32,7 @@ function expense_settle(int $id,array $input): void {
         if($old){if((int)$old['expense_id']!==$id||(int)$old['amount']!==$amount||$old['method']!==$method||(int)($old['account_id']??$old['cash_shift_id'])!==$source)throw new RuntimeException('درخواست تکراری مغایر است.');db()->commit();return;}
         $x=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
         if(!$x||$x['approval_status']!=='approved'||$amount>expense_employee_due($tenant,$id))throw new RuntimeException('مانده قابل تسویه کافی نیست.');
+        branch_require($tenant,$actor,(int)$x['branch_id']);
         accounting_assert_write_open($tenant,date('Y-m-d'));
         $adjustment=null;
         if($method==='cash')$adjustment=expense_cash_entry($tenant,(int)$x['branch_id'],$source,$amount,'out','تسویه هزینه '.$id,$actor);
@@ -46,14 +50,21 @@ function expense_void(int $id,string $reason): void {
         query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
         $x=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
         if(!$x||!in_array($x['approval_status'],['approved','pending','rejected','draft'],true))throw new RuntimeException('سند قابل ابطال نیست.');
+        branch_require($tenant,$actor,(int)$x['branch_id']);
         accounting_assert_write_open($tenant,$x['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
-        if(query('SELECT id FROM expense_settlements WHERE company_id=? AND expense_id=? LIMIT 1',[$tenant,$id])->fetch())throw new RuntimeException('ابتدا تسویه کارمند باید با سند اصلاحی برگشت داده شود.');
+        $settled=(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_settlements WHERE company_id=? AND expense_id=?',[$tenant,$id])->fetchColumn();
+        $returned=expense_returns_ready()?(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND settlement_id IS NOT NULL',[$tenant,$id])->fetchColumn():0;
+        if($settled!==$returned)throw new RuntimeException('ابتدا مانده تسویه کارمند باید با سند برگشت واقعی دریافت شود.');
         // An administrative cancellation is not evidence that funds were physically returned.
-        if($x['approval_status']==='approved' && query("SELECT id FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL AND method IN ('cash','bank') LIMIT 1 FOR UPDATE",[$tenant,$id])->fetch())throw new RuntimeException('ابطال پرداخت نقدی یا بانکی قطعی نیازمند سند مستقل و تأیید بازگشت واقعی وجه است.');
+        if($x['approval_status']==='approved'){
+            $paid=(int)query("SELECT COALESCE(SUM(amount),0) FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL AND method IN ('cash','bank')",[$tenant,$id])->fetchColumn();
+            $refunded=expense_returns_ready()?(int)query('SELECT COALESCE(SUM(amount),0) FROM expense_returns WHERE company_id=? AND expense_id=? AND payment_id IS NOT NULL',[$tenant,$id])->fetchColumn():0;
+            if($paid!==$refunded)throw new RuntimeException('ابتدا مانده پرداخت نقدی یا بانکی باید با سند برگشت واقعی دریافت شود.');
+        }
         if($x['approval_status']==='approved'){
             foreach(query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? AND posted_at IS NOT NULL ORDER BY id FOR UPDATE',[$tenant,$id])->fetchAll() as $p){
                 $adjustment=null;
-                if($p['method']==='cash')$adjustment=expense_cash_entry($tenant,(int)$x['branch_id'],(int)$p['cash_shift_id'],(int)$p['amount'],'in','برگشت هزینه '.$id);
+                // Refund receipts already posted cash/bank movements; cancellation never posts money.
                 query('INSERT INTO expense_reversals(payment_id,company_id,expense_id,cash_adjustment_id,actor_id) VALUES(?,?,?,?,?)',[$p['id'],$tenant,$id,$adjustment,$actor]);
             }
         }

@@ -194,6 +194,8 @@ function require_admin(): void {
 }
 function permission_catalog(): array {
     return [
+        'expenses.view'=>'مشاهده هزینه‌ها', 'expenses.create'=>'ثبت هزینه',
+        'expenses.export'=>'خروجی هزینه‌ها',
         'customers.view'=>'مشاهده تاکسیرانان', 'customers.create'=>'ثبت تاکسیران',
         'services.view'=>'مشاهده خدمات', 'invoices.view'=>'مشاهده فاکتورها',
         'invoices.create'=>'صدور فاکتور', 'reports.view'=>'گزارش‌های مالی',

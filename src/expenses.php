@@ -22,6 +22,7 @@ function expense_event(int $tenant,int $id,string $event,string $reason=''): voi
 }
 function expense_create(array $input): int {
     require_login();
+    require_permission('expenses.create');
     if(!expenses_ready())throw new RuntimeException('ساختار هزینه‌ها آماده نیست.');
     $tenant=tenant_id();$actor=(int)user()['id'];
     if(is_super())throw new RuntimeException('ثبت هزینه باید توسط کاربر همان شرکت انجام شود.');
@@ -71,6 +72,7 @@ function expense_review(int $id,string $decision,string $reason): void {
         query('SELECT id FROM companies WHERE id=? FOR UPDATE',[$tenant])->fetch();
         $x=query('SELECT * FROM expenses WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
         if(!$x||$x['approval_status']!=='pending')throw new RuntimeException('سند در انتظار تأیید نیست.');
+        branch_require($tenant,$actor,(int)$x['branch_id']);
         if($decision==='approved'){
             accounting_assert_write_open($tenant,$x['expense_date']);accounting_assert_write_open($tenant,date('Y-m-d'));
             $rows=query('SELECT * FROM expense_payments WHERE company_id=? AND expense_id=? ORDER BY id FOR UPDATE',[$tenant,$id])->fetchAll();

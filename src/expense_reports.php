@@ -17,7 +17,7 @@ function expense_dashboard(int $tenant,string $from,string $to): void {
 }
 function expense_export(int $tenant): never {
     if(!expenses_ready())throw new RuntimeException('ساختار هزینه‌ها آماده نیست.');
-    if(!expense_manager())require_permission('reports.export');
+    require_permission('expenses.export');
     $rows=expense_rows($tenant,10001);
     if(count($rows)>10000)throw new RuntimeException('بازه گزارش را محدود کنید.');
     $data=array_map(static fn($x)=>[(string)$x['id'],jalali_datetime($x['expense_date'],true),$x['branch_name'],$x['title'],$x['category_name'],$x['full_name'],expense_status($x['approval_status']),$x['total_amount']],$rows);

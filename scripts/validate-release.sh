@@ -29,7 +29,7 @@ if [[ "${SODORYAR_INTEGRATION:-0}" == "1" ]]; then
     echo 'Refusing integration test outside disposable local sodoryar_integration_test database.' >&2
     exit 2
   fi
-  php integration/mysql-tenant-smoke.php
+  php integration/expense-ledger-smoke.php
 else
   echo 'DB integration not run. Set up an isolated MariaDB database and SODORYAR_INTEGRATION=1.'
 fi
