@@ -198,7 +198,7 @@ try {
                 login_succeeded($attemptKey);
                 session_regenerate_id(true);
                 rotate_csrf_token();
-                unset($_SESSION['login_captcha'], $_SESSION['invoice_create_nonce']);
+                unset($_SESSION['login_captcha'], $_SESSION['invoice_create_nonce'], $_SESSION['invoice_start_next']);
                 $_SESSION['user'] = ['id'=>(int)$u['id'],'full_name'=>$u['full_name'],'role'=>$u['role'],'company_id'=>$u['company_id']];
                 if (auth_version_ready()) $_SESSION['auth_version']=(int)$u['auth_version'];
                 $_SESSION['last_activity']=time(); $_SESSION['regenerated_at']=time();
@@ -1064,7 +1064,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <div class="invoice-page-heading invoice-page-toolbar"><div><span class="invoice-eyebrow">عملیات مالی / مدیریت فاکتورها</span><h1>فاکتورها</h1><p>صدور سند جدید و دسترسی به سوابق مالی تاکسیرانان</p></div><div class="invoice-page-actions"><?php if(can('invoices.view')): ?><a class="button-link secondary" href="?page=invoice_manager">جستجو و گزارش فاکتورها</a><?php endif; ?><?php if(can('invoices.create')): ?><button type="button" id="invoiceWizardOpen" aria-haspopup="dialog" aria-controls="invoiceWizard"><span aria-hidden="true">＋</span> صدور فاکتور جدید</button><?php endif; ?></div></div>
 <?php if(can('invoices.create')): ?>
 <?php $invoiceDriverLines=query("SELECT DISTINCT TRIM(line_area) AS line_name FROM global_drivers WHERE line_area IS NOT NULL AND TRIM(line_area) <> '' ORDER BY line_name")->fetchAll(PDO::FETCH_COLUMN); ?>
-<dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"><div class="invoice-workspace">
+<dialog id="invoiceWizard" class="invoice-wizard" aria-labelledby="invoiceWizardTitle"<?=!empty($_SESSION['invoice_start_next']) ? ' data-start-next="1"' : ''?>><?php unset($_SESSION['invoice_start_next']); ?><div class="invoice-workspace">
 <form method="post" class="stack invoice-form" id="invoiceCreateForm" data-invoice-ui-version="invoice-wizard-v2" novalidate><header class="invoice-wizard-header"><div class="invoice-wizard-title"><h2 id="invoiceWizardTitle">صدور فاکتور جدید</h2><p data-wizard-status tabindex="-1" aria-live="polite"></p></div><ol class="invoice-wizard-steps" aria-label="مراحل صدور فاکتور"><li><span>۱</span><b>تاکسیران</b></li><li><span>۲</span><b>خدمات</b></li><li><span>۳</span><b>پرداخت</b></li><li><span>۴</span><b>تأیید نهایی</b></li></ol></header><div class="invoice-wizard-body"><input type="hidden" name="invoice_after_save" value="list"><?=csrf_field()?><input type="hidden" name="action" value="add"><input type="hidden" name="invoice_create_nonce" value="<?=e($_SESSION['invoice_create_nonce'] ??= bin2hex(random_bytes(16)))?>">
 <section data-wizard-stage="1" class="invoice-panel invoice-panel-details" aria-labelledby="invoiceDetailsTitle">
 <div class="invoice-panel-heading"><span class="invoice-step">۱</span><div><h2 id="invoiceDetailsTitle">اطلاعات فاکتور</h2><p>شناسه تاکسیران و تاریخ انجام خدمت</p></div></div>
@@ -1081,7 +1081,7 @@ $userListSQL=user_photo_table_ready()?'SELECT u.id,u.full_name,u.username,u.role
 <select id="invoiceTerminalOptions" hidden aria-hidden="true"><option value="">بدون انتخاب دستگاه</option><?php foreach(query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll() as $terminal): ?><option value="<?=e($terminal['id'])?>"><?=e($terminal['brand'])?> (<?=e(fa_digits($terminal['id']))?>)</option><?php endforeach; ?></select>
 <div id="invoicePaymentRows" class="invoice-payment-rows"></div><button type="button" class="secondary" id="invoiceAddPayment" hidden>+ افزودن پرداخت</button><label class="choice"><input type="checkbox" name="allow_partial" value="1" id="invoiceAllowPartial"> صدور فاکتور با مانده بدهی (پرداخت جزئی)</label><label class="choice"><input type="checkbox" id="invoiceNoInitialPayment"> صدور بدون دریافت اولیه</label>
 <div class="invoice-payment-summary" aria-live="polite"><span>مبلغ فاکتور: <strong data-payable-total>۰</strong></span><span>جمع دریافتی: <strong data-payment-paid>۰</strong></span><span>مانده: <strong data-payment-remaining>۰</strong></span><span>تعداد تراکنش: <strong data-payment-count>۱</strong></span></div><p id="invoicePaymentError" class="invoice-payment-error" role="alert" hidden></p></section>
-<section data-wizard-stage="4" class="invoice-panel" hidden><h2>بررسی نهایی فاکتور</h2><div data-wizard-review></div></section></div><p data-wizard-error role="alert" class="invoice-wizard-error"></p><div class="invoice-form-footer"><div class="invoice-footer-summary"><span>مبلغ فاکتور (تومان)</span><strong data-wizard-total>۰</strong></div><div class="invoice-footer-actions"><button type="button" class="secondary" data-wizard-cancel>انصراف</button><button type="button" class="secondary" data-wizard-prev hidden>مرحله قبل</button><button type="button" data-wizard-next>مرحله بعد</button><button type="submit" class="invoice-submit" hidden>ذخیره فاکتور</button><?php if(can('invoices.view') && can('invoices.print')): ?><button type="submit" data-print="1" hidden>ذخیره و چاپ</button><?php endif; ?></div></div></form></div></dialog>
+<section data-wizard-stage="4" class="invoice-panel" hidden><h2>بررسی نهایی فاکتور</h2><div data-wizard-review></div></section></div><p data-wizard-error role="alert" class="invoice-wizard-error"></p><div class="invoice-form-footer"><div class="invoice-footer-summary"><span>مبلغ فاکتور (تومان)</span><strong data-wizard-total>۰</strong></div><div class="invoice-footer-actions"><button type="button" class="secondary" data-wizard-cancel>انصراف</button><button type="button" class="secondary" data-wizard-prev hidden>مرحله قبل</button><button type="button" data-wizard-next>مرحله بعد</button><button type="submit" class="invoice-submit" hidden>ذخیره فاکتور</button><?php if(can('invoices.view') && can('invoices.print')): ?><button type="submit" data-print="1" hidden>ذخیره و چاپ</button><?php endif; ?><button type="submit" data-save-next="1" hidden>ذخیره و ثبت سند جدید</button></div></div></form></div></dialog>
 <?php endif; ?><?php if(can('invoices.view')): ?><div class="card invoice-history"><div class="invoice-history-heading"><div><h2>آخرین فاکتورها</h2><p>سوابق صدور، دریافت و مانده حساب</p></div><a href="?page=invoice_manager">مشاهده همه</a></div><?php render_invoices($tenant,50); ?></div><?php endif; ?>
 <?php elseif($page==='finance_center'): ?>
 <?php render_finance_presets((int)$tenant); ?>
@@ -1181,6 +1181,10 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php
 function finish_invoice_creation(int $invoiceId): never {
     if (hash_equals((string)($_SESSION['invoice_create_nonce']??''),(string)($_POST['invoice_create_nonce']??''))) unset($_SESSION['invoice_create_nonce']);
+    if (($_POST['invoice_after_save']??'list')==='next' && can('invoices.create')) {
+        $_SESSION['invoice_start_next']=true;
+        redirect('invoices','فاکتور قبلی با موفقیت ثبت شد. آماده صدور فاکتور جدید هستید.');
+    }
     if (can('invoices.view') && can('invoices.print')) {
         if (($_POST['invoice_after_save']??'list')==='print') {
             $_SESSION['flash']='فاکتور با موفقیت ثبت شد.';
