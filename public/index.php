@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/_private/src/bootstrap.php';
 require __DIR__ . '/_private/src/branches.php';
+require __DIR__ . '/_private/src/company_resources.php';
 require __DIR__ . '/_private/src/localization.php';
 require __DIR__ . '/_private/src/modules.php';
 require __DIR__ . '/_private/src/photos.php';
@@ -38,7 +39,7 @@ function archive_ready(string $table): bool {
 }
 
 $page = (string) ($_GET['page'] ?? 'dashboard');
-$valid = ['login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
+$valid = ['branches','branch_users','bank_accounts','login','logout','dashboard','companies','users','roles','customers','driver_account','payment_receipt','services','service_rate_history','invoices','invoice_manager','cashbox','periods','finance_health','reports','finance_center','receipt','bills','pos','commissions','templates','settings','activity','profile','driver_lookup','global_search','dashboard_detail','service_rate_quotes','user_preferences','user_photo','my_photo','template_logo'];
 if (!in_array($page, $valid, true)) { http_response_code(404); exit('صفحه پیدا نشد'); }
 if ($page==='user_photo') {
     if ($_SERVER['REQUEST_METHOD']!=='GET') { http_response_code(405); exit; }
@@ -761,6 +762,7 @@ try {
                 (string)($_POST['date_to']??''));
             redirect('reports','بررسی مغایرت ثبت شد؛ سابقه قبلی حفظ شده است.');
         }
+        if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_post($page,$action);
         if ($page==='cashbox') cashbox_handle_post($action);
         if ($page==='periods' && $action==='lock_period') {
             require_permission('periods.manage');
@@ -777,6 +779,7 @@ try {
 
 if ($page === 'companies' && !is_super()) { http_response_code(403); exit('دسترسی مجاز نیست'); }
 if ($page === 'companies' && is_super() && isset($_SESSION['selected_company'])) redirect('dashboard','برای مدیریت شرکت‌ها ابتدا به داشبورد مدیریت کل بازگردید.');
+if (in_array($page,['branches','branch_users','bank_accounts'],true)) company_resources_guard();
 if ($page === 'users') require_admin();
 if ($page === 'roles') { require_admin(); require_permission('roles.manage'); }
 if ($page === 'services' || $page==='service_rate_history') require_permission('services.view');
@@ -947,6 +950,9 @@ if ($tenant) {
     if (can('activity.view')) $navItems[]=['activity','لاگ فعالیت‌ها','activity','گزارش‌ها و نظارت'];
     if (user()['role']!=='operator') {
         $navItems[]=['users','کاربران شرکت','users','کاربران و دسترسی'];
+        $navItems[]=['branches','مدیریت شعب','companies','تنظیمات و پیکربندی'];
+        $navItems[]=['bank_accounts','حساب‌های بانکی','commissions','تنظیمات و پیکربندی'];
+        $navItems[]=['branch_users','تخصیص کاربران به شعب','users','کاربران و دسترسی'];
         $navItems[]=['roles','نقش‌ها و مجوزها','users','کاربران و دسترسی'];
         if (can('pos.view')) $navItems[]=['pos','کارتخوان‌ها','services','تنظیمات و پیکربندی'];
         $navItems[]=['templates','قالب چاپ','templates','تنظیمات و پیکربندی'];
@@ -1171,6 +1177,8 @@ $voidRecord=database_table_exists('invoice_voids')?query('SELECT reason,voided_a
 <?php elseif($section==='footer' && $selectedTemplate && $selectedTemplate['footer_text']!==''): ?><p class="receipt-footer"><?=e($selectedTemplate['footer_text'])?></p>
 <?php endif; endforeach; ?></div>
 <?php endif; ?>
+<?php elseif(in_array($page,['branches','branch_users','bank_accounts'],true)): ?>
+<?php render_company_resources($page); ?>
 <?php elseif($page==='cashbox'): ?>
 <?php render_cashbox((int)$tenant); ?>
 <?php elseif($page==='periods'): ?>
