@@ -424,7 +424,7 @@ jobs:
             echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
-          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css expenses.css expenses.js login-ui.js app.js table-experience.js report-progress.js; do
+          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css login-ui.js app.js table-experience.js report-progress.js expenses.css expenses.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
