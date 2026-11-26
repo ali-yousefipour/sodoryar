@@ -176,3 +176,20 @@ try {
     expense_expect_blocked(fn()=>company_assign_new_user_branch($companyA,$newUser),'New user provisioning accepted cross-company assignment');
 } finally {db()->rollBack();}
 echo "PASS: atomic new-company central branch/register/category provisioning and new-user branch isolation.\n";
+
+db()->beginTransaction();
+try {
+    $collectionBranch=insert_fixture('INSERT INTO branches(company_id,branch_number,branch_code,name) VALUES(?,?,?,?)',[$companyA,889,'889','CI collection branch']);
+    $branchInvoice=insert_fixture('INSERT INTO invoices(company_id,invoice_number,customer_id,user_id,total_amount,payment_type,invoice_date,branch_id) VALUES(?,?,?,?,?,?,?,?)',[$companyA,'CI-BRANCH-RECEIPTS',$customerA,$userA,300,'cash',date('Y-m-d'),$branch]);
+    foreach([[$branch,100],[$collectionBranch,200]] as [$collectAt,$value])query("INSERT INTO invoice_payments(company_id,invoice_id,payment_method,amount,paid_at,created_by,branch_id) VALUES(?,?,'cash',?,NOW(),?,?)",[$companyA,$branchInvoice,$value,$userA,$collectAt]);
+    $branchFilter=report_filters_default();$branchFilter['invoice_number']='CI-BRANCH-RECEIPTS';$branchFilter['branch_id']=(string)$branch;
+    integration_assert((int)invoice_report($companyA,$branchFilter)['summary']['total']===300,'Issuing branch report lost invoice sales');
+    integration_assert((int)invoice_payment_report($companyA,$branchFilter)['summary']['cash_paid']===100,'Collection branch report used invoice issuing branch');
+    $branchFilter['branch_id']=(string)$collectionBranch;
+    integration_assert((int)invoice_payment_report($companyA,$branchFilter)['summary']['cash_paid']===200,'Other collection branch lost actual receipts');
+    $_SESSION['user']['role']='operator';
+    expense_expect_blocked(fn()=>invoice_payment_report($companyA,$branchFilter),'Unassigned branch report was exposed to operator');
+    $branchFilter['branch_id']='';
+    integration_assert((int)invoice_payment_report($companyA,$branchFilter)['summary']['cash_paid']===100,'All branches filter bypassed operator branch assignment');
+} finally {db()->rollBack();$_SESSION['user']['role']='company_admin';}
+echo "PASS: issuing versus collecting branch reports, actual receipt totals and operator branch isolation.\n";
