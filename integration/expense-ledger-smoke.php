@@ -121,6 +121,20 @@ $_SESSION['user']=['id'=>$userA,'company_id'=>$companyA,'full_name'=>'CI expense
 expense_policy_save($companyA,['approval_mode'=>'all','approval_threshold'=>'0']);
 integration_assert((string)query('SELECT SUM(total_amount) FROM invoices WHERE company_id=?',[$companyA])->fetchColumn()===$salesBefore,'Workflow operations changed invoice sales');
 $expectedCost=(int)query("SELECT COALESCE(SUM(total_amount),0) FROM expenses WHERE company_id=? AND approval_status='approved' AND classification='expense'",[$companyA])->fetchColumn();
+$mixedInput=expense_test_input($branch,$category,'personal',null,100000);
+$mixedInput['items']=[['title'=>'قلم اول','quantity'=>'۱','unit'=>'عدد','price'=>'40000'],['title'=>'قلم دوم','quantity'=>'۲','unit'=>'عدد','price'=>'30000']];
+$mixedInput['payments']=[['method'=>'cash','amount'=>'50000','source'=>$nextShift,'tracking'=>''],['method'=>'bank','amount'=>'25000','source'=>$account,'tracking'=>'CI mixed bank'],['method'=>'personal','amount'=>'25000','source'=>null,'tracking'=>'']];
+$balanceBefore=expense_test_balance($companyA,$nextShift);
+$mixed=expense_create($mixedInput);expense_review($mixed,'approved','CI mixed approval');
+integration_assert(expense_test_balance($companyA,$nextShift)===$balanceBefore-50000&&expense_employee_due($companyA,$mixed)===25000,'Mixed payment allocation changed cash or employee liability incorrectly');
+expense_expect_blocked(fn()=>expense_void($mixed,'CI mixed missing receipt'),'Mixed payment void fabricated a receipt');
+foreach(query("SELECT id,method,amount FROM expense_payments WHERE company_id=? AND expense_id=? AND method IN ('cash','bank') ORDER BY id",[$companyA,$mixed])->fetchAll() as $mixedPayment){
+    expense_return($mixed,['kind'=>'payment','target'=>(int)$mixedPayment['id'],'amount'=>(string)$mixedPayment['amount'],'cash_shift_id'=>$mixedPayment['method']==='cash'?$nextShift:null,'reference'=>'CI mixed receipt '.$mixedPayment['id'],'reason'=>'CI mixed actual return','refund_confirmed'=>'1','request_key'=>bin2hex(random_bytes(32))]);
+}
+expense_void($mixed,'CI mixed fully returned');
+integration_assert(expense_test_balance($companyA,$nextShift)===$balanceBefore,'Mixed payment return and void duplicated or lost cash');
+integration_assert((string)query('SELECT SUM(total_amount) FROM invoices WHERE company_id=?',[$companyA])->fetchColumn()===$salesBefore,'Mixed expense changed sales');
+echo "PASS: multiple items, cash/bank/personal mixed allocation and cancellation only after actual cash/bank receipts.\n";
 foreach(array_keys(expense_report_catalog()) as $reportType){
     $reportFilter=expense_center_filters(['report'=>$reportType]);$reportRows=expense_center_rows($companyA,$reportFilter);
     $reportTotals=expense_center_totals($reportRows,expense_center_columns($reportType));
