@@ -156,6 +156,23 @@ def main():
                 page.set_viewport_size({'width': width, 'height': 844})
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), f'{report_type} report overflow at {width}'
         page.screenshot(path=str(OUTPUT / 'expense-reports-desktop.png'), full_page=True)
+        viewer_context, viewer = financial.log_in(browser, 'ci_expense_viewer')
+        assert viewer.goto(f'{ORIGIN}/?page=expenses').status == 200
+        assert viewer.locator('#expenseOpen').count() == 0, 'View-only permission exposed creation UI'
+        viewer_csrf = viewer.locator('input[name="csrf"]').first.input_value()
+        for action in ('create', 'settle', 'return', 'void', 'category', 'policy', 'approver'):
+            denied = viewer.request.post(f'{ORIGIN}/?page=expenses', form={'csrf': viewer_csrf, 'action': action, 'id': detail})
+            assert denied.status == 403, ('view-only mutation', action, denied.status)
+        for url in ('?page=expenses&export=xlsx', '?page=expense_reports&export=xlsx', '?page=expense_reports&export=pdf'):
+            assert viewer.request.get(f'{ORIGIN}/{url}').status == 403, ('view-only export', url)
+        viewer.goto(f'{ORIGIN}/?page=expenses&detail={detail}')
+        expect(viewer.get_by_text('سند یافت نشد یا دسترسی مجاز نیست.', exact=True)).to_be_visible()
+        assert viewer.request.get(f'{ORIGIN}/{attachment}').status == 404, 'Same-company nonowner downloaded a private receipt'
+        none_context, none = financial.log_in(browser, 'ci_expense_none')
+        for route in ('expenses', 'expense_reports', 'expense_attachment'):
+            assert none.request.get(f'{ORIGIN}/?page={route}').status == 403, ('missing view grant', route)
+        none_context.close()
+        viewer_context.close()
         assert not errors, errors
         foreign_context.close()
         context.close()
