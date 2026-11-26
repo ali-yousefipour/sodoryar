@@ -5,25 +5,29 @@ declare(strict_types=1);
 function sodoryar_finance_schema_checks(): array {
     $tableChecks=[
         'دفتر دریافت‌ها (۰۱۶)'=>['invoice_payments'],
-        'کلید یکتای دریافت (۰۱۷)'=>['invoice_payments','request_key'],
-        'صندوق و شیفت مالی (۰۱۸)'=>['cash_registers','cash_shifts','cash_shift_adjustments','invoice_payments','cash_shift_id'],
+        'کلید یکتای دریافت (۰۱۷)'=>['invoice_payments','invoice_payments.request_key'],
+        'صندوق و شیفت مالی (۰۱۸)'=>['cash_registers','cash_shifts','cash_shift_adjustments','invoice_payments','invoice_payments.cash_shift_id'],
         'قفل دوره مالی (۰۱۹)'=>['financial_period_locks'],
         'تاریخچه تعرفه (۰۲۰)'=>['service_rate_versions'],
         'تنظیمات شخصی (۰۲۱)'=>['user_preferences'],
-        'رسیدگی به مغایرت‌ها (۰۲۲)'=>['financial_issue_reviews']
+        'رسیدگی به مغایرت‌ها (۰۲۲)'=>['financial_issue_reviews'],
+        'درخواست یکتای فاکتور (۰۲۳)'=>['invoice_create_requests'],
+        'چندشعبه‌ای (۰۲۴)'=>['branches','user_branch_assignments','pos_branch_assignments','banks','invoices.branch_id','invoice_payments.branch_id','cash_registers.branch_id'],
+        'حساب بانکی شرکت و شعبه (۰۲۵)'=>['company_bank_accounts','pos_account_registry'],
+        'اسناد هزینه (۰۲۶)'=>['expenses.request_hash','expenses.classification','expense_categories.classification','expense_items.quantity','expense_payments.account_id','expense_events.event_type'],
+        'تسویه و ابطال هزینه (۰۲۷)'=>['expense_settlements','expense_reversals'],
+        'دریافت واقعی برگشت وجه (۰۲۸)'=>['expense_returns.request_hash','expense_returns.reference','expense_returns.return_date'],
+        'گردش تأیید و پیوست خصوصی (۰۲۹)'=>['expense_policies','expense_branch_approvers','expense_mutation_requests','expense_attachments.content_hash','expenses.version','expenses.subtotal','expenses.extra_amount','expenses.discount_amount'],
     ];
     $tables=query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
     $known=array_fill_keys($tables,true);
     $cols=[];
-    if(isset($known['invoice_payments'])){
-        $cols=array_fill_keys(query('SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-           WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?',['invoice_payments'])->fetchAll(PDO::FETCH_COLUMN),true);
-    }
+    foreach(query('SELECT TABLE_NAME,COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE()')->fetchAll() as $column)$cols[$column['TABLE_NAME'].'.'.$column['COLUMN_NAME']]=true;
     $results=[];
     foreach($tableChecks as $label=>$needs){
         $missing=[];
         foreach($needs as $thing){
-            if(in_array($thing,['request_key','cash_shift_id'],true)) {
+            if(str_contains($thing,'.')) {
                 if(!isset($cols[$thing]))$missing[]=$thing;
             }elseif(!isset($known[$thing]))$missing[]=$thing;
         }

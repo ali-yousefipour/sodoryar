@@ -27,6 +27,11 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, pdo_mysql, zip, gd
           coverage: none
+      - name: Install locked PDF runtime dependencies
+        run: |
+          composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
+          composer check-platform-reqs --no-dev
+          composer audit --no-dev
       - name: Validate source and regression tests without production access
         run: bash scripts/validate-release.sh
       - name: Set up Python for Chromium UI and print checks
@@ -68,8 +73,11 @@ jobs:
           php-version: '8.4'
           extensions: pdo_mysql, mbstring, zip, gd
           coverage: none
-      - name: Verify migrations and two-company financial isolation
-        run: php integration/mysql-tenant-smoke.php
+      - name: Install locked PDF runtime for database and browser checks
+        # Dependencies are installed here too because this job runs on a separate runner.
+        run: composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress
+      - name: Verify expense migrations and financial isolation
+        run: php integration/expense-ledger-smoke.php
       - name: Install MariaDB client for isolated backup and recovery verification
         run: sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client
       - name: Verify complete restore and financial checksums on disposable database
@@ -91,6 +99,7 @@ jobs:
           mkdir -p "$site/_private/src"
           cp -a public/. "$site/"
           cp -a src/. "$site/_private/src/"
+          cp -a vendor "$site/_private/vendor"
           php -S 127.0.0.1:8089 -t "$site" > "$RUNNER_TEMP/sodoryar-php-e2e.log" 2>&1 &
           server_pid=$!
           trap 'status=$?; if [ "$status" -ne 0 ]; then tail -n 100 "$RUNNER_TEMP/sodoryar-php-e2e.log" || true; fi; kill "$server_pid" 2>/dev/null || true' EXIT
@@ -107,6 +116,7 @@ jobs:
             exit 1
           fi
           python scripts/browser-financial-e2e.py
+          python scripts/browser-expense-ledger-e2e.py
       - name: Save disposable browser QA screenshots and print sample
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,6 +134,17 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Configure PHP for locked PDF dependencies
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd
+          coverage: none
+      - name: Install verified production dependencies
+        run: |
+          test -s composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --no-scripts --no-progress --optimize-autoloader
+          composer check-platform-reqs --no-dev
       - name: Validate isolated Sodoryar target and public origin before upload
         env:
           FTP_REMOTE_DIR: ${{ vars.SODORYAR_FTP_REMOTE_DIR || '.' }}
@@ -155,6 +176,7 @@ jobs:
           mkdir -p deploy-payload/public deploy-payload/_private/src
           cp -a public/. deploy-payload/public/
           cp -a src/. deploy-payload/_private/src/
+          cp -a vendor deploy-payload/_private/vendor
           cp -a deploy/private.htaccess deploy-payload/_private/.htaccess
           cp .env.example deploy-payload/_private/.env.example
           test -s deploy-payload/public/index.php
@@ -290,7 +312,7 @@ jobs:
           set -euo pipefail
           # Read-only FTP readback: verify the critical private source that
           # the public PHP router uses; never expose PHP source over HTTPS.
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
             test -s "deploy-payload/_private/src/$file"
           done
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
@@ -305,9 +327,22 @@ jobs:
           get "_private/src/localization.php" -o "$RUNNER_TEMP/sodoryar-readback-localization.php"
           get "_private/src/reporting.php" -o "$RUNNER_TEMP/sodoryar-readback-reporting.php"
           get "_private/src/invoice_numbers.php" -o "$RUNNER_TEMP/sodoryar-readback-invoice_numbers.php"
+          get "_private/src/cashbox.php" -o "$RUNNER_TEMP/sodoryar-readback-cashbox.php"
+          get "_private/src/expenses.php" -o "$RUNNER_TEMP/sodoryar-readback-expenses.php"
+          get "_private/src/expenses_page.php" -o "$RUNNER_TEMP/sodoryar-readback-expenses_page.php"
+          get "_private/src/expense_workflow.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_workflow.php"
+          get "_private/src/expense_settlement.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_settlement.php"
+          get "_private/src/expense_returns.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_returns.php"
+          get "_private/src/expense_reports.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_reports.php"
+          get "_private/src/expense_report_center.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_report_center.php"
+          get "_private/src/expense_pdf.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_pdf.php"
+          get "_private/src/finance_schema_health.php" -o "$RUNNER_TEMP/sodoryar-readback-finance_schema_health.php"
+          get "_private/vendor/autoload.php" -o "$RUNNER_TEMP/sodoryar-readback-autoload.php"
+          get "_private/src/fonts/Vazirmatn-Regular.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Regular.ttf"
+          get "_private/src/fonts/Vazirmatn-Bold.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Bold.ttf"
           bye
           EOF
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
             expected="$(sha256sum "deploy-payload/_private/src/$file" | cut -d' ' -f1)"
             actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-$file" | cut -d' ' -f1)"
             if [[ "$expected" != "$actual" ]]; then
@@ -315,6 +350,11 @@ jobs:
               exit 1
             fi
             echo "Verified private PHP source: $file"
+          done
+          for file in vendor/autoload.php src/fonts/Vazirmatn-Regular.ttf src/fonts/Vazirmatn-Bold.ttf; do
+            expected="$(sha256sum "deploy-payload/_private/$file" | cut -d' ' -f1)"
+            actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-${file##*/}" | cut -d' ' -f1)"
+            test "$expected" = "$actual" || { echo "::error::Private dependency $file does not match the commit."; exit 1; }
           done
 
       - name: Verify deployed application commit manifest
@@ -384,7 +424,7 @@ jobs:
             echo "::error::Expected the fixed Sodoryar HTTPS origin."
             exit 1
           fi
-          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css login-ui.js app.js table-experience.js report-progress.js; do
+          for file in ux-unified.css iam-ux.css print-engine.css login-experience.css workspace-refresh.css login-ui.js app.js table-experience.js report-progress.js expenses.css expenses.js; do
             local_file="public/assets/$file"
             expected="$(sha256sum "$local_file" | cut -d' ' -f1)"
             curl --fail --location --silent --show-error --retry 4 --retry-delay 3 --max-time 30 \
@@ -434,7 +474,7 @@ jobs:
         run: |
           set -euo pipefail
           origin="https://taxiranico.ir"
-          for private_path in "_private/.env.example" "_private/src/bootstrap.php" "_private/.sodoryar-instance"; do
+          for private_path in "_private/.env.example" "_private/src/bootstrap.php" "_private/src/expense_pdf.php" "_private/vendor/autoload.php" "_private/.sodoryar-instance"; do
             status="$(curl --silent --show-error --max-time 30 -o /dev/null -w '%{http_code}' "$origin/$private_path")"
             case "$status" in
               403|404|410) echo "Private-path access blocked: $private_path (HTTP $status)" ;;

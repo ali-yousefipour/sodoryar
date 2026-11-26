@@ -1,0 +1,37 @@
+.expense-dialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: 90dvh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  color: var(--text, #173c3c);
+  background: var(--surface, #fff);
+  font-family: inherit;
+}
+.expense-dialog::backdrop { background: rgb(15 23 42 / 45%); }
+.expense-dialog [hidden] { display: none !important; }
+.expense-preview { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.expense-wizard-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  background: var(--surface, #fff);
+}
+.expense-dialog .form-grid { min-width: 0; }
+.expense-dialog label { min-width: 0; }
+.expense-dialog input, .expense-dialog select, .expense-dialog textarea { max-width: 100%; }
+.expense-report-columns { grid-column: 1 / -1; display: flex; gap: 16px; flex-wrap: wrap; }
+.expense-report-columns label { display: inline-flex; gap: 6px; align-items: center; }
+.expense-report-columns input { width: auto; min-height: auto; }
+@media (max-width: 700px) {
+  .expense-dialog { padding: 16px; }
+  .expense-dialog .form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media print {
+  #mainContent form, #mainContent details, #mainContent button, #mainContent a { display: none !important; }
+  #mainContent .table-wrap { overflow: visible; }
+}

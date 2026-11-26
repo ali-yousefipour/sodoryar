@@ -194,6 +194,8 @@ function require_admin(): void {
 }
 function permission_catalog(): array {
     return [
+        'expenses.view'=>'مشاهده هزینه‌ها', 'expenses.create'=>'ثبت هزینه',
+        'expenses.export'=>'خروجی هزینه‌ها',
         'customers.view'=>'مشاهده تاکسیرانان', 'customers.create'=>'ثبت تاکسیران',
         'services.view'=>'مشاهده خدمات', 'invoices.view'=>'مشاهده فاکتورها',
         'invoices.create'=>'صدور فاکتور', 'reports.view'=>'گزارش‌های مالی',
@@ -245,7 +247,7 @@ function permission_groups(): array {
         'customers'=>'تاکسیرانان', 'services'=>'خدمات', 'invoices'=>'فاکتورها',
         'bills'=>'فیش‌ها و قبوض', 'reports'=>'گزارش‌های مالی', 'activity'=>'گزارش فعالیت‌ها',
         'commissions'=>'پورسانت', 'pos'=>'کارتخوان‌ها', 'cashbox'=>'صندوق و تسویه', 'periods'=>'دوره مالی', 'users'=>'کاربران',
-        'roles'=>'مدیریت نقش‌ها'
+        'roles'=>'مدیریت نقش‌ها', 'expenses'=>'هزینه‌ها'
     ];
     $groups=[];
     foreach(permission_catalog() as $key=>$label) {
