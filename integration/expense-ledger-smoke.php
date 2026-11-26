@@ -193,3 +193,18 @@ try {
     integration_assert((int)invoice_payment_report($companyA,$branchFilter)['summary']['cash_paid']===100,'All branches filter bypassed operator branch assignment');
 } finally {db()->rollBack();$_SESSION['user']['role']='company_admin';}
 echo "PASS: issuing versus collecting branch reports, actual receipt totals and operator branch isolation.\n";
+
+$guardBranch=insert_fixture('INSERT INTO branches(company_id,branch_number,branch_code,name) VALUES(?,?,?,?)',[$companyA,890,'890','CI revoked cash branch']);
+$guardRegister=insert_fixture('INSERT INTO cash_registers(company_id,branch_id,name) VALUES(?,?,?)',[$companyA,$guardBranch,'CI revoked register']);
+$guardShift=insert_fixture('INSERT INTO cash_shifts(company_id,register_id,operator_id,opening_cash,started_at) VALUES(?,?,?,?,NOW())',[$companyA,$guardRegister,$userA,50]);
+query('INSERT INTO user_branch_assignments(company_id,user_id,branch_id,is_active,is_default) VALUES(?,?,?,1,0)',[$companyA,$userA,$guardBranch]);
+$_SESSION['user']['role']='operator';
+expense_expect_blocked(fn()=>cashbox_add_adjustment($companyA,$guardShift,$userA,'out',51,'CI too much cash'),'Manual cash adjustment overdrew the shift');
+cashbox_add_adjustment($companyA,$guardShift,$userA,'in',100,'CI actual cash in');
+integration_assert(cashbox_expected_cash($companyA,$guardShift)===150,'Valid manual cash entry was lost');
+query('UPDATE user_branch_assignments SET is_active=0 WHERE company_id=? AND user_id=? AND branch_id=?',[$companyA,$userA,$guardBranch]);
+expense_expect_blocked(fn()=>cashbox_add_adjustment($companyA,$guardShift,$userA,'out',1,'CI revoked access'),'Revoked branch retained manual cash access');
+expense_expect_blocked(fn()=>cashbox_close_shift($companyA,$guardShift,$userA,150,'CI revoked closure'),'Revoked branch retained shift close access');
+integration_assert(cashbox_expected_cash($companyA,$guardShift)===150 && query('SELECT status FROM cash_shifts WHERE id=?',[$guardShift])->fetchColumn()==='open','Rejected revoked-branch mutation changed cash or shift');
+$_SESSION['user']['role']='company_admin';
+echo "PASS: manual cash overdraft rejection and revoked-branch mutation/close denial with unchanged balance.\n";

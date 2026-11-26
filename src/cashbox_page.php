@@ -83,7 +83,7 @@ function render_cashbox(int $tenant): void {
     $list=query('SELECT s.*,r.name register_name,u.full_name operator_name
        FROM cash_shifts s JOIN cash_registers r ON r.id=s.register_id AND r.company_id=s.company_id
        JOIN users u ON u.id=s.operator_id AND u.company_id=s.company_id
-       WHERE s.company_id=?'.($own?' AND s.operator_id=?':'').' ORDER BY s.id DESC LIMIT 30',
+       WHERE s.company_id=?'.($own?' AND s.operator_id=?':'').report_branch_sql($tenant,'r.branch_id').' ORDER BY s.id DESC LIMIT 30',
        $own?[$tenant,$actor]:[$tenant])->fetchAll();
     echo '<section class="card"><h2>شیفت‌ها و وضعیت تسویه</h2>';
     if(!$list) echo '<p class="muted">هنوز شیفتی ثبت نشده است.</p>';
