@@ -1,5 +1,12 @@
 <?php
 declare(strict_types=1);
+
+/** Defaults for a new company, in its creation transaction; never changes existing categories. */
+function expense_initialize_categories(int $tenant): void {
+    if(!db()->inTransaction())throw new LogicException('Category provisioning requires a transaction.');
+    $defaults=['خرید ملزومات مصرفی'=>'expense','پذیرایی و مواد غذایی'=>'expense','لوازم اداری'=>'expense','تعمیرات و نگهداری'=>'expense','تجهیزات سرمایه‌ای'=>'asset','خدمات'=>'expense','حمل‌ونقل'=>'expense','آب، برق، گاز و تلفن'=>'expense','اینترنت و ارتباطات'=>'expense','اجاره'=>'expense','سایر هزینه‌ها'=>'expense','موجودی کالا'=>'inventory','پیش‌پرداخت'=>'prepayment'];
+    foreach($defaults as $name=>$classification)query('INSERT INTO expense_categories(company_id,name,classification) SELECT ?,?,? WHERE NOT EXISTS(SELECT 1 FROM expense_categories WHERE company_id=? AND name=?)',[$tenant,$name,$classification,$tenant,$name]);
+}
 function expenses_ready(): bool {
     if(!branches_ready() || (int)query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('expenses','expense_items','expense_payments','expense_categories','expense_events','company_bank_accounts')")->fetchColumn()!==6)return false;
     // Another development branch uses the same table names with an incompatible schema.

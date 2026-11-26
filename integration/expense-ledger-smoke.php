@@ -160,3 +160,19 @@ try {
     expense_expect_blocked(fn()=>cashbox_expected_cash($companyA,$hugeShift),'Unrepresentable cash balance was silently truncated');
 } finally {db()->rollBack();}
 echo "PASS: exact cash balance with gross turnover above PHP_INT_MAX and explicit net overflow rejection.\n";
+
+require_once $root.'/src/company_resources.php';
+db()->beginTransaction();
+try {
+    $newTenant=insert_fixture('INSERT INTO companies(name,slug) VALUES(?,?)',['CI fresh company','ci-fresh-'.bin2hex(random_bytes(5))]);
+    company_initialize_branches($newTenant);company_initialize_branches($newTenant);
+    $newUser=insert_fixture('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$newTenant,'fresh-'.bin2hex(random_bytes(5)),password_hash('disposable password',PASSWORD_DEFAULT),'CI fresh user','operator']);
+    company_assign_new_user_branch($newTenant,$newUser);
+    expense_initialize_categories($newTenant);expense_initialize_categories($newTenant);
+    integration_assert((int)query('SELECT COUNT(*) FROM branches WHERE company_id=?',[$newTenant])->fetchColumn()===1,'New company has duplicate or missing central branch');
+    integration_assert((int)query('SELECT COUNT(*) FROM cash_registers WHERE company_id=?',[$newTenant])->fetchColumn()===1,'New company has duplicate or missing register');
+    integration_assert((int)query('SELECT COUNT(*) FROM expense_categories WHERE company_id=?',[$newTenant])->fetchColumn()===13,'New company default categories are missing or duplicated');
+    integration_assert((int)query('SELECT COUNT(*) FROM user_branch_assignments WHERE company_id=? AND user_id=? AND is_active=1 AND is_default=1',[$newTenant,$newUser])->fetchColumn()===1,'New user lacks active default branch');
+    expense_expect_blocked(fn()=>company_assign_new_user_branch($companyA,$newUser),'New user provisioning accepted cross-company assignment');
+} finally {db()->rollBack();}
+echo "PASS: atomic new-company central branch/register/category provisioning and new-user branch isolation.\n";
