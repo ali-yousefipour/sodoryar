@@ -8,7 +8,8 @@ function render_expense_financial_actions(int $tenant,array $x): void {
         return;
     }
     $id=(int)$x['id'];$branch=(int)$x['branch_id'];$actor=(int)user()['id'];
-    $approved=$x['approval_status']==='approved';
+    $correction=function_exists('expense_correction_row')?expense_correction_row($tenant,$id):null;
+    $approved=$x['approval_status']==='approved'&&!$correction;
     $due=$approved?expense_employee_due($tenant,$id):0;
     $settlements=query('SELECT s.*,a.title account_title,r.name register_name FROM expense_settlements s LEFT JOIN company_bank_accounts a ON a.id=s.account_id AND a.company_id=s.company_id LEFT JOIN cash_shifts sh ON sh.id=s.cash_shift_id AND sh.company_id=s.company_id LEFT JOIN cash_registers r ON r.id=sh.register_id AND r.company_id=sh.company_id WHERE s.company_id=? AND s.expense_id=? ORDER BY s.id',[$tenant,$id])->fetchAll();
     ?>
@@ -30,14 +31,19 @@ function render_expense_financial_actions(int $tenant,array $x): void {
         <?php endforeach;endif;?></section>
     <?php endif;?>
     <?php render_expense_returns($tenant,$x); ?>
-    <?php if(expense_manager()&&in_array($x['approval_status'],['approved','pending','rejected','draft'],true)):?>
+    <?php if(!$correction&&expense_manager()&&in_array($x['approval_status'],['approved','pending','rejected','draft'],true)):?>
     <section class="card"><h2>ابطال سند هزینه</h2>
     <details><summary>ابطال با حفظ تاریخچه</summary><p>ابتدا تمام پرداخت‌های نقدی، بانکی و تسویه کارکنان را با تأیید دریافت واقعی وجه برگشت دهید. ابطال سند هیچ وجهی به صندوق یا بانک اضافه نمی‌کند.</p>
     <form method="post" action="?page=expenses&amp;detail=<?=e($id)?>" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="void"><input type="hidden" name="id" value="<?=e($id)?>">
     <label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label>
     <label><input type="checkbox" required> ابطال و آثار مالی آن را تأیید می‌کنم.</label><button type="submit">ثبت ابطال</button></form></details></section>
     <?php endif;?>
+    <?php if($correction):?>
+    <section class="card" id="expenseCorrection"><h2>سند اصلاحی ابطال هزینه <?=fa_digits($correction['id'])?></h2><p>مرجع: هزینه <?=fa_digits($id)?> | تاریخ اصلاحیه: <?=e(jalali_datetime($correction['correction_date'],true))?> | مبلغ اصلاح: <?=money_toman('-'.$correction['amount'])?></p><p><?=e($correction['reason'])?></p><p>اصل هزینه در تاریخ و دوره قبلی محفوظ است؛ اصلاحیه در تاریخ خود محاسبه می‌شود. این سند گردش وجه جدیدی ایجاد نمی‌کند و بدهی باقی‌مانده این هزینه صفر است.</p></section>
+    <?php elseif($approved&&expense_manager()&&function_exists('expense_corrections_ready')&&expense_corrections_ready()):?>
+    <section class="card"><details><summary>ثبت سند اصلاحی ابطال در دوره باز</summary><p>برای حفظ گزارش دوره قبلی، اصل سند تغییر نمی‌کند و مبلغ آن با سند جدا در تاریخ امروز اصلاح می‌شود. ابتدا تمام پرداخت‌های شرکت و تسویه‌های کارکنان باید واقعاً برگشت داده شوند. برای ثبت هزینه جایگزین، سند جدید ثبت کنید.</p><form method="post" action="?page=expenses&amp;detail=<?=e($id)?>" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="correct"><input type="hidden" name="id" value="<?=e($id)?>"><input type="hidden" name="request_key" value="<?=e(bin2hex(random_bytes(32)))?>"><label>دلیل سند اصلاحی<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><label><input type="checkbox" required> حفظ اصل سند و ثبت اصلاحیه در دوره باز را تأیید می‌کنم.</label><button>ثبت سند اصلاحی</button></form></details></section>
+    <?php endif;?>
     <section class="card"><h2>تاریخچه سند</h2><div class="table-wrap"><table><thead><tr><th>تاریخ</th><th>رویداد</th><th>کاربر</th><th>توضیح</th></tr></thead><tbody>
-    <?php $labels=['submitted'=>'ثبت هزینه','approved'=>'تأیید','rejected'=>'رد','settled'=>'تسویه','void'=>'ابطال'];foreach(query('SELECT ev.*,u.full_name FROM expense_events ev LEFT JOIN users u ON u.id=ev.actor_id WHERE ev.company_id=? AND ev.expense_id=? ORDER BY ev.id',[$tenant,$id])->fetchAll() as $ev):?><tr><td><?=e(jalali_datetime($ev['created_at']))?></td><td><?=e($labels[$ev['event_type']]??$ev['event_type'])?></td><td><?=e($ev['full_name']??'—')?></td><td><?=e($ev['reason']??'—')?></td></tr><?php endforeach;?></tbody></table></div></section>
+    <?php $labels=['submitted'=>'ثبت هزینه','approved'=>'تأیید','rejected'=>'رد','settled'=>'تسویه','void'=>'ابطال','correction.void'=>'سند اصلاحی ابطال'];foreach(query('SELECT ev.*,u.full_name FROM expense_events ev LEFT JOIN users u ON u.id=ev.actor_id WHERE ev.company_id=? AND ev.expense_id=? ORDER BY ev.id',[$tenant,$id])->fetchAll() as $ev):?><tr><td><?=e(jalali_datetime($ev['created_at']))?></td><td><?=e($labels[$ev['event_type']]??$ev['event_type'])?></td><td><?=e($ev['full_name']??'—')?></td><td><?=e($ev['reason']??'—')?></td></tr><?php endforeach;?></tbody></table></div></section>
     <?php
 }

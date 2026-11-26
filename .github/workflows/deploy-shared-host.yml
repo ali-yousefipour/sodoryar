@@ -312,7 +312,7 @@ jobs:
           set -euo pipefail
           # Read-only FTP readback: verify the critical private source that
           # the public PHP router uses; never expose PHP source over HTTPS.
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php expense_corrections.php expense_financial_forms.php company_resources.php branches.php; do
             test -s "deploy-payload/_private/src/$file"
           done
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
@@ -337,12 +337,16 @@ jobs:
           get "_private/src/expense_report_center.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_report_center.php"
           get "_private/src/expense_pdf.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_pdf.php"
           get "_private/src/finance_schema_health.php" -o "$RUNNER_TEMP/sodoryar-readback-finance_schema_health.php"
+          get "_private/src/expense_corrections.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_corrections.php"
+          get "_private/src/expense_financial_forms.php" -o "$RUNNER_TEMP/sodoryar-readback-expense_financial_forms.php"
+          get "_private/src/company_resources.php" -o "$RUNNER_TEMP/sodoryar-readback-company_resources.php"
+          get "_private/src/branches.php" -o "$RUNNER_TEMP/sodoryar-readback-branches.php"
           get "_private/vendor/autoload.php" -o "$RUNNER_TEMP/sodoryar-readback-autoload.php"
           get "_private/src/fonts/Vazirmatn-Regular.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Regular.ttf"
           get "_private/src/fonts/Vazirmatn-Bold.ttf" -o "$RUNNER_TEMP/sodoryar-readback-Vazirmatn-Bold.ttf"
           bye
           EOF
-          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php; do
+          for file in bootstrap.php modules.php localization.php reporting.php invoice_numbers.php cashbox.php expenses.php expenses_page.php expense_workflow.php expense_settlement.php expense_returns.php expense_reports.php expense_report_center.php expense_pdf.php finance_schema_health.php expense_corrections.php expense_financial_forms.php company_resources.php branches.php; do
             expected="$(sha256sum "deploy-payload/_private/src/$file" | cut -d' ' -f1)"
             actual="$(sha256sum "$RUNNER_TEMP/sodoryar-readback-$file" | cut -d' ' -f1)"
             if [[ "$expected" != "$actual" ]]; then

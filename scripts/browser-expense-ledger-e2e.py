@@ -123,6 +123,22 @@ def main():
         page.wait_for_function('window.__expensePrinted === true')
         expect(page.get_by_role('link', name='receipt.png', exact=True)).to_be_visible()
         expect(page.get_by_text('CI corrected draft with receipt', exact=False).first).to_be_visible()
+        # A separate correction preserves the approved document and its private receipt.
+        review = page.locator('form').filter(has=page.locator('input[name="action"][value="review"]'))
+        review.locator('input[name="reason"]').fill('CI approve before correction')
+        review.locator('button[value="approved"]').click()
+        page.goto(f'{ORIGIN}/?page=expenses&detail={draft_detail}')
+        correction = page.locator('form').filter(has=page.locator('input[name="action"][value="correct"]'))
+        correction.locator('..').locator('summary').click()
+        correction.locator('textarea[name="reason"]').fill('CI current-period cancelling correction')
+        correction.locator('input[type="checkbox"]').check()
+        correction.get_by_role('button', name='ثبت سند اصلاحی', exact=True).click()
+        page.goto(f'{ORIGIN}/?page=expenses&detail={draft_detail}')
+        expect(page.locator('#expenseCorrection')).to_contain_text('۱۱۵٬۰۰۰')
+        expect(page.get_by_text('ابطال با سند اصلاحی', exact=True)).to_be_visible()
+        expect(page.get_by_role('link', name='receipt.png', exact=True)).to_be_visible()
+        assert page.locator('input[name="action"][value="correct"]').count() == 0
+        assert page.locator('input[name="action"][value="settle"]').count() == 0
         # Every report exports the same complete totals shown in its filtered UI.
         page.goto(f'{ORIGIN}/?page=expense_reports')
         report_types = page.locator('select[name="report"] option').evaluate_all('(options) => options.map(o => o.value)')
@@ -160,7 +176,7 @@ def main():
         assert viewer.goto(f'{ORIGIN}/?page=expenses').status == 200
         assert viewer.locator('#expenseOpen').count() == 0, 'View-only permission exposed creation UI'
         viewer_csrf = viewer.locator('input[name="csrf"]').first.input_value()
-        for action in ('create', 'settle', 'return', 'void', 'category', 'policy', 'approver'):
+        for action in ('create', 'settle', 'return', 'void', 'correct', 'category', 'policy', 'approver'):
             denied = viewer.request.post(f'{ORIGIN}/?page=expenses', form={'csrf': viewer_csrf, 'action': action, 'id': detail})
             assert denied.status == 403, ('view-only mutation', action, denied.status)
         for url in ('?page=expenses&export=xlsx', '?page=expense_reports&export=xlsx', '?page=expense_reports&export=pdf'):

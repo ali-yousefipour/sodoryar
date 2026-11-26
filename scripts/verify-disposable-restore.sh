@@ -36,7 +36,7 @@ restored_total="$("$client" --host="$DB_HOST" --port="${DB_PORT:-3306}" --user="
 original_paid="$("$client" --host="$DB_HOST" --port="${DB_PORT:-3306}" --user="${DB_USER:-root}" -Nse 'SELECT COALESCE(SUM(amount),0) FROM sodoryar_integration_test.invoice_payments')"
 restored_paid="$("$client" --host="$DB_HOST" --port="${DB_PORT:-3306}" --user="${DB_USER:-root}" -Nse 'SELECT COALESCE(SUM(amount),0) FROM sodoryar_restore_verify.invoice_payments')"
 [[ "$original_paid" == "$restored_paid" ]] || { echo 'Receipt amount mismatch after restore' >&2; exit 1; }
-for financial_table in expenses expense_payments expense_settlements expense_returns; do
+for financial_table in expenses expense_payments expense_settlements expense_returns expense_corrections; do
   amount_column=amount
   if [[ "$financial_table" == expenses ]]; then amount_column=total_amount; fi
   original_amount="$("$client" --host="$DB_HOST" --port="${DB_PORT:-3306}" --user="${DB_USER:-root}" -Nse "SELECT COALESCE(SUM($amount_column),0) FROM sodoryar_integration_test.$financial_table")"
