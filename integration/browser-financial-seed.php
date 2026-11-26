@@ -36,3 +36,11 @@ foreach(['ci_operator_a','ci_operator_b'] as $username){
     $uid=(int)query('SELECT id FROM users WHERE username=?',[$username])->fetchColumn();
     foreach(['expenses.view','expenses.create'] as $permission)query('INSERT IGNORE INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$uid,$permission]);
 }
+$permissionTenant=(int)query("SELECT id FROM companies WHERE slug='ci-tenant-a'")->fetchColumn();
+$permissionBranch=(int)query('SELECT id FROM branches WHERE company_id=? AND branch_number=1',[$permissionTenant])->fetchColumn();
+foreach(['ci_expense_viewer','ci_expense_none'] as $name){
+    query('INSERT INTO users(company_id,username,password_hash,full_name,role) VALUES(?,?,?,?,?)',[$permissionTenant,$name,$hash,$name,'operator']);
+    $id=(int)db()->lastInsertId();
+    query('INSERT INTO user_branch_assignments(company_id,user_id,branch_id,is_default,is_active) VALUES(?,?,?,1,1)',[$permissionTenant,$id,$permissionBranch]);
+    if($name==='ci_expense_viewer')query('INSERT INTO user_permissions(user_id,permission_key) VALUES(?,?)',[$id,'expenses.view']);
+}

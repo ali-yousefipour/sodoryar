@@ -3,6 +3,7 @@ declare(strict_types=1);
 function expense_dashboard(int $tenant,string $monthStart,string $today): void {
     if(!expense_manager()||!expenses_ready())return;
     try{
+        foreach(['expense_branch','expense_from','expense_to'] as $key)if(isset($_GET[$key])&&!is_string($_GET[$key]))throw new RuntimeException('ساختار فیلتر داشبورد نامعتبر است.');
         $input=['report'=>'daily','branch'=>(string)((int)($_GET['expense_branch']??0)?:''),'from'=>(string)($_GET['expense_from']??jalali_datetime($monthStart,true)),'to'=>(string)($_GET['expense_to']??jalali_datetime($today,true))];
         $filter=expense_center_filters($input);$branches=branch_choices($tenant,(int)user()['id']);
         if($filter['branch']!=='')branch_require($tenant,(int)user()['id'],$filter['branch']);

@@ -18,7 +18,9 @@ function expense_cash_entry(int $tenant,int $branch,int $shift,int $amount,strin
     if(!$s||($owner!==null&&(int)$s['operator_id']!==$owner))throw new RuntimeException('صندوق فعال و مجاز نیست.');
     if($direction==='out'&&$amount>cashbox_expected_cash($tenant,$shift))throw new RuntimeException('موجودی نقدی کافی نیست.');
     query('INSERT INTO cash_shift_adjustments(company_id,shift_id,direction,amount,reason,created_by) VALUES(?,?,?,?,?,?)',[$tenant,$shift,$direction,$amount,$reason,(int)user()['id']]);
-    return (int)db()->lastInsertId();
+    $adjustmentId=(int)db()->lastInsertId();
+    cashbox_expected_cash($tenant,$shift);
+    return $adjustmentId;
 }
 function expense_settle(int $id,array $input): void {
     require_admin();if(!expense_extensions_ready())throw new RuntimeException('مهاجرت ۰۲۷ لازم است.');

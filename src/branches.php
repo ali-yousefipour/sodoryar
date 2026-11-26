@@ -23,7 +23,10 @@ function branch_choices(int $tenant,int $actor): array {
 function branch_require(int $tenant,int $actor,mixed $requested): int {
     $id=filter_var($requested,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     foreach(branch_choices($tenant,$actor) as $branch) {
-        if ($id!==false && (int)$branch['id']===$id) return $id;
+        if ($id!==false && (int)$branch['id']===$id) {
+            if(db()->inTransaction()&&!query('SELECT id FROM branches WHERE id=? AND company_id=? AND is_active=1 FOR UPDATE',[$id,$tenant])->fetch())break;
+            return $id;
+        }
     }
     throw new RuntimeException('شعبه انتخاب‌شده فعال یا مجاز نیست.');
 }
