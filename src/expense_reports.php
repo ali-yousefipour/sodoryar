@@ -5,20 +5,28 @@ function expense_dashboard(int $tenant,string $monthStart,string $today): void {
     try{
         foreach(['expense_branch','expense_from','expense_to'] as $key)if(isset($_GET[$key])&&!is_string($_GET[$key]))throw new RuntimeException('ساختار فیلتر داشبورد نامعتبر است.');
         $input=['report'=>'daily','branch'=>(string)((int)($_GET['expense_branch']??0)?:''),'from'=>(string)($_GET['expense_from']??jalali_datetime($monthStart,true)),'to'=>(string)($_GET['expense_to']??jalali_datetime($today,true))];
-        $filter=expense_center_filters($input);$branches=branch_choices($tenant,(int)user()['id']);
-        if($filter['branch']!=='')branch_require($tenant,(int)user()['id'],$filter['branch']);
+        $filter=expense_center_filters($input);$branches=report_branch_choices($tenant);
+        if($filter['branch']!==''&&!in_array((int)$filter['branch'],array_map('intval',array_column($branches,'id')),true))throw new RuntimeException('شعبه گزارش مجاز نیست.');
         [$where,$args]=expense_center_where($tenant,$filter);
         $summary=query("SELECT COUNT(*) documents,COUNT(DISTINCT branch_id) branches,
           COALESCE(SUM(approval_status='pending'),0) pending,COALESCE(SUM(approval_status='rejected'),0) rejected,COALESCE(SUM(approval_status='void'),0) voided,
           COALESCE(SUM(CASE WHEN approval_status='approved' AND classification='expense' THEN total_amount ELSE 0 END),0) cost FROM expenses e WHERE ".$where,$args)->fetch();
-        $cost=expense_report_add(0,$summary['cost']);
+        $cost=function_exists('expense_cost_total')?expense_cost_total($tenant,$filter):expense_report_add(0,$summary['cost']);
+        if(function_exists('expense_corrections_ready')&&expense_corrections_ready()){
+            [$cxWhere,$cxArgs]=expense_center_where($tenant,$filter,'cx.correction_date');
+            $summary['voided']+=(int)query('SELECT COUNT(*) FROM expense_corrections cx JOIN expenses e ON e.id=cx.expense_id AND e.company_id=cx.company_id WHERE '.$cxWhere,$cxArgs)->fetchColumn();
+        }
         [$scope,$scopeArgs]=expense_scope($tenant);if($filter['branch']!==''){$scope.=' AND e.branch_id=?';$scopeArgs[]=$filter['branch'];}
         $calendar=query("SELECT COALESCE(SUM(CASE WHEN expense_date=? THEN total_amount ELSE 0 END),0) today,
           COALESCE(SUM(CASE WHEN expense_date BETWEEN ? AND ? THEN total_amount ELSE 0 END),0) month FROM expenses e WHERE ".$scope." AND approval_status='approved' AND classification='expense'",array_merge([$today,$monthStart,$today],$scopeArgs))->fetch();
+        if(function_exists('expense_cost_total')){
+            $calendar['today']=expense_cost_total($tenant,expense_center_filters(array_replace($input,['from'=>jalali_datetime($today,true),'to'=>jalali_datetime($today,true)])));
+            $calendar['month']=expense_cost_total($tenant,expense_center_filters(array_replace($input,['from'=>jalali_datetime($monthStart,true),'to'=>jalali_datetime($today,true)])));
+        }
         $length=(new DateTimeImmutable($filter['from_iso']))->diff(new DateTimeImmutable($filter['to_iso']))->days+1;
         $previousTo=(new DateTimeImmutable($filter['from_iso']))->modify('-1 day');$previousFrom=$previousTo->modify('-'.($length-1).' days');
         $previous=query("SELECT COALESCE(SUM(total_amount),0) FROM expenses e WHERE ".$scope." AND approval_status='approved' AND classification='expense' AND expense_date BETWEEN ? AND ?",array_merge($scopeArgs,[$previousFrom->format('Y-m-d'),$previousTo->format('Y-m-d')]))->fetchColumn();
-        $previous=expense_report_add(0,$previous);$difference=expense_report_add($cost,-$previous);
+        $previous=function_exists('expense_cost_total')?expense_cost_total($tenant,expense_center_filters(array_replace($input,['from'=>jalali_datetime($previousFrom->format('Y-m-d'),true),'to'=>jalali_datetime($previousTo->format('Y-m-d'),true)]))):expense_report_add(0,$previous);$difference=expense_report_add($cost,-$previous);
         $payments=[];
         foreach(['cash','bank','personal'] as $method){
             [$paymentWhere,$paymentArgs]=expense_center_where($tenant,$filter,'DATE(p.posted_at)');
@@ -34,7 +42,7 @@ function expense_dashboard(int $tenant,string $monthStart,string $today): void {
             ['هزینه‌های امروز',money_toman($calendar['today']),$link('daily',['from'=>jalali_datetime($today,true),'to'=>jalali_datetime($today,true)]),'هزینه جاری تأییدشده'],
             ['هزینه‌های ماه جاری',money_toman($calendar['month']),$link('monthly',['from'=>jalali_datetime($monthStart,true),'to'=>jalali_datetime($today,true)]),'بر مبنای ماه شمسی'],
             ['هزینه‌های دوره انتخاب‌شده',money_toman($cost),$link('daily'),'هزینه جاری تأییدشده'],
-            ['هزینه‌های شعب',money_toman($cost),$link('branches'),fa_digits($summary['branches']).' شعبه دارای سند در بازه'],
+            ['هزینه‌های شعب',money_toman($cost),$link('branches'),fa_digits($summary['branches']).' شعبه دارای سند اولیه در بازه'],
             ['پرداخت نقدی اسناد',money_toman($payments['cash']),$link('cash',['status'=>'approved']),'بر مبنای تاریخ قطعی‌شدن پرداخت'],
             ['پرداخت بانکی اسناد',money_toman($payments['bank']),$link('bank',['status'=>'approved']),'گردش مستند؛ نه مانده بانکی'],
             ['پرداخت شخصی کارکنان',money_toman($payments['personal']),$link('personal',['status'=>'approved']),'پرداخت شخصی، خروج وجه شرکت نیست'],
@@ -58,7 +66,7 @@ function expense_export(int $tenant): never {
     require_permission('expenses.export');
     $rows=expense_rows($tenant,10001);
     if(count($rows)>10000)throw new RuntimeException('بازه گزارش را محدود کنید.');
-    $data=array_map(static fn($x)=>[(string)$x['id'],jalali_datetime($x['expense_date'],true),$x['branch_name'],$x['title'],$x['category_name'],$x['full_name'],expense_status($x['approval_status']),$x['total_amount']],$rows);
+    $data=array_map(static fn($x)=>[(string)$x['id'],jalali_datetime($x['expense_date'],true),$x['branch_name'],$x['title'],$x['category_name'],$x['full_name'],expense_status($x['display_status']??$x['approval_status']),$x['total_amount']],$rows);
     export_excel_xlsx('sodoryar-expenses',['شماره سند','تاریخ','شعبه','عنوان','دسته‌بندی','ثبت‌کننده','وضعیت','مبلغ (تومان)'],$data,[7]);
     exit;
 }

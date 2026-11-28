@@ -28,6 +28,7 @@ require __DIR__ . '/_private/src/expense_settlement.php';
 require __DIR__ . '/_private/src/expense_returns.php';
 require __DIR__ . '/_private/src/expense_financial_forms.php';
 require __DIR__ . '/_private/src/expense_reports.php';
+require __DIR__ . '/_private/src/expense_corrections.php';
 require __DIR__ . '/_private/src/expense_report_center.php';
 require __DIR__ . '/_private/src/expense_pdf.php';
 require __DIR__ . '/_private/src/expenses_page.php';

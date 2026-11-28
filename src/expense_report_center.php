@@ -33,14 +33,14 @@ function expense_center_filters(array $input): array {
     return $filter;
 }
 function expense_center_where(int $tenant,array $filter,string $date='e.expense_date'): array {
-    if(!in_array($date,['e.expense_date','DATE(p.posted_at)','DATE(s.created_at)','r.return_date'],true))throw new LogicException('Unexpected report date column');
+    if(!in_array($date,['e.expense_date','DATE(p.posted_at)','DATE(s.created_at)','r.return_date','cx.correction_date'],true))throw new LogicException('Unexpected report date column');
     [$sql,$args]=expense_scope($tenant);
     foreach(['branch'=>'e.branch_id','user_id'=>'e.created_by','category_id'=>'e.category_id','status'=>'e.approval_status'] as $key=>$column)
         if($filter[$key]!==''){$sql.=' AND '.$column.'=?';$args[]=$filter[$key];}
     foreach(['from_iso'=>[$date,'>='],'to_iso'=>[$date,'<='],'minimum'=>['e.total_amount','>='],'maximum'=>['e.total_amount','<=']] as $key=>[$column,$op])
         if($filter[$key]!==''){$sql.=' AND '.$column.$op.'?';$args[]=$filter[$key];}
     if($filter['q']!==''){$sql.=' AND (e.title LIKE ? OR CAST(e.id AS CHAR) LIKE ?)';$args[]='%'.$filter['q'].'%';$args[]='%'.$filter['q'].'%';}
-    if($date==='e.expense_date'&&$filter['method']!==''){$sql.=' AND EXISTS(SELECT 1 FROM expense_payments fp WHERE fp.company_id=e.company_id AND fp.expense_id=e.id AND fp.method=?)';$args[]=$filter['method'];}
+    if(in_array($date,['e.expense_date','cx.correction_date'],true)&&$filter['method']!==''){$sql.=' AND EXISTS(SELECT 1 FROM expense_payments fp WHERE fp.company_id=e.company_id AND fp.expense_id=e.id AND fp.method=?)';$args[]=$filter['method'];}
     return [$sql,$args];
 }
 function expense_report_add(int $a,int|string $b): int {
@@ -95,11 +95,23 @@ function expense_center_read_rows(int $tenant,array $filter): array {
             if($filter['status']==='')$where.=" AND e.approval_status='approved'";
             $rows=query('SELECT '.$names.',e.expense_date date,it.title item,it.description,it.quantity qty,it.unit,it.unit_price,it.line_total amount'.$joins.' JOIN expense_items it ON it.expense_id=e.id AND it.company_id=e.company_id WHERE '.$where.' ORDER BY e.expense_date DESC,it.id DESC LIMIT 10001',$args)->fetchAll();
         }elseif($type==='liabilities'){
+            if(function_exists('expense_corrections_ready')&&expense_corrections_ready())$where.=' AND NOT EXISTS(SELECT 1 FROM expense_corrections cx WHERE cx.company_id=e.company_id AND cx.expense_id=e.id)';
             $returned=expense_returns_ready()?"COALESCE((SELECT SUM(rf.amount) FROM expense_returns rf WHERE rf.company_id=e.company_id AND rf.expense_id=e.id AND rf.settlement_id IS NOT NULL),0)":'0';
             $due="COALESCE((SELECT SUM(ep.amount) FROM expense_payments ep WHERE ep.company_id=e.company_id AND ep.expense_id=e.id AND ep.method='personal' AND ep.posted_at IS NOT NULL),0)-COALESCE((SELECT SUM(es.amount) FROM expense_settlements es WHERE es.company_id=e.company_id AND es.expense_id=e.id),0)+".$returned;
             $rows=query('SELECT '.$names.',e.expense_date date,e.approval_status status,('.$due.') amount'.$joins.' WHERE '.$where." AND e.approval_status='approved' HAVING amount>0 ORDER BY e.expense_date DESC,e.id DESC LIMIT 10001",$args)->fetchAll();
         }else{
             $documents=query('SELECT '.$names.',e.expense_date date,e.total_amount amount,e.approval_status status,e.classification,e.branch_id,e.category_id,e.created_by'.$joins.' WHERE '.$where.' ORDER BY e.expense_date DESC,e.id DESC LIMIT 10001',$args)->fetchAll();
+            $grouped=in_array($type,['daily','monthly','branches','categories','users','comparison','performance'],true);
+            if(function_exists('expense_corrections_ready')&&expense_corrections_ready()&&(($grouped&&in_array($filter['status'],['','approved'],true))||($type==='void'&&in_array($filter['status'],['','void'],true)))){
+                $correctionFilter=$filter;if($type==='void')$correctionFilter['status']='';
+                [$correctionWhere,$correctionArgs]=expense_center_where($tenant,$correctionFilter,'cx.correction_date');
+                $corrections=query('SELECT '.$names.",cx.correction_date date,cx.amount,cx.id correction_id,e.approval_status status,e.classification,e.branch_id,e.category_id,e.created_by".$joins.' JOIN expense_corrections cx ON cx.expense_id=e.id AND cx.company_id=e.company_id WHERE '.$correctionWhere." AND e.approval_status='approved' ORDER BY cx.id DESC LIMIT 10001",$correctionArgs)->fetchAll();
+                foreach($corrections as $correction){
+                    if($grouped)$correction['amount']='-'.$correction['amount'];
+                    else {$correction['status']='corrected';$correction['title']='اصلاحیه '.fa_digits($correction['correction_id']).' — '.$correction['title'];}
+                    $documents[]=$correction;
+                }
+            }
             if(count($documents)>10000)throw new RuntimeException('گزارش بیشتر از ۱۰٬۰۰۰ سند است؛ فیلتر را محدود کنید.');
             if(in_array($type,['daily','monthly','branches','categories','users','comparison','performance'],true)){
                 $groups=[];
@@ -107,7 +119,8 @@ function expense_center_read_rows(int $tenant,array $filter): array {
                     if($doc['status']!=='approved'||$doc['classification']!=='expense')continue;
                     $key=match($type){'daily'=>$doc['date'],'monthly'=>substr(ascii_digits(jalali_datetime($doc['date'],true)),0,7),'categories'=>(string)$doc['category_id'],'users'=>(string)$doc['created_by'],default=>(string)$doc['branch_id']};
                     if(!isset($groups[$key]))$groups[$key]=['date'=>$type==='monthly'?$key:$doc['date'],'branch'=>$doc['branch'],'category'=>$doc['category'],'user'=>$doc['user'],'qty'=>0,'amount'=>0,'sales'=>0];
-                    $groups[$key]['qty']++;$groups[$key]['amount']=expense_report_add($groups[$key]['amount'],$doc['amount']);
+                    if(!isset($doc['correction_id']))$groups[$key]['qty']++;
+                    $groups[$key]['amount']=expense_report_add($groups[$key]['amount'],$doc['amount']);
                 }
                 if(in_array($type,['comparison','performance'],true)){
                     require_permission('reports.view');
@@ -137,10 +150,10 @@ function expense_center_read_rows(int $tenant,array $filter): array {
 }
 function expense_center_columns(string $type): array {
     return match($type){
-        'daily','monthly'=>['date'=>'دوره شمسی','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
-        'branches'=>['branch'=>'شعبه','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
-        'categories'=>['category'=>'دسته‌بندی','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
-        'users'=>['user'=>'ثبت‌کننده','qty'=>'تعداد اسناد','amount'=>'هزینه جاری (تومان)'],
+        'daily','monthly'=>['date'=>'دوره شمسی','qty'=>'تعداد اسناد اولیه','amount'=>'هزینه جاری (تومان)'],
+        'branches'=>['branch'=>'شعبه','qty'=>'تعداد اسناد اولیه','amount'=>'هزینه جاری (تومان)'],
+        'categories'=>['category'=>'دسته‌بندی','qty'=>'تعداد اسناد اولیه','amount'=>'هزینه جاری (تومان)'],
+        'users'=>['user'=>'ثبت‌کننده','qty'=>'تعداد اسناد اولیه','amount'=>'هزینه جاری (تومان)'],
         'comparison','performance'=>['branch'=>'شعبه','sales'=>'فروش معتبر (تومان)','amount'=>'هزینه جاری (تومان)','performance'=>'فروش منهای هزینه جاری (تومان)'],
         'cash','bank','personal','settlements','returns','settlement_returns','movements'=>['date'=>'تاریخ گردش','document_id'=>'سند هزینه','entry_id'=>'شناسه گردش','branch'=>'شعبه','user'=>'ثبت‌کننده هزینه','title'=>'عنوان','kind'=>'نوع گردش','method'=>'روش','source'=>'حساب / صندوق','direction'=>'جهت','amount'=>'خروج خالص وجه (تومان)','reference'=>'مرجع'],
         'items'=>['date'=>'تاریخ','document_id'=>'سند','branch'=>'شعبه','item'=>'کالا / خدمت','description'=>'شرح','qty'=>'تعداد','unit'=>'واحد','unit_price'=>'قیمت واحد (تومان)','amount'=>'مبلغ ردیف (تومان)'],
@@ -203,7 +216,7 @@ function render_expense_report_center(int $tenant): void {
     $allColumns=expense_center_columns($filter['report']);$totals=expense_center_totals($rows,$columns);$context=expense_center_context($tenant,$filter);
     $pages=max(1,(int)ceil(count($rows)/$filter['size']));$page=min($pages,$filter['report_page']);$visible=isset($_GET['print'])?$rows:array_slice($rows,($page-1)*$filter['size'],$filter['size']);
     $printQuery=$_GET;$printQuery['print']='1';unset($printQuery['export']);$printUrl='?'.http_build_query($printQuery);
-    $branches=branch_choices($tenant,(int)user()['id']);$categories=query('SELECT id,name FROM expense_categories WHERE company_id=? ORDER BY name',[$tenant])->fetchAll();
+    $branches=report_branch_choices($tenant);$categories=query('SELECT id,name FROM expense_categories WHERE company_id=? ORDER BY name',[$tenant])->fetchAll();
     $users=query('SELECT id,full_name FROM users WHERE company_id=?'.(!expense_manager()?' AND id='.(int)user()['id']:'').' ORDER BY full_name',[$tenant])->fetchAll();
     ?>
     <section class="card"><div class="heading"><h1>گزارش‌های تخصصی هزینه‌ها</h1><a href="?page=expenses">ثبت و مدیریت هزینه</a></div>
@@ -222,6 +235,7 @@ function render_expense_report_center(int $tenant): void {
     <button>نمایش گزارش</button><?php if(can('expenses.export')):?><button name="export" value="xlsx">دریافت XLSX</button><button name="export" value="pdf">دریافت PDF</button><?php endif;?><a href="<?=e($printUrl)?>" target="_blank" rel="noopener">چاپ تمام نتایج</a></form></section>
     <section class="card expense-report-print"><h2><?=e($context['title'])?></h2><p><?=e($context['company'].' | '.$context['branch'].' | '.$context['period'])?></p>
     <p>تعداد نتایج: <?=fa_digits(count($rows))?>؛ صفحه <?=fa_digits($page)?> از <?=fa_digits($pages)?>. جمع پایین جدول، کل نتایج فیلترشده را پوشش می‌دهد.</p>
+    <p>اصلاحیه‌ها مبلغ هزینه را در تاریخ اصلاحیه تغییر می‌دهند؛ تعداد اسناد در گزارش‌های تجمیعی مربوط به هزینه‌های اولیه است.</p>
     <?php if(in_array($filter['report'],['comparison','performance'],true)):?><p>فروش معتبر منهای هزینه جاری ثبت‌شده، سود خالص حسابداری نیست. دارایی، موجودی و پیش‌پرداخت در هزینه جاری منظور نشده‌اند.</p><?php endif;?>
     <?php if(in_array($filter['report'],['movements','returns','settlement_returns'],true)):?><p>ورود وجه با مبلغ منفی و خروج وجه با مبلغ مثبت نمایش داده می‌شود. بازپرداخت کارکنان هزینه جدید نیست. مانده بانکی از این گزارش استنباط نمی‌شود.</p><?php endif;?>
     <div class="table-wrap"><?=expense_center_table($visible,$columns,$totals)?></div>

@@ -174,8 +174,8 @@ apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 apply_sql_fixture($root.'/database/migrations/022_financial_issue_reviews.sql');
 integration_assert(financial_issue_reviews_ready(),'Financial issue review journal failed to install');
 $health=sodoryar_finance_schema_checks();
-integration_assert(count($health)===14 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7
-    && count(array_filter($health,static fn($check)=>$check['installed']))<14,
+integration_assert(count($health)===15 && count(array_filter(array_slice($health,0,7),static fn($check)=>$check['installed']))===7
+    && count(array_filter($health,static fn($check)=>$check['installed']))<15,
     'Finance schema health must recognize all legacy stages without claiming later expense stages are installed');
 
 integration_assert(invoice_followup_ready(),'Invoice follow-up schema did not migrate');

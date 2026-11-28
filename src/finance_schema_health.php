@@ -18,6 +18,7 @@ function sodoryar_finance_schema_checks(): array {
         'تسویه و ابطال هزینه (۰۲۷)'=>['expense_settlements','expense_reversals'],
         'دریافت واقعی برگشت وجه (۰۲۸)'=>['expense_returns.request_hash','expense_returns.reference','expense_returns.return_date'],
         'گردش تأیید و پیوست خصوصی (۰۲۹)'=>['expense_policies','expense_branch_approvers','expense_mutation_requests','expense_attachments.content_hash','expenses.version','expenses.subtotal','expenses.extra_amount','expenses.discount_amount'],
+        'سند اصلاحی دوره باز (۰۳۰)'=>['expense_corrections.correction_date','expense_corrections.request_hash'],
     ];
     $tables=query('SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=DATABASE()')->fetchAll(PDO::FETCH_COLUMN);
     $known=array_fill_keys($tables,true);
