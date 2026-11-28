@@ -227,3 +227,11 @@ dialog.app-dialog.invoice-payment-edit-dialog{width:min(920px,calc(100vw - 32px)
 .invoice-payment-edit-dialog label,.invoice-payment-edit-dialog input,.invoice-payment-edit-dialog select,.invoice-payment-edit-dialog textarea{min-width:0;max-width:100%;box-sizing:border-box}
 .invoice-payment-edit-dialog .dialog-actions{position:sticky;bottom:0;background:var(--surface,#fff);padding:12px 0;display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:600px){dialog.app-dialog.invoice-payment-edit-dialog{padding:14px}.invoice-payment-edit-dialog .invoice-payment-row,.invoice-payment-edit-dialog .payment-pos-fields{grid-template-columns:minmax(0,1fr)}}
+
+/* Unified invoice editor: one dialog for date changes and receipt corrections. */
+.invoice-payment-edit-dialog .invoice-edit-section{border:1px solid var(--line,#e3eaed);border-radius:14px;padding:16px;margin-block:14px;background:var(--surface,#fff);min-width:0}
+.invoice-payment-edit-dialog .invoice-edit-section h3{margin:0 0 12px;font-size:1rem}
+.invoice-payment-edit-dialog .invoice-edit-section .jalali-field{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.invoice-payment-edit-dialog .invoice-edit-section .jalali-picker-button{max-width:100%}
+.invoice-payment-edit-dialog .invoice-edit-section .dialog-actions{border-top:1px solid var(--line,#e3eaed)}
+@media(max-width:600px){.invoice-payment-edit-dialog .invoice-edit-section{padding:12px}.invoice-payment-edit-dialog .invoice-edit-section .dialog-actions button{width:100%}}
