@@ -51,6 +51,33 @@ document.addEventListener('DOMContentLoaded',()=>{
     const months=form.querySelector('[data-subscription-months]');
     const end=form.querySelector('[data-subscription-end-iso]');
     const output=form.querySelector('[data-subscription-end-preview]');
+    const totalNode=form.querySelector('[data-subscription-total]');
+    const balanceNode=form.querySelector('[data-subscription-balance]');
+    const warning=form.querySelector('[data-subscription-payment-warning]');
+    const parseMoney=value=>{
+      const standard=String(value||'').replace(/[۰-۹٠-٩]/g,part=>{
+        const p='۰۱۲۳۴۵۶۷۸۹'.indexOf(part);
+        return String(p<0?'٠١٢٣٤٥٦٧٨٩'.indexOf(part):p);
+      }).replace(/[,٬\s]/g,'');
+      return /^\d+$/.test(standard)?BigInt(standard):null;
+    };
+    const moneyFormat=value=>new Intl.NumberFormat('fa-IR').format(value);
+    const showMoney=()=>{
+      const fee=parseMoney(form.querySelector('[name="monthly_fee"]')?.value);
+      const paid=parseMoney(form.querySelector('[name="paid_amount"]')?.value);
+      const duration=Number(months?.value);
+      const okay=fee!==null&&paid!==null&&Number.isInteger(duration)&&duration>=1&&duration<=120;
+      const amount=okay?fee*BigInt(duration):null;
+      if(totalNode)totalNode.textContent=amount!==null?moneyFormat(amount):'—';
+      if(balanceNode)balanceNode.textContent=amount!==null&&paid!==null?moneyFormat(amount-paid):'—';
+      if(warning)warning.hidden=!(amount!==null&&paid>amount);
+      return amount!==null&&paid<=amount;
+    };
+    form.querySelectorAll('[name="monthly_fee"],[name="paid_amount"]').forEach(input=>{
+      input.addEventListener('input',showMoney);
+    });
+    months?.addEventListener('input',showMoney);
+
     const changed=form.querySelector('[data-subscription-period-changed]');
     const validate=()=>{
       // Existing periods keep their original expiry on fee/payment-only edits.
@@ -70,12 +97,13 @@ document.addEventListener('DOMContentLoaded',()=>{
     start?.addEventListener('change',recalculate);
     months?.addEventListener('input',recalculate);
     form.addEventListener('submit',event=>{
-      if(validate())return;
+      if(validate()&&showMoney())return;
       event.preventDefault();
       output?.setAttribute('role','alert');
       months?.focus();
     });
     validate();
+    showMoney();
   });
   const search=root.querySelector('[data-company-search]');
   const status=root.querySelector('[data-company-status]');

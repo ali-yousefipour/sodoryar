@@ -1148,6 +1148,7 @@ $subscriptionStats=query("SELECT COUNT(*) total,
       <div class="company-period-preview company-span-2"><span>تاریخ پایان محاسبه‌شده</span><output data-subscription-end-preview aria-live="polite">—</output><input type="hidden" name="end_date" data-subscription-end-iso><small>پایان دوره شامل آخرین روز اعتبار است؛ ۳ روز مهلت تمدید پس از آن اعمال می‌شود.</small></div>
       <label>هزینه هر ماه (تومان)<input type="text" inputmode="numeric" data-money-input name="monthly_fee" required placeholder="۰"></label>
       <label>مبلغ پرداخت‌شده (تومان)<input type="text" inputmode="numeric" data-money-input name="paid_amount" value="0" required></label>
+<div class="company-payment-overview company-span-2" aria-live="polite"><span>ارزش کل دوره: <strong data-subscription-total>—</strong> تومان</span><span>مانده اشتراک: <strong data-subscription-balance>—</strong> تومان</span><small data-subscription-payment-warning hidden>مبلغ پرداخت‌شده نمی‌تواند از کل مبلغ اشتراک بیشتر باشد.</small></div>
       <label class="company-span-2">وضعیت<select name="status"><option value="active">فعال</option><option value="suspended">تعلیق دستی</option></select></label>
     </div>
     <div class="company-dialog-footer"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اشتراک شمسی</button></div>
@@ -1173,6 +1174,7 @@ $subscriptionStats=query("SELECT COUNT(*) total,
         <div class="company-period-preview company-span-2"><span>تاریخ پایان دوره (شمسی)</span><output data-subscription-end-preview aria-live="polite"><?=e(jalali_datetime($sub['end_date'],true))?></output><input type="hidden" name="end_date" data-subscription-end-iso value="<?=e($sub['end_date'])?>"><small>با تغییر تاریخ شروع یا تعداد ماه، پایان دوره به‌صورت خودکار محاسبه می‌شود.</small></div>
         <label>هزینه هر ماه (تومان)<input type="text" inputmode="numeric" data-money-input name="monthly_fee" value="<?=e($sub['monthly_fee'])?>" required></label>
         <label>مبلغ پرداخت‌شده (تومان)<input type="text" inputmode="numeric" data-money-input name="paid_amount" value="<?=e($sub['paid_amount'])?>" required></label>
+<div class="company-payment-overview company-span-2" aria-live="polite"><span>ارزش کل دوره: <strong data-subscription-total>—</strong> تومان</span><span>مانده اشتراک: <strong data-subscription-balance>—</strong> تومان</span><small data-subscription-payment-warning hidden>مبلغ پرداخت‌شده نمی‌تواند از کل مبلغ اشتراک بیشتر باشد.</small></div>
         <label class="company-span-2">وضعیت<select name="status"><option value="active" <?=$sub['status']==='active'?'selected':''?>>فعال</option><option value="suspended" <?=$sub['status']==='suspended'?'selected':''?>>تعلیق دستی</option></select></label>
       </div>
       <div class="company-dialog-footer"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ذخیره و ثبت سابقه تغییر</button></div>

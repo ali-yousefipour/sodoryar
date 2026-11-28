@@ -11,6 +11,8 @@ if(!str_contains($html,'data-company-console')||
    !str_contains($html,'data-jalali-open')||
    !str_contains($html,'data-jalali-iso')||
    !str_contains($html,'data-subscription-end-preview')||
+   !str_contains($html,'data-subscription-total')||
+   !str_contains($html,'data-subscription-balance')||
    !str_contains($html,'data-company-search')||
    !str_contains($html,'data-company-status')||
    str_contains($html,'type="date"')||
@@ -27,6 +29,7 @@ $script=(string)file_get_contents(__DIR__.'/../public/assets/company-management.
 if(!str_contains($script,'data-subscription-start')||
    !str_contains($script,'data-subscription-months')||
    !str_contains($script,'jalaliIso')||
+   !str_contains($script,'showMoney')||
    !str_contains($script,"periodEnd(start?.value")) {
     throw new RuntimeException('Jalali term preview and field interaction missing.');
 }
