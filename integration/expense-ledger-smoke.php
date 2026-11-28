@@ -208,3 +208,23 @@ expense_expect_blocked(fn()=>cashbox_close_shift($companyA,$guardShift,$userA,15
 integration_assert(cashbox_expected_cash($companyA,$guardShift)===150 && query('SELECT status FROM cash_shifts WHERE id=?',[$guardShift])->fetchColumn()==='open','Rejected revoked-branch mutation changed cash or shift');
 $_SESSION['user']['role']='company_admin';
 echo "PASS: manual cash overdraft rejection and revoked-branch mutation/close denial with unchanged balance.\n";
+
+/* Subscription migration and multi-tenant grace controls in disposable CI DB. */
+require_once $root.'/src/subscriptions.php';
+foreach ([1,2] as $attempt) apply_sql_fixture($root.'/database/migrations/031_company_subscriptions.sql');
+integration_assert(sodoryar_subscription_ready(),'Subscription tables missing after migration 031');
+integration_assert(sodoryar_company_subscription($companyA)===null && sodoryar_company_subscription($companyB)===null,'Migration unexpectedly subscribed or blocked existing tenants');
+$start=date('Y-m-d',strtotime('-2 months'));
+$end=date('Y-m-d',strtotime('-2 days'));
+sodoryar_subscription_save($companyA,$start,$end,100000,2,50000,'active',$userA);
+$state=sodoryar_company_entitlement($companyA);
+integration_assert($state['state']==='grace' && $state['grace_days_left']===2 && $state['allowed'],'Grace entitlement incorrect after first subscription');
+integration_assert(sodoryar_company_entitlement($companyB)['state']==='unassigned','Other company affected by subscription');
+integration_assert((int)query('SELECT COUNT(*) FROM company_subscription_events WHERE company_id=?',[$companyA])->fetchColumn()===1,'First subscription history missing');
+sodoryar_subscription_save($companyA,$start,date('Y-m-d',strtotime('+1 month')),100000,2,200000,'active',$userA);
+integration_assert(sodoryar_company_entitlement($companyA)['state']==='active','Renewal did not restore access');
+integration_assert((int)query('SELECT COUNT(*) FROM company_subscription_events WHERE company_id=?',[$companyA])->fetchColumn()===2,'Renewal history missing');
+sodoryar_subscription_save($companyA,$start,date('Y-m-d',strtotime('+1 month')),100000,2,200000,'suspended',$userA);
+integration_assert(sodoryar_company_entitlement($companyA)['state']==='suspended','Suspension did not block access');
+integration_assert(sodoryar_company_entitlement($companyB)['allowed']===true,'Company B access changed by company A subscription');
+echo "PASS: rerunnable subscriptions migration, grace, suspension, renewal audit and tenant isolation.\\n";
