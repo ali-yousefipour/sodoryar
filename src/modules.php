@@ -1,6 +1,21 @@
 <?php
 declare(strict_types=1);
 
+function pos_provider_directory(): array {
+    return ['به‌پرداخت ملت','پرداخت الکترونیک سداد','فن‌آوا کارت','پرداخت الکترونیک سامان (سپ)','تجارت الکترونیک پارسیان (تاپ)','آسان پرداخت پرشین (آپ)','کارت اعتباری ایران کیش','پرداخت الکترونیک پاسارگاد','پرداخت نوین آرین','پرداخت الکترونیک سپهر','فراپردازان آروند امید','الکترونیک کارت دماوند'];
+}
+function pos_provider_name(array $input): string {
+    $selected=$input['brand']??null;
+    if(!is_string($selected))throw new RuntimeException('شرکت ارائه‌دهنده کارتخوان را انتخاب کنید.');
+    if(in_array($selected,pos_provider_directory(),true))return $selected;
+    $custom=$input['brand_other']??null;
+    if($selected==='other' && is_string($custom)){
+        $custom=trim($custom);
+        if($custom!=='' && mb_strlen($custom)<=100 && !preg_match('/[\x00-\x1F\x7F]/u',$custom))return $custom;
+    }
+    throw new RuntimeException('نام شرکت ارائه‌دهنده کارتخوان معتبر نیست.');
+}
+
 function database_table_exists(string $table): bool {
     static $cache=[];
     if (!in_array($table,['user_profiles','invoice_voids','invoice_payments','branches','user_branch_assignments','banks','pos_branch_assignments','company_bank_accounts','pos_account_registry'],true)) return false;
@@ -284,7 +299,7 @@ function handle_module_post(string $page, string $action): void {
     }
     if ($page === 'pos' && $action === 'add') {
         require_admin();
-        $brand=trim((string)($_POST['brand']??'')); $ip=trim((string)($_POST['ip_address']??''));
+        $brand=pos_provider_name($_POST); $ip=trim((string)($_POST['ip_address']??''));
         $port=filter_var($_POST['port']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>65535]]);
         if ($brand==='' || ($ip!=='' && !filter_var($ip,FILTER_VALIDATE_IP)) || !$port) throw new RuntimeException('مشخصات کارتخوان نامعتبر است.');
         if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')) {
@@ -564,7 +579,7 @@ function render_module(string $page, int $tenant): void {
     <?php return; }
     if ($page==='pos') { require_permission('pos.view'); ?>
       <h1>مدیریت کارتخوان‌ها</h1><p class="muted">تعریف دستگاه برای استفاده در اتصال آینده؛ پرداخت آنلاین از سرور لینوکسی انجام نمی‌شود.</p>
-      <?php if(can('users.manage')): ?><div class="card"><h2>افزودن کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>برند<input name="brand" required></label><label>IP دستگاه<input name="ip_address" placeholder="192.168.1.10"></label><label>پورت<input name="port" type="number" min="1" max="65535" required></label><?php if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')): ?><label>شعبه<select name="branch_id" required><option value="">انتخاب شعبه</option><?=resource_options(branch_choices($tenant,(int)user()['id']))?></select></label><label>حساب مقصد<select name="account_id" required><option value="">انتخاب حساب</option><?=resource_options(query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll(),'title')?></select></label><label>شماره پایانه<input name="terminal_number" inputmode="numeric" maxlength="64" required></label><?php endif; ?><button>ثبت دستگاه</button></form></div><?php endif; ?>
+      <?php if(can('users.manage')): ?><div class="card"><h2>افزودن کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><div data-pos-provider><label for="posProviderSearch">شرکت ارائه‌دهنده کارتخوان (برند)</label><input id="posProviderSearch" type="search" placeholder="جست‌وجوی نام شرکت…" autocomplete="off" aria-controls="posProviderSelect"><label for="posProviderSelect">انتخاب شرکت</label><select id="posProviderSelect" name="brand" required><option value="">انتخاب شرکت</option><?php foreach(pos_provider_directory() as $provider): ?><option value="<?=e($provider)?>"><?=e($provider)?></option><?php endforeach; ?><option value="other">سایر</option></select><label data-pos-other hidden>نام شرکت دیگر<input name="brand_other" maxlength="100" disabled></label><small data-pos-provider-status aria-live="polite"></small></div><script src="assets/pos-provider.js?v=1" defer></script><label>IP دستگاه<input name="ip_address" placeholder="192.168.1.10"></label><label>پورت<input name="port" type="number" min="1" max="65535" required></label><?php if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')): ?><label>شعبه<select name="branch_id" required><option value="">انتخاب شعبه</option><?=resource_options(branch_choices($tenant,(int)user()['id']))?></select></label><label>حساب مقصد<select name="account_id" required><option value="">انتخاب حساب</option><?=resource_options(query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll(),'title')?></select></label><label>شماره پایانه<input name="terminal_number" inputmode="numeric" maxlength="64" required></label><?php endif; ?><button>ثبت دستگاه</button></form></div><?php endif; ?>
       <div class="card"><h2>دستگاه‌ها</h2><?php render_table(['برند','IP','پورت','فعال'],query('SELECT brand,ip_address,port,is_active FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
     <?php return; }
     if ($page==='templates') { require_admin(); ?>
