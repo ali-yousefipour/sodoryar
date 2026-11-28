@@ -343,6 +343,18 @@ function render_invoice_management(int $tenant): void {
     }
     echo '<section class="card manager-results"><div class="heading"><h2>فهرست اسناد</h2><span>'.money($sum['invoice_count']).' نتیجه</span></div>';
     echo '<div class="table-wrap" tabindex="0" role="region" aria-label="فهرست اسناد؛ برای مشاهده ستون‌ها افقی جابه‌جا کنید"><table data-pagination="server"><thead><tr><th>ردیف</th><th>شماره فاکتور</th><th>تاریخ</th><th>مشتری</th><th>خدمات</th><th>مبلغ</th><th>دریافتی</th><th>مانده</th><th>روش پرداخت</th><th>صادرکننده</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody>';
+    // Prefetch visible receipts in one tenant-scoped query; avoid one SQL query per editor row.
+    $paymentsByInvoice=[];
+    if (can('invoices.payment_edit') && invoice_payment_ledger_ready() && $rows) {
+        $invoiceIds=array_map(static fn($invoice)=>(int)$invoice['id'],$rows);
+        $placeholders=implode(',',array_fill(0,count($invoiceIds),'?'));
+        $paymentRows=query('SELECT id,invoice_id,payment_method,amount,terminal_id,tracking_number,reference_number,paid_at
+            FROM invoice_payments WHERE company_id=? AND voided_at IS NULL AND invoice_id IN ('.$placeholders.')
+            ORDER BY invoice_id,id',array_merge([$tenant],$invoiceIds))->fetchAll();
+        foreach ($paymentRows as $paymentRow) {
+            $paymentsByInvoice[(int)$paymentRow['invoice_id']][]=$paymentRow;
+        }
+    }
     foreach($rows as $i=>$row){
         $paid=(int)$row['paid_amount'];$total=(int)$row['total_amount'];$void=(bool)$row['is_void'];
         $methods=(int)$row['cash_count']>0 && (int)$row['pos_count']>0?'ترکیبی':((int)$row['pos_count']>0?'کارتخوان':'نقدی');
@@ -352,7 +364,7 @@ function render_invoice_management(int $tenant): void {
             '<td class="manager-service">'.e((string)$row['services']).'</td><td>'.money_toman($total).'</td><td>'.money_toman($paid).'</td><td>'.money_toman(max(0,$total-$paid)).'</td>'.
             '<td>'.e($methods).'</td><td>'.e($row['operator_name']).'</td><td><span class="status-chip '.($void?'status-muted':($paid>=$total?'status-good':'status-warning')).'">'.e($status).'</span></td>'.
             '<td><div class="management-actions"><a class="button-link secondary small" href="?page=invoice_manager&amp;detail='.(int)$row['id'].'">جزئیات</a>'.(can('invoices.print')?'<a class="button-link small" target="_blank" rel="noopener" href="?page=receipt&amp;id='.(int)$row['id'].'&amp;auto_print=1">چاپ</a>':'').'';
-        if(!$void)render_invoice_date_edit((int)$row['id'],$row['invoice_date']?:substr($row['created_at'],0,10));
+        if (!$void) render_invoice_edit_dialog($tenant,$row,$paymentsByInvoice[(int)$row['id']]??[]);
         echo '</div></td></tr>';
     }
     if(!$rows) echo '<tr><td colspan="12">فاکتوری با این فیلترها پیدا نشد.</td></tr>';
