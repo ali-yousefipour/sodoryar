@@ -1088,9 +1088,22 @@ $navGroup=null;
 <label>مبلغ پرداخت‌شده (تومان)<input type="number" name="paid_amount" min="0" step="1" value="0" required></label>
 <label>وضعیت<select name="status"><option value="active">فعال</option><option value="suspended">تعلیق دستی</option></select></label>
 <button>ثبت یا به‌روزرسانی اشتراک</button></form>
-<div class="table-wrap"><table><thead><tr><th>شرکت</th><th>پایان اشتراک</th><th>وضعیت</th><th>مانده (تومان)</th></tr></thead><tbody>
-<?php foreach(query('SELECT c.name,s.start_date,s.end_date,s.total_amount,s.paid_amount,s.status FROM company_subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.end_date')->fetchAll() as $sub): $subState=sodoryar_subscription_state($sub,date('Y-m-d')); ?>
-<tr><td><?=e($sub['name'])?></td><td><?=e($sub['end_date'])?></td><td><?=e(['active'=>'فعال','grace'=>'مهلت تمدید','expired'=>'منقضی','suspended'=>'تعلیق‌شده','not_started'=>'آغازنشده','invalid'=>'نامعتبر','unassigned'=>'تخصیص‌نیافته'][$subState['state']]??'نامشخص')?></td><td><?=money((int)$sub['total_amount']-(int)$sub['paid_amount'])?></td></tr>
+<div class="table-wrap"><table><thead><tr><th>شرکت</th><th>پایان اشتراک</th><th>وضعیت</th><th>مانده (تومان)</th><th>عملیات</th></tr></thead><tbody>
+<?php foreach(query('SELECT c.name,s.company_id,s.start_date,s.end_date,s.monthly_fee,s.months,s.total_amount,s.paid_amount,s.status FROM company_subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.end_date')->fetchAll() as $sub): $subState=sodoryar_subscription_state($sub,date('Y-m-d')); ?>
+<tr><td><?=e($sub['name'])?></td><td><?=e($sub['end_date'])?></td><td><?=e(['active'=>'فعال','grace'=>'مهلت تمدید','expired'=>'منقضی','suspended'=>'تعلیق‌شده','not_started'=>'آغازنشده','invalid'=>'نامعتبر','unassigned'=>'تخصیص‌نیافته'][$subState['state']]??'نامشخص')?></td><td><?=money((int)$sub['total_amount']-(int)$sub['paid_amount'])?></td><td>
+<button class="small secondary" type="button" data-dialog-open="subEdit<?=e($sub['company_id'])?>">تمدید / ویرایش</button>
+<dialog class="app-dialog" id="subEdit<?=e($sub['company_id'])?>">
+<form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="save_subscription"><input type="hidden" name="company_id" value="<?=e($sub['company_id'])?>">
+<h2>اشتراک <?=e($sub['name'])?></h2>
+<label>شروع دوره<input type="date" name="start_date" value="<?=e($sub['start_date'])?>" required></label>
+<label>پایان دوره<input type="date" name="end_date" value="<?=e($sub['end_date'])?>" required></label>
+<label>هزینه ماهانه (تومان)<input type="number" name="monthly_fee" min="0" value="<?=e($sub['monthly_fee'])?>" required></label>
+<label>تعداد ماه<input type="number" name="months" min="1" max="120" value="<?=e($sub['months'])?>" required></label>
+<label>مبلغ پرداخت‌شده (تومان)<input type="number" name="paid_amount" min="0" value="<?=e($sub['paid_amount'])?>" required></label>
+<label>وضعیت<select name="status"><option value="active" <?=$sub['status']==='active'?'selected':''?>>فعال</option><option value="suspended" <?=$sub['status']==='suspended'?'selected':''?>>تعلیق دستی</option></select></label>
+<p class="muted">تاریخچه تغییرات قبلی محفوظ می‌ماند.</p>
+<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div>
+</form></dialog></td></tr>
 <?php endforeach; ?></tbody></table></div></div>
 <?php endif; ?>
 <?php if(sodoryar_subscription_ready()): ?>
