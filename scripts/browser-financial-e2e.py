@@ -568,7 +568,7 @@ def main() -> None:
         branch_card = manager_a.locator('details').filter(has_text='CI branch lifecycle')
         branch_card.locator('summary').click()
         branch_id = branch_card.locator('[name="branch_id"]').input_value()
-        expect(branch_card.locator('[name="postal_code"]')).to_have_value('1234567890')
+        expect(branch_card.locator('[name="postal_code"]')).to_have_value('۱۲۳۴۵۶۷۸۹۰')
         branch_card.locator('[name="name"]').fill('CI branch edited')
         branch_card.locator('[name="is_active"]').uncheck()
         branch_card.get_by_role('button', name='ذخیره شعبه', exact=True).click()
