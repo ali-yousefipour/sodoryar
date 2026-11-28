@@ -51,14 +51,24 @@ document.addEventListener('DOMContentLoaded',()=>{
     const months=form.querySelector('[data-subscription-months]');
     const end=form.querySelector('[data-subscription-end-iso]');
     const output=form.querySelector('[data-subscription-end-preview]');
+    const changed=form.querySelector('[data-subscription-period-changed]');
     const validate=()=>{
+      // Existing periods keep their original expiry on fee/payment-only edits.
+      if(changed?.value==='0' && end?.value){
+        if(output)output.textContent=format(end.value);
+        return true;
+      }
       const val=periodEnd(start?.value,Number(months?.value));
       if(end)end.value=val||'';
       if(output)output.textContent=val?format(val):'تاریخ شروع و تعداد ماه را بررسی کنید';
       return !!val;
     };
-    start?.addEventListener('change',validate);
-    months?.addEventListener('input',validate);
+    const recalculate=()=>{
+      if(changed)changed.value='1';
+      validate();
+    };
+    start?.addEventListener('change',recalculate);
+    months?.addEventListener('input',recalculate);
     form.addEventListener('submit',event=>{
       if(validate())return;
       event.preventDefault();
