@@ -27,7 +27,7 @@ if (substr_count($workflow, "vars.SODORYAR_FTP_REMOTE_DIR || '.'") !== 3
     || !str_contains($workflow, 'get "_private/.sodoryar-instance"')
     || substr_count($workflow, 'lftp --user "$FTP_USER" --password "$FTP_PASS"') < 2
     || str_contains($workflow, 'FTP_REMOTE_DIR: /')
-    || !str_contains($workflow, 'mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"')) {
     throw new RuntimeException('Dedicated Sodoryar FTP deployment must use only its jailed root and verified credentials.');
 }
 if (!str_contains($workflow, 'if [[ -f "$marker_file" ]]; then')
@@ -65,12 +65,12 @@ if (!str_contains($workflow, 'login-experience.css workspace-refresh.css login-u
 $verifyPrivate=strpos($workflow,'Verify deployed private PHP files match the triggering commit');
 $verifyPublic=strpos($workflow,'Verify deployed application commit manifest');
 if ($verifyPrivate===false || $verifyPublic===false || !($upload<$verifyPrivate && $verifyPrivate<$verifyPublic)
-    || !str_contains($workflow, 'mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/_private')
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private')
     || !str_contains($workflow, 'get "_private/src/modules.php"')
     || !str_contains($workflow, 'get "_private/src/bootstrap.php"')
     || !str_contains($workflow, 'get "_private/src/localization.php"')
     || !str_contains($workflow, 'get "_private/src/reporting.php"')
     || !str_contains($workflow, 'Private PHP file $file does not match the commit after FTP upload.')) {
-    throw new RuntimeException('Deployment must force and read-back-verify private PHP code before claiming success.');
+    throw new RuntimeException('Deployment must mirror and read-back-verify private PHP code before claiming success.');
 }
-echo "Release ownership, FTP transport and migration gate contracts passed\n";
+echo "Release ownership, incremental FTP transport and migration gate contracts passed\n";
