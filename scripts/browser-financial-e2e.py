@@ -256,7 +256,7 @@ def main() -> None:
         manager_a.wait_for_url(lambda url: "page=receipt" in url, timeout=15000)
         expect(manager_a.locator(".receipt")).to_be_visible()
         expect(manager_a.locator(".receipt")).to_contain_text("۷۰٬۰۰۰")
-        expect(manager_a.locator(".receipt")).to_contain_text("CI-INVOICE-POS-2026")
+        expect(manager_a.locator(".receipt")).to_contain_text("CI-INVOICE-POS-۲۰۲۶")
         assert re.search(r'شماره فاکتور:\s*[A-Z]{2}[0-9]{6}(?![0-9])', manager_a.locator('.receipt').inner_text()), (
             'New invoice number must contain two letters and six digits'
         )
@@ -429,13 +429,13 @@ def main() -> None:
         form.locator('[name="ref_code"]').fill("CI-E2E-REF")
         form.locator("button").last.click()
         manager_a.wait_for_load_state("domcontentloaded")
-        if manager_a.get_by_text("CI-E2E-BILL").count() == 0:
+        if manager_a.get_by_text("CI-E۲E-BILL").count() == 0:
             manager_a.screenshot(path=str(OUTPUT / "bill-error.png"), full_page=True)
             raise AssertionError(
                 "POS bill not visible after save; URL=" + manager_a.url
                 + "; body=" + manager_a.locator("body").inner_text()[:2300]
             )
-        expect(manager_a.get_by_role("cell", name="CI-E2E-BILL", exact=True)).to_be_visible()
+        expect(manager_a.get_by_role("cell", name="CI-E۲E-BILL", exact=True)).to_be_visible()
         for bill_id, payment_id, tracking in (
             ('CI-E2E-BILL', 'CI-E2E-PAYMENT', 'CI-OTHER-REF'),
             ('CI-OTHER-BILL', 'CI-OTHER-PAYMENT', 'CI-E2E-REF'),
@@ -452,7 +452,7 @@ def main() -> None:
 
         manager_a.goto(f"{ORIGIN}/?page=reports")
         expect(manager_a.locator(".content")).to_be_visible()
-        assert manager_a.get_by_text("CI-B-0001").count() == 0, "Foreign company invoice leaked into reports"
+        assert manager_a.get_by_text("CI-B-۰۰۰۱").count() == 0, "Foreign company invoice leaked into reports"
 
         # Exercise XLSX output using only the disposable database.
         for route in ("reports", "activity"):
