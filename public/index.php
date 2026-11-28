@@ -1433,24 +1433,25 @@ function render_invoice_edit_dialog(int $tenant,array $invoice,array $payments=[
     $date=(string)(($invoice['invoice_date']??null) ?: substr((string)$invoice['created_at'],0,10));
     $dialog='invoiceEditor'.$id;
     echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialog).'">ویرایش فاکتور</button>';
-    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialog).'" aria-label="ویرایش فاکتور">';
-    echo '<div class="heading"><h2>ویرایش فاکتور</h2><button type="button" class="secondary small" data-dialog-close>بستن</button></div>';
-    echo '<section class="invoice-edit-section"><h3>تاریخ فاکتور</h3><form method="post" class="stack">'.csrf_field()
+    echo '<dialog class="app-dialog invoice-payment-edit-dialog invoice-editor-compact" id="'.e($dialog).'" aria-label="ویرایش فاکتور" data-invoice-editor>';
+    echo '<header class="invoice-editor-header"><div><span class="invoice-editor-eyebrow">مدیریت اسناد مالی</span><h2>ویرایش فاکتور <small>شماره '.e((string)($invoice['invoice_number']??$id)).'</small></h2></div><button type="button" class="secondary invoice-editor-close" data-dialog-close aria-label="بستن پنجره">×</button></header>';
+    echo '<nav class="invoice-editor-tabs" aria-label="بخش‌های ویرایش فاکتور"><button type="button" class="invoice-editor-tab" data-invoice-tab="date" aria-selected="true">تاریخ فاکتور</button><button type="button" class="invoice-editor-tab" data-invoice-tab="payment" aria-selected="false">اطلاعات پرداخت</button></nav>';
+    echo '<div class="invoice-editor-body"><section class="invoice-edit-section" data-invoice-panel="date"><h3>اصلاح تاریخ فاکتور</h3><form method="post" class="stack">'.csrf_field()
         .'<input type="hidden" name="action" value="edit_invoice_date">'
         .'<input type="hidden" name="invoice_id" value="'.e((string)$id).'">'
         .'<label>تاریخ شمسی فاکتور<span class="jalali-field">'
         .'<input type="hidden" name="invoice_date" data-jalali-iso value="'.e($date).'">'
         .'<button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ</button>'
         .'</span></label>'
-        .'<p class="muted">زمان ثبت اولیه و تاریخ دریافت واقعی وجه بدون تغییر باقی می‌مانند. دوره مالی مبدأ و مقصد بررسی می‌شود.</p>'
+        .'<p class="invoice-editor-help">تاریخ ثبت و زمان دریافت وجه تغییر نمی‌کنند؛ دوره مالی بررسی می‌شود.</p>'
         .'<label>دلیل تغییر تاریخ<textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'
         .'<div class="dialog-actions"><button type="submit">ذخیره تاریخ فاکتور</button></div></form></section>';
     if (invoice_payment_ledger_ready() && $payments) {
-        echo '<section class="invoice-edit-section"><h3>جزئیات تراکنش‌ها</h3>';
+        echo '<section class="invoice-edit-section" data-invoice-panel="payment" hidden><h3>اصلاح تراکنش‌های پرداخت</h3>';
         render_invoice_payment_replace_dialog($tenant,$id,(int)$invoice['total_amount'],$payments,true);
         echo '</section>';
     } elseif (!invoice_payment_ledger_ready() && isset($invoice['payment_type'])) {
-        echo '<section class="invoice-edit-section"><h3>اطلاعات پرداخت</h3><form method="post" class="stack">'.csrf_field()
+        echo '<section class="invoice-edit-section" data-invoice-panel="payment" hidden><h3>اطلاعات پرداخت</h3><form method="post" class="stack">'.csrf_field()
             .'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.e((string)$id).'">'
             .'<label>نوع پرداخت<select name="payment_type"><option value="cash"'.($invoice['payment_type']==='cash'?' selected':'').'>نقدی</option>'
             .'<option value="pos"'.($invoice['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label>'
@@ -1458,7 +1459,7 @@ function render_invoice_edit_dialog(int $tenant,array $invoice,array $payments=[
             .'<label>دلیل اصلاح<textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'
             .'<div class="dialog-actions"><button type="submit">ذخیره پرداخت</button></div></form></section>';
     }
-    echo '</dialog>';
+    echo '</div></dialog>';
 }
 
 function render_invoices(int $tenant, int $limit): void {
