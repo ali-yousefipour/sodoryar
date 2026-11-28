@@ -1105,13 +1105,13 @@ $subscriptionSummary=query("SELECT
  COALESCE(SUM(total_amount-paid_amount),0) outstanding
  FROM company_subscriptions")->fetch();
 ?>
-<div class="stat-grid">
-<div class="stat-card"><span>اشتراک‌های ثبت‌شده</span><strong><?=money((int)$subscriptionSummary['total'])?></strong></div>
-<div class="stat-card"><span>فعال</span><strong><?=money((int)$subscriptionSummary['active_count'])?></strong></div>
-<div class="stat-card"><span>مهلت تمدید</span><strong><?=money((int)$subscriptionSummary['grace_count'])?></strong></div>
-<div class="stat-card"><span>منقضی</span><strong><?=money((int)$subscriptionSummary['expired_count'])?></strong></div>
-<div class="stat-card"><span>تعلیق‌شده</span><strong><?=money((int)$subscriptionSummary['suspended'])?></strong></div>
-<div class="stat-card"><span>مطالبات ثبت‌شده (تومان)</span><strong><?=money((string)$subscriptionSummary['outstanding'])?></strong></div>
+<div class="stats">
+<article class="stat"><span>اشتراک‌های ثبت‌شده</span><b><?=money((int)$subscriptionSummary['total'])?></b></article>
+<article class="stat"><span>فعال</span><b><?=money((int)$subscriptionSummary['active_count'])?></b></article>
+<article class="stat"><span>مهلت تمدید</span><b><?=money((int)$subscriptionSummary['grace_count'])?></b></article>
+<article class="stat"><span>منقضی</span><b><?=money((int)$subscriptionSummary['expired_count'])?></b></article>
+<article class="stat"><span>تعلیق‌شده</span><b><?=money((int)$subscriptionSummary['suspended'])?></b></article>
+<article class="stat"><span>مطالبات ثبت‌شده (تومان)</span><b><?=money((string)$subscriptionSummary['outstanding'])?></b></article>
 </div>
 <details><summary>آخرین تغییرات و تمدید اشتراک‌ها</summary>
 <div class="table-wrap"><table><thead><tr><th>شرکت</th><th>زمان ثبت تغییر</th><th>کاربر ثبت‌کننده</th><th>شروع دوره</th><th>پایان دوره</th><th>هزینه ماهانه</th><th>مبلغ پرداخت‌شده</th><th>وضعیت</th></tr></thead><tbody>
