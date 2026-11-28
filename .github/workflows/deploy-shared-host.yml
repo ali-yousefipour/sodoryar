@@ -288,6 +288,8 @@ jobs:
               timeout 90s sudo apt-get install -y -qq lftp
             fi
           fi
+          # Incremental transfer avoids retransmitting unchanged dependencies on every commit.
+          # Critical files are read back and compared with the checkout after upload.
           # Do not delete remote files. Database and .env remain managed separately.
           # FTP without TLS transmits credentials and data without transport encryption.
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
@@ -298,8 +300,8 @@ jobs:
           set net:max-retries 5
           set net:timeout 60
           set net:reconnect-interval-base 2
-          mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
-          mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private "$FTP_REMOTE_DIR/_private"
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
           bye
           EOF
 
