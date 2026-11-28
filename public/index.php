@@ -760,7 +760,7 @@ try {
             }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
             redirect($page,'تاریخ فاکتور اصلاح شد؛ تاریخ دریافت وجه بدون تغییر باقی ماند.');
         }
-        if ($page==='invoices' && $action==='replace_payments') {
+        if (in_array($page,['invoices','invoice_manager'],true) && $action==='replace_payments') {
             require_permission('invoices.payment_edit'); $tenant=tenant_id();
             if (!invoice_payment_ledger_ready()) throw new RuntimeException('ابتدا میگرشن ۰۱۶ را اجرا کنید.');
             $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT);
@@ -798,7 +798,7 @@ try {
                 db()->commit();
                 unset($_SESSION['invoice_replace_nonce']);
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
-            redirect('invoices','پرداخت‌ها با حفظ سوابق قبلی اصلاح شدند.');
+            redirect($page,'پرداخت‌ها با حفظ سوابق قبلی اصلاح شدند.');
         }
         if ($page==='invoices' && $action==='void') {
             require_permission('invoices.void'); $tenant=tenant_id();
@@ -1359,10 +1359,39 @@ function finish_invoice_creation(int $invoiceId): never {
     redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
 }
 
-function render_invoice_date_edit(int $id,string $date): void {
-    if(!can('invoices.payment_edit'))return;
-    $dialog='invoiceDateEdit'.$id;
-    echo '<button type="button" class="small secondary" data-dialog-open="'.$dialog.'">ویرایش تاریخ</button><dialog class="app-dialog" id="'.$dialog.'"><form method="post" class="stack">'.csrf_field().'<input type="hidden" name="action" value="edit_invoice_date"><input type="hidden" name="invoice_id" value="'.$id.'"><h2>اصلاح تاریخ فاکتور</h2><label>تاریخ شمسی<span class="jalali-field"><input type="hidden" name="invoice_date" data-jalali-iso value="'.e($date).'"><button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ</button></span></label><p class="muted">تاریخ دریافت وجه و زمان ثبت اولیه تغییر نمی‌کند.</p><label>دلیل اصلاح<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ثبت اصلاح</button></div></form></dialog>';
+/** One edit dialog shared by the recent-invoices and invoice-manager screens. */
+function render_invoice_edit_dialog(int $tenant,array $invoice,array $payments=[]): void {
+    if (!can('invoices.payment_edit')) return;
+    $id=(int)$invoice['id'];
+    $date=(string)(($invoice['invoice_date']??null) ?: substr((string)$invoice['created_at'],0,10));
+    $dialog='invoiceEditor'.$id;
+    echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialog).'">ویرایش فاکتور</button>';
+    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialog).'" aria-label="ویرایش فاکتور">';
+    echo '<div class="heading"><h2>ویرایش فاکتور</h2><button type="button" class="secondary small" data-dialog-close>بستن</button></div>';
+    echo '<section class="invoice-edit-section"><h3>تاریخ فاکتور</h3><form method="post" class="stack">'.csrf_field()
+        .'<input type="hidden" name="action" value="edit_invoice_date">'
+        .'<input type="hidden" name="invoice_id" value="'.e((string)$id).'">'
+        .'<label>تاریخ شمسی فاکتور<span class="jalali-field">'
+        .'<input type="hidden" name="invoice_date" data-jalali-iso value="'.e($date).'">'
+        .'<button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ</button>'
+        .'</span></label>'
+        .'<p class="muted">زمان ثبت اولیه و تاریخ دریافت واقعی وجه بدون تغییر باقی می‌مانند. دوره مالی مبدأ و مقصد بررسی می‌شود.</p>'
+        .'<label>دلیل تغییر تاریخ<textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'
+        .'<div class="dialog-actions"><button type="submit">ذخیره تاریخ فاکتور</button></div></form></section>';
+    if (invoice_payment_ledger_ready() && $payments) {
+        echo '<section class="invoice-edit-section"><h3>جزئیات تراکنش‌ها</h3>';
+        render_invoice_payment_replace_dialog($tenant,$id,(int)$invoice['total_amount'],$payments,true);
+        echo '</section>';
+    } elseif (!invoice_payment_ledger_ready() && isset($invoice['payment_type'])) {
+        echo '<section class="invoice-edit-section"><h3>اطلاعات پرداخت</h3><form method="post" class="stack">'.csrf_field()
+            .'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.e((string)$id).'">'
+            .'<label>نوع پرداخت<select name="payment_type"><option value="cash"'.($invoice['payment_type']==='cash'?' selected':'').'>نقدی</option>'
+            .'<option value="pos"'.($invoice['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label>'
+            .'<label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e((string)($invoice['pos_ref']??'')).'"></label>'
+            .'<label>دلیل اصلاح<textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'
+            .'<div class="dialog-actions"><button type="submit">ذخیره پرداخت</button></div></form></section>';
+    }
+    echo '</dialog>';
 }
 
 function render_invoices(int $tenant, int $limit): void {
@@ -1393,18 +1422,12 @@ function render_invoices(int $tenant, int $limit): void {
         $payLabel=count($methods)>1?'ترکیبی':(($methods[0]??$r['payment_type'])==='cash'?'نقدی':'کارتخوان');
         $payLabel.=count($actualPayments)>1?' ('.fa_digits((string)count($actualPayments)).' تراکنش)':'';
         echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.money_toman($voided?0:$balance).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
-        if(!$voided)render_invoice_date_edit((int)$r['id'],$r['invoice_date']?:substr($r['created_at'],0,10));
+        if (!$voided) render_invoice_edit_dialog($tenant,$r,$actualPayments);
         if (can('invoices.payment_edit') && !$voided && invoice_followup_ready() && $balance>0) {
             render_invoice_collect_dialog($tenant,(int)$r['id'],$balance);
         }
         if ((can('invoices.payment_edit') || can('invoices.void')) && !$voided) {
-            $editId='invoiceEdit'.(int)$r['id']; $voidId='invoiceVoid'.(int)$r['id'];
-            if (can('invoices.payment_edit') && invoice_payment_ledger_ready() && $actualPayments) {
-                render_invoice_payment_replace_dialog($tenant,(int)$r['id'],(int)$r['total_amount'],$actualPayments);
-            } elseif (can('invoices.payment_edit')) {
-                echo ' <button type="button" class="small secondary" data-dialog-open="'.$editId.'">ویرایش پرداخت</button>';
-                echo '<dialog class="app-dialog" id="'.$editId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="edit"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ویرایش شیوه پرداخت</h2><label>نوع پرداخت<select name="payment_type"><option value="cash"'.($r['payment_type']==='cash'?' selected':'').'>نقدی</option><option value="pos"'.($r['payment_type']==='pos'?' selected':'').'>کارتخوان</option></select></label><label>کد پیگیری<input name="pos_ref" maxlength="120" value="'.e($r['pos_ref']).'"></label><label>دلیل اصلاح<textarea name="reason" minlength="5" maxlength="500" required></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره</button></div></form></dialog>';
-            }
+            $voidId='invoiceVoid'.(int)$r['id'];
             if (can('invoices.void') && database_table_exists('invoice_voids')) {
                 echo ' <button type="button" class="small danger" data-dialog-open="'.$voidId.'">ابطال</button>';
                 echo '<dialog class="app-dialog" id="'.$voidId.'"><form class="stack" method="post">'.csrf_field().'<input type="hidden" name="action" value="void"><input type="hidden" name="invoice_id" value="'.(int)$r['id'].'"><h2>ابطال فاکتور</h2><p>این عملیات برگشت‌ناپذیر است، اما سابقه فاکتور برای پیگیری باقی می‌ماند.</p><label>دلیل ابطال<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button class="danger">تأیید ابطال</button></div></form></dialog>';
@@ -1416,14 +1439,14 @@ function render_invoices(int $tenant, int $limit): void {
 }
 
 /** Editable payment allocation; changes are always audit-preserving replacements. */
-function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $total,array $payments): void {
+function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $total,array $payments,bool $embedded=false): void {
     static $terminalLists=[];
     if (!isset($terminalLists[$tenant])) {
         $terminalLists[$tenant]=query('SELECT id,brand FROM pos_settings WHERE company_id=? AND is_active=1 ORDER BY brand,id',[$tenant])->fetchAll();
     }
     $dialogId='invoiceReplace'.$invoiceId;
-    echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialogId).'">ویرایش تراکنش‌ها</button>';
-    echo '<dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialogId).'"><form method="post" class="stack invoice-payment-replace" data-payment-total="'.e((string)array_sum(array_map(static fn($p)=>(int)$p['amount'],$payments))).'">'.csrf_field().
+    if (!$embedded) echo ' <button type="button" class="small secondary" data-dialog-open="'.e($dialogId).'">ویرایش تراکنش‌ها</button><dialog class="app-dialog invoice-payment-edit-dialog" id="'.e($dialogId).'">';
+    echo '<form method="post" class="stack invoice-payment-replace" data-payment-total="'.e((string)array_sum(array_map(static fn($p)=>(int)$p['amount'],$payments))).'">'.csrf_field().
          '<input type="hidden" name="action" value="replace_payments"><input type="hidden" name="invoice_id" value="'.e((string)$invoiceId).'">'.
          '<input type="hidden" name="payment_replace_nonce" value="'.e($_SESSION['invoice_replace_nonce']??=bin2hex(random_bytes(16))).'">'.
          '<h2>اصلاح جزئیات پرداخت</h2><p class="muted">تاریخ و مبلغ وصول، شناسه رسید و صندوق ثابت می‌مانند؛ فقط مشخصات فیش اصلاح و سابقه تغییر ثبت می‌شود.</p>'.
@@ -1448,7 +1471,8 @@ function render_invoice_payment_replace_dialog(int $tenant,int $invoiceId,int $t
     echo '</div>'.
          '<p class="muted" data-edit-summary></p><p class="invoice-payment-error" data-edit-error hidden></p>'.
          '<label>دلیل اصلاح <textarea name="reason" minlength="5" maxlength="500" required></textarea></label>'.
-         '<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اصلاحات</button></div></form></dialog>';
+         '<div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button type="submit">ثبت اصلاحات پرداخت</button></div></form>';
+    if (!$embedded) echo '</dialog>'; 
 }
 
 /** Collect an additional amount without replacing or changing previous payment records. */
