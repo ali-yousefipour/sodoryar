@@ -1,0 +1,79 @@
+/* Management workspace for superadmin; scoped to companies page only. */
+.company-console{--company-ink:#29243f;--company-soft:#736c84;--company-purple:#6849b2;--company-line:#e8e5f1;--company-bg:#fff;display:grid;gap:16px;max-width:1380px;margin-inline:auto;padding-block:4px 18px;color:var(--company-ink)}
+.company-console>*{min-width:0}
+.company-hero{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;border:1px solid #e6e2ef;padding:24px 26px;background:linear-gradient(118deg,#ffffff 42%,#f4efff 100%);border-radius:20px;box-shadow:0 12px 36px -32px #3d285d}
+.company-eyebrow{font-size:11px;font-weight:800;letter-spacing:.1px;color:#7454b1}
+.company-hero h1{margin:5px 0;font-size:clamp(20px,2.5vw,28px);font-weight:850;line-height:1.6}
+.company-hero p{color:var(--company-soft);font-size:13px;line-height:1.9;margin:4px 0 0}
+.company-hero-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.company-hero-actions button,.company-console .company-panel-heading button{min-height:42px;padding-inline:17px;border-radius:11px}
+.company-console .company-panel{border-radius:17px!important;padding:20px 22px;border:1px solid var(--company-line);box-shadow:0 12px 30px -27px #443e56}
+.company-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.company-metric{background:var(--company-bg);border:1px solid var(--company-line);border-radius:15px;padding:16px 16px 13px;display:flex;flex-direction:column;gap:5px;min-width:0;box-shadow:0 9px 25px -23px #3b2a60}
+.company-metric::before{content:"";display:block;width:32px;height:3px;background:#8868bd;border-radius:3px;margin-bottom:6px}
+.company-metric-good::before{background:#24977c}.company-metric-warn::before{background:#c18a2d}.company-metric-danger::before{background:#c75b65}
+.company-metric>span{font-size:12px;color:var(--company-soft);font-weight:650}
+.company-metric>strong{font-size:clamp(20px,2vw,27px);font-weight:850;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:#30244f}
+.company-metric>small{color:#858094;font-size:11px;line-height:1.8}
+.company-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:14px}
+.company-panel-heading h2{margin:4px 0!important;font-size:18px!important;line-height:1.65}
+.company-panel-heading p{margin:3px 0;color:var(--company-soft);font-size:12px;line-height:1.8}
+.company-toolbar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;background:#faf9fd;border:1px solid var(--company-line);border-radius:12px;padding:12px;margin-bottom:13px}
+.company-toolbar label{display:grid;gap:6px;font-size:12px;font-weight:750;flex:1 1 220px}
+.company-toolbar label:nth-child(2){flex:0 1 220px}
+.company-toolbar input,.company-toolbar select{height:42px;min-height:42px;margin:0;background:#fff}
+.company-result-count{font-size:12px;color:var(--company-soft);margin-inline-start:auto;white-space:nowrap}
+.company-table{overflow-x:auto;border:1px solid var(--company-line);border-radius:12px}
+.company-table table{min-width:730px;width:100%}
+.company-table thead th{background:#f7f5fb;color:#5d5674;font-size:12px;font-weight:750}
+.company-table td{font-size:12.5px;white-space:normal;vertical-align:middle}
+.company-table tr[hidden]{display:none!important}
+.company-table .management-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start}
+.company-table .management-actions>*{margin:0}
+.company-table .management-actions button{font-size:12px;min-height:35px;padding:5px 10px;border-radius:9px}
+.company-state{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 11px;font-size:11px;font-weight:760;background:#eff5f2;color:#25684f;white-space:nowrap}
+.company-state-grace,.company-state-not_started{background:#fff5e4;color:#9f670d}
+.company-state-expired,.company-state-suspended,.company-state-invalid{background:#fff0f1;color:#b14158}
+.company-audit-history{margin-top:16px;border-top:1px solid var(--company-line);padding-top:14px}
+.company-audit-history>summary,.company-services-details>summary{cursor:pointer;font-weight:750;color:#533990;display:flex;gap:12px;align-items:center;justify-content:space-between;line-height:1.8;padding:8px 4px}
+.company-audit-history .table-wrap{margin-top:14px}
+.company-services-details>summary strong{display:block;color:#33284e}
+.company-services-details>summary small{display:block;font-size:11px;font-weight:500;color:var(--company-soft)}
+.company-inline-form{display:flex;gap:12px;align-items:flex-end;padding:15px 4px 4px;flex-wrap:wrap}
+.company-inline-form label{flex:1 1 320px;display:grid;gap:7px}
+.company-inline-form select,.company-inline-form button{min-height:43px}
+.company-console .company-manage-dialog{width:min(720px,calc(100vw - 26px));max-width:calc(100vw - 26px);max-height:min(92dvh,900px);padding:0;overflow:auto;border:1px solid #e6e1ef;border-radius:18px;direction:rtl;background:#fff;box-shadow:0 22px 80px #1c153d45}
+.company-console .company-manage-dialog::backdrop{background:#1f153c88;backdrop-filter:blur(3px)}
+.company-dialog-form{padding:22px 24px;display:grid;gap:17px}
+.company-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:12px;border-bottom:1px solid var(--company-line)}
+.company-dialog-heading h2{font-size:20px;margin:4px 0;line-height:1.5}
+.company-dialog-heading p{font-size:12px;margin:2px 0 0;line-height:1.8}
+.company-dialog-heading>button{flex:none;min-height:36px;min-width:36px}
+.company-form-panel{border:1px solid var(--company-line);border-radius:13px;padding:12px 16px 17px;min-width:0}
+.company-form-panel legend{padding:0 9px;color:#594181;font-weight:800}
+.company-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.company-form-grid label,.company-form-panel label{font-size:12.5px;font-weight:750;display:grid;align-content:start;gap:7px;min-width:0}
+.company-form-grid label>small,.company-form-panel label>small{color:#7c758a;font-weight:500;font-size:11px;line-height:1.6}
+.company-form-grid input,.company-form-grid select,.company-form-panel input{min-height:43px;background:#fbfafd;border-color:#ddd7eb;border-radius:11px}
+.company-span-2{grid-column:1/-1}
+.company-jalali-field{display:flex;align-items:center;min-width:0}
+.company-jalali-field button{min-height:43px;width:100%;text-align:right;background:#fbfafd!important;border:1px solid #ddd7eb;border-radius:11px;color:#362a51}
+.company-jalali-field button:hover{border-color:#8261b2}
+.company-period-preview{display:flex;flex-direction:column;gap:6px;padding:14px 17px;border:1px dashed #ac91d5;background:#f7f3fe;border-radius:12px}
+.company-period-preview span{font-size:12px;color:#65538a;font-weight:700}
+.company-period-preview output{font-size:20px;font-weight:850;color:#44257a}
+.company-period-preview small{color:#786c8f;font-size:11px;line-height:1.7}
+.company-dialog-footer{position:sticky;bottom:-22px;display:flex;justify-content:flex-end;align-items:center;gap:9px;flex-wrap:wrap;background:#fff;border-top:1px solid #eeeaf4;padding:15px 0 5px;z-index:1}
+.company-dialog-footer button{min-height:42px;padding-inline:20px}
+.company-console .company-confirm-dialog{width:min(520px,calc(100vw - 26px))}
+.company-console .company-confirm-dialog form{padding:22px;display:grid;gap:13px}
+.company-console .company-confirm-dialog .dialog-actions{position:sticky;bottom:0;background:#fff}
+.company-console .company-manage-dialog:not(#companyCreate):not(#companySubscriptionCreate) form.stack{padding:21px;display:grid;gap:12px}
+.company-console .company-manage-dialog form.stack>h2{font-size:18px;line-height:1.6}
+.company-console .company-manage-dialog form.stack>label{display:grid;gap:7px}
+.company-console .company-manage-dialog .dialog-actions button{min-height:42px}
+.company-console :is(input,select,button,summary):focus-visible{outline:3px solid #a988e5;outline-offset:2px}
+@media(max-width:1150px){.company-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.company-hero{padding:18px;align-items:flex-start}.company-hero-actions{width:100%}.company-hero-actions button{flex:1 1 150px}.company-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.company-console .company-panel{padding:16px 13px}.company-form-grid{grid-template-columns:1fr}.company-span-2{grid-column:1}.company-dialog-form{padding:16px}.company-toolbar{align-items:stretch}.company-toolbar label,.company-toolbar label:nth-child(2){flex:1 1 100%}.company-dialog-footer button{flex:1 1 130px}}
+@media(max-width:430px){.company-metrics{grid-template-columns:1fr 1fr;gap:8px}.company-metric{padding:13px 10px}.company-metric strong{font-size:19px}.company-hero h1{font-size:21px}.company-hero-actions button{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.company-console *{scroll-behavior:auto!important;transition:none!important}}
