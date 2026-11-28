@@ -48,6 +48,21 @@ function sodoryar_company_subscription(int $companyId): ?array {
     return $record?:null;
 }
 
+/**
+ * Audited subscription periods remain available after renewals and edits.
+ * Never infer historical paid amounts from cashbox or branch finances.
+ */
+function sodoryar_subscription_history(int $companyId,int $limit=25): array {
+    if ($companyId<1 || !sodoryar_subscription_ready()) return [];
+    $limit=max(1,min($limit,100));
+    return query(
+        'SELECT e.created_at,e.actor_id,e.old_snapshot,e.new_snapshot
+         FROM company_subscription_events e
+         WHERE e.company_id=? ORDER BY e.id DESC LIMIT '.$limit,
+        [$companyId]
+    )->fetchAll();
+}
+
 function sodoryar_company_entitlement(int $companyId): array {
     return sodoryar_subscription_state(sodoryar_company_subscription($companyId),date('Y-m-d'));
 }
