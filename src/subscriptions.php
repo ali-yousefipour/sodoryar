@@ -17,6 +17,37 @@ function sodoryar_subscription_ready(): bool {
 }
 
 /** Pure and testable entitlement calculation in Asia/Tehran calendar days. */
+/**
+ * End date is derived from Solar Hijri months, not Gregorian month lengths.
+ * Coverage is [start date, matching day N Jalali months later), inclusive end.
+ * When a target month has fewer days, its last day is used as the anniversary.
+ */
+function sodoryar_subscription_jalali_end(string $startIso,int $months): string {
+    if($months<1 || $months>120 || !preg_match('/^\d{4}-\d{2}-\d{2}$/D',$startIso)) {
+        throw new RuntimeException('تاریخ شروع یا مدت اشتراک نامعتبر است.');
+    }
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$startIso,new DateTimeZone('Asia/Tehran'));
+    if(!$date || $date->format('Y-m-d')!==$startIso) {
+        throw new RuntimeException('تاریخ شروع معتبر نیست.');
+    }
+    [$jy,$jm,$jd]=gregorian_to_jalali((int)$date->format('Y'),(int)$date->format('n'),(int)$date->format('j'));
+    $target=($jy*12)+$jm-1+$months;
+    $year=intdiv($target,12);
+    $month=($target%12)+1;
+    $anniversary=null;
+    for($day=$jd;$day>=1;$day--){
+        try {
+            $anniversary=jalali_to_gregorian_date(sprintf('%04d/%02d/%02d',$year,$month,$day));
+            break;
+        }catch(RuntimeException $ex){
+            // An anniversary on the 31st may land in a 30-day Jalali month.
+        }
+    }
+    if($anniversary===null) throw new RuntimeException('مدت اشتراک شمسی قابل محاسبه نیست.');
+    return (new DateTimeImmutable($anniversary,new DateTimeZone('Asia/Tehran')))
+        ->modify('-1 day')->format('Y-m-d');
+}
+
 function sodoryar_subscription_state(?array $subscription,string $today): array {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$today) || !checkdate((int)substr($today,5,2),(int)substr($today,8,2),(int)substr($today,0,4))) {
         throw new InvalidArgumentException('Invalid subscription evaluation date.');

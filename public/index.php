@@ -253,11 +253,19 @@ try {
         }
         if ($page === 'companies' && is_super() && $action === 'save_subscription') {
             $id=filter_var($_POST['company_id']??null,FILTER_VALIDATE_INT);
-            $fee=filter_var($_POST['monthly_fee']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
-            $months=filter_var($_POST['months']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>120]]);
-            $paid=filter_var($_POST['paid_amount']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $normalizeAmount=static function(mixed $value): string {
+                return preg_replace('/[,\x{066C}\s\x{200C}]/u','',ascii_digits(trim((string)$value)));
+            };
+            $fee=filter_var($normalizeAmount($_POST['monthly_fee']??''),FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $months=filter_var($normalizeAmount($_POST['months']??''),FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>120]]);
+            $paid=filter_var($normalizeAmount($_POST['paid_amount']??''),FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
             if (!$id || $fee===false || $months===false || $paid===false) throw new RuntimeException('مبالغ یا تعداد ماه‌های اشتراک نامعتبر است.');
-            sodoryar_subscription_save((int)$id,(string)($_POST['start_date']??''),(string)($_POST['end_date']??''),(int)$fee,(int)$months,(int)$paid,(string)($_POST['status']??''),(int)user()['id']);
+            $start=(string)($_POST['start_date']??'');
+            $end=(string)($_POST['end_date']??'');
+            if(($_POST['period_basis']??'')==='jalali') {
+                $end=sodoryar_subscription_jalali_end($start,(int)$months);
+            }
+            sodoryar_subscription_save((int)$id,$start,$end,(int)$fee,(int)$months,(int)$paid,(string)($_POST['status']??''),(int)user()['id']);
             redirect('companies','اشتراک شرکت با ثبت تاریخچه تغییرات ذخیره شد.');
         }
         if ($page === 'companies' && is_super() && $action === 'add') {
