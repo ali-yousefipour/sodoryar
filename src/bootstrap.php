@@ -149,6 +149,8 @@ function revoke_access_sessions(int $userId,int $companyId): void {
     query('UPDATE users SET auth_version=auth_version+1 WHERE id=? AND company_id=?',[$userId,$companyId]);
 }
 
+require_once __DIR__ . '/subscriptions.php';
+
 function require_login(): array {
     $u = user(); if (!$u) { header('Location: ?page=login'); exit; }
     if (time()-(int)($_SESSION['last_activity']??time())>1800) {
@@ -166,6 +168,7 @@ function require_login(): array {
             || ($versioned && (!isset($_SESSION['auth_version']) || (int)$_SESSION['auth_version'] !== (int)$record['auth_version']))) {
             $_SESSION=[]; session_regenerate_id(true); header('Location: ?page=login'); exit;
         }
+        if ($record['role']!=='superadmin') sodoryar_subscription_enforce((int)$record['company_id']);
         $_SESSION['user']=['id'=>(int)$record['id'],'role'=>$record['role'],'company_id'=>$record['company_id'],'full_name'=>$record['full_name']];
         $checked=true;
     }

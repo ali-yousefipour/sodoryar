@@ -225,6 +225,7 @@ try {
             $captchaValid=login_captcha_verify((string)($_POST['captcha_answer']??''));
             $u=$captchaValid?query('SELECT u.*, c.is_active AS company_active FROM users u LEFT JOIN companies c ON c.id=u.company_id WHERE u.username=? LIMIT 1', [$login])->fetch():false;
             if ($captchaValid && $u && (int) $u['is_active'] === 1 && ($u['role'] === 'superadmin' || (int) $u['company_active'] === 1) && password_verify($password, $u['password_hash'])) {
+                if ($u['role']!=='superadmin') sodoryar_subscription_enforce((int)$u['company_id']);
                 login_succeeded($attemptKey);
                 session_regenerate_id(true);
                 rotate_csrf_token();
@@ -249,6 +250,15 @@ try {
         }
         if ($action === 'leave_company' && is_super()) {
             unset($_SESSION['selected_company']); rotate_csrf_token(); redirect('dashboard','به داشبورد مدیریت کل بازگشتید.');
+        }
+        if ($page === 'companies' && is_super() && $action === 'save_subscription') {
+            $id=filter_var($_POST['company_id']??null,FILTER_VALIDATE_INT);
+            $fee=filter_var($_POST['monthly_fee']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $months=filter_var($_POST['months']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>120]]);
+            $paid=filter_var($_POST['paid_amount']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            if (!$id || $fee===false || $months===false || $paid===false) throw new RuntimeException('مبالغ یا تعداد ماه‌های اشتراک نامعتبر است.');
+            sodoryar_subscription_save((int)$id,(string)($_POST['start_date']??''),(string)($_POST['end_date']??''),(int)$fee,(int)$months,(int)$paid,(string)($_POST['status']??''),(int)user()['id']);
+            redirect('companies','اشتراک شرکت با ثبت تاریخچه تغییرات ذخیره شد.');
         }
         if ($page === 'companies' && is_super() && $action === 'add') {
             $name = trim((string)($_POST['name'] ?? ''));
@@ -1067,6 +1077,22 @@ $navGroup=null;
 <div class="heading"><div><h1>مدیریت شرکت‌ها</h1><p class="muted">هر شرکت پایگاه داده منطقی و دسترسی مستقل دارد.</p></div></div>
 <div class="card"><h2>افزودن شرکت و مدیر اولیه</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><label>نام شرکت<input name="name" required></label><label>شناسه انگلیسی<input name="slug" pattern="[a-z0-9-]{3,80}" placeholder="mashhad-taxi" required></label><label>نام مدیر شرکت<input name="manager_name" required></label><label>نام کاربری مدیر<input name="manager_username" pattern="[a-zA-Z0-9_.-]{3,100}" required></label><label>رمز اولیه مدیر<input type="password" minlength="12" autocomplete="new-password" name="manager_password" required></label><button>ثبت شرکت و مدیر</button></form></div>
 <div class="card company-defaults-card"><div class="heading"><div><h2>افزودن خدمات پیش‌فرض به شرکت‌های موجود</h2><p class="muted">فقط خدماتی که عنوانشان در شرکت وجود ندارد افزوده می‌شوند؛ مبلغ و وضعیت خدمات قبلی تغییر نمی‌کند. این عملیات را می‌توان دوباره اجرا کرد.</p></div><span class="status-chip status-good">بدون تغییر تعرفه‌های قبلی</span></div><form method="post" class="company-defaults-form"><?=csrf_field()?><input type="hidden" name="action" value="import_default_services"><label>شرکت مقصد<select name="company_id" required><option value="">انتخاب شرکت</option><?php foreach(query('SELECT id,name FROM companies'.(archive_ready('companies')?' WHERE archived_at IS NULL':'').' ORDER BY name')->fetchAll() as $companyOption): ?><option value="<?=e($companyOption['id'])?>"><?=e($companyOption['name'])?></option><?php endforeach; ?></select></label><button type="submit">افزودن خدمات پیش‌فرض</button></form></div>
+<?php if(sodoryar_subscription_ready()): ?>
+<div class="card"><h2>مدیریت اشتراک شرکت‌ها</h2><p class="muted">اشتراک شرکت‌های قبلی بدون ثبت دوره جدید همچنان فعال می‌ماند. مهلت تمدید سه روز کامل پس از تاریخ پایان است.</p>
+<form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="save_subscription">
+<label>شرکت<select name="company_id" required><option value="">انتخاب شرکت</option><?php foreach(query('SELECT id,name FROM companies ORDER BY name')->fetchAll() as $sc): ?><option value="<?=e($sc['id'])?>"><?=e($sc['name'])?></option><?php endforeach; ?></select></label>
+<label>تاریخ شروع (میلادی، ذخیره‌سازی داخلی)<input type="date" name="start_date" required></label>
+<label>تاریخ پایان (میلادی، ذخیره‌سازی داخلی)<input type="date" name="end_date" required></label>
+<label>هزینه ماهانه (تومان)<input type="number" name="monthly_fee" min="0" step="1" required></label>
+<label>تعداد ماه<input type="number" name="months" min="1" max="120" value="1" required></label>
+<label>مبلغ پرداخت‌شده (تومان)<input type="number" name="paid_amount" min="0" step="1" value="0" required></label>
+<label>وضعیت<select name="status"><option value="active">فعال</option><option value="suspended">تعلیق دستی</option></select></label>
+<button>ثبت یا به‌روزرسانی اشتراک</button></form>
+<div class="table-wrap"><table><thead><tr><th>شرکت</th><th>پایان اشتراک</th><th>وضعیت</th><th>مانده (تومان)</th></tr></thead><tbody>
+<?php foreach(query('SELECT c.name,s.end_date,s.total_amount,s.paid_amount,s.status FROM company_subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.end_date')->fetchAll() as $sub): $subState=sodoryar_subscription_state($sub,date('Y-m-d')); ?>
+<tr><td><?=e($sub['name'])?></td><td><?=e($sub['end_date'])?></td><td><?=e($subState['state'])?></td><td><?=money((int)$sub['total_amount']-(int)$sub['paid_amount'])?></td></tr>
+<?php endforeach; ?></tbody></table></div></div>
+<?php endif; ?>
 <div class="card"><h2>شرکت‌های ثبت‌شده</h2><p class="muted">حذف شرکت به‌صورت بایگانی انجام می‌شود تا فاکتورها و گزارش‌های مالی آن محفوظ بمانند.</p><div class="table-wrap"><table><thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php
 $companyManagers=[];
 foreach(query('SELECT id,company_id,full_name,username,is_active FROM users WHERE role=? ORDER BY company_id,is_active DESC,id ASC',['company_admin'])->fetchAll() as $adminRow) {
