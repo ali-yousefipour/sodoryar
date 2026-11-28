@@ -65,7 +65,7 @@ if (!str_contains($workflow, 'login-experience.css workspace-refresh.css login-u
 $verifyPrivate=strpos($workflow,'Verify deployed private PHP files match the triggering commit');
 $verifyPublic=strpos($workflow,'Verify deployed application commit manifest');
 if ($verifyPrivate===false || $verifyPublic===false || !($upload<$verifyPrivate && $verifyPrivate<$verifyPublic)
-    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private')
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/_private/src')
     || !str_contains($workflow, 'get "_private/src/modules.php"')
     || !str_contains($workflow, 'get "_private/src/bootstrap.php"')
     || !str_contains($workflow, 'get "_private/src/localization.php"')
@@ -73,4 +73,10 @@ if ($verifyPrivate===false || $verifyPublic===false || !($upload<$verifyPrivate 
     || !str_contains($workflow, 'Private PHP file $file does not match the commit after FTP upload.')) {
     throw new RuntimeException('Deployment must mirror and read-back-verify private PHP code before claiming success.');
 }
-echo "Release ownership, incremental FTP transport and migration gate contracts passed\n";
+if (!str_contains($workflow, 'known_good_lock=')
+    || !str_contains($workflow, 'reuse_vendor=1')
+    || !str_contains($workflow, 'put deploy-payload/public/index.php -o "index.php"')
+    || !str_contains($workflow, 'mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private/vendor')) {
+    throw new RuntimeException('Production upload must reinstall the matching private runtime before publishing the public router.');
+}
+echo "Release ownership, protected PHP recovery and migration gate contracts passed\n";
