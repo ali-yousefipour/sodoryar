@@ -288,20 +288,74 @@ jobs:
               timeout 90s sudo apt-get install -y -qq lftp
             fi
           fi
-          # Incremental transfer avoids retransmitting unchanged dependencies on every commit.
-          # Critical files are read back and compared with the checkout after upload.
-          # Do not delete remote files. Database and .env remain managed separately.
-          # FTP without TLS transmits credentials and data without transport encryption.
+          # Repair the critical application runtime before publishing the public router.
+          # Avoid uploading the entire Composer tree on every commit: it is expensive
+          # on shared FTP and previously left mixed PHP versions when runs timed out.
+          composer_lock_sha="$(sha256sum composer.lock | awk '{print $1}')"
+          previous_vendor_lock="$RUNNER_TEMP/sodoryar-live-vendor-lock"
+          previous_autoload="$RUNNER_TEMP/sodoryar-live-vendor-autoload.php"
+          lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF || true
+          set cmd:fail-exit no
+          set ftp:ssl-allow false
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          set net:max-retries 2
+          set net:timeout 25
+          get "_private/.sodoryar-vendor-lock.sha256" -o "$previous_vendor_lock"
+          get "_private/vendor/autoload.php" -o "$previous_autoload"
+          bye
+          EOF
+          known_good_lock="52d805c39b312e0e703c9d3e3bb5e4c1e3f0a1a7"
+          current_lock_blob="$(git hash-object composer.lock)"
+          expected_autoload="$(sha256sum deploy-payload/_private/vendor/autoload.php | awk '{print $1}')"
+          current_autoload=""
+          if [[ -f "$previous_autoload" ]]; then
+            current_autoload="$(sha256sum "$previous_autoload" | awk '{print $1}')"
+          fi
+          reuse_vendor=0
+          if [[ "$current_autoload" == "$expected_autoload" ]] && {
+              { [[ -f "$previous_vendor_lock" ]] && [[ "$(cat "$previous_vendor_lock")" == "$composer_lock_sha" ]]; } ||
+              [[ "$current_lock_blob" == "$known_good_lock" ]];
+            }; then
+            reuse_vendor=1
+            echo "Verified existing Composer runtime with unchanged locked dependencies."
+          fi
+          if [[ "$reuse_vendor" != 1 ]]; then
+            echo "Composer lock or runtime changed; refreshing protected vendor dependencies."
+            lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          set cmd:fail-exit yes
+          set ftp:ssl-allow false
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          set net:max-retries 3
+          set net:timeout 30
+          mirror -R --verbose --no-perms --parallel=2 deploy-payload/_private/vendor "$FTP_REMOTE_DIR/_private/vendor"
+          bye
+          EOF
+            printf '%s\n' "$composer_lock_sha" > "$RUNNER_TEMP/sodoryar-vendor-lock.sha256"
+            lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
+          set cmd:fail-exit yes
+          set ftp:ssl-allow false
+          set ftp:passive-mode true
+          set ftp:prefer-epsv false
+          put "$RUNNER_TEMP/sodoryar-vendor-lock.sha256" -o "_private/.sodoryar-vendor-lock.sha256"
+          bye
+          EOF
+          fi
+          # Force freshly built PHP source. This is deliberately separate from vendor.
           lftp --user "$FTP_USER" --password "$FTP_PASS" "ftp://$FTP_HOST:21" <<EOF
           set cmd:fail-exit yes
           set ftp:ssl-allow false
           set ftp:passive-mode true
           set ftp:prefer-epsv false
-          set net:max-retries 5
-          set net:timeout 60
-          set net:reconnect-interval-base 2
-          mirror -R --verbose --no-perms --parallel=2 --ignore-time deploy-payload/_private "$FTP_REMOTE_DIR/_private"
+          set net:max-retries 3
+          set net:timeout 30
+          mirror -R --verbose --no-perms --transfer-all --parallel=2 deploy-payload/_private/src "$FTP_REMOTE_DIR/_private/src"
+          put deploy-payload/_private/.htaccess -o "_private/.htaccess"
+          put deploy-payload/_private/.env.example -o "_private/.env.example"
           mirror -R --verbose --no-perms --parallel=2 deploy-payload/public "$FTP_REMOTE_DIR"
+          # The router is published last, after the matching private runtime.
+          put deploy-payload/public/index.php -o "index.php"
           bye
           EOF
 
