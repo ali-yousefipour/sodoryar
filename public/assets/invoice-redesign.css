@@ -217,3 +217,13 @@
 .invoice-payment-error{color:#b42318;font-weight:600}
 @media(max-width:900px){.invoice-payment-row{grid-template-columns:repeat(2,minmax(0,1fr))}.payment-pos-fields{grid-column:1/-1}.invoice-payment-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.invoice-payment-row{grid-template-columns:1fr}.payment-pos-fields{grid-column:auto;grid-template-columns:1fr}.invoice-payment-summary{grid-template-columns:1fr 1fr}.payment-mode-group{display:grid;grid-template-columns:1fr}.payment-mode-group button{width:100%}}
+
+/* Payment correction dialogs: keep all fields inside the viewport. */
+dialog.app-dialog.invoice-payment-edit-dialog{width:min(920px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:90dvh;overflow:auto;box-sizing:border-box;padding:24px;direction:rtl}
+.invoice-payment-edit-dialog .invoice-payment-replace,.invoice-payment-edit-dialog .invoice-payment-rows,.invoice-payment-edit-dialog .invoice-payment-row,.invoice-payment-edit-dialog .payment-pos-fields{min-width:0;max-width:100%;box-sizing:border-box}
+.invoice-payment-edit-dialog .invoice-payment-row,.invoice-payment-edit-dialog .payment-pos-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.invoice-payment-edit-dialog .payment-pos-fields,.invoice-payment-edit-dialog .invoice-payment-row>p{grid-column:1/-1}
+.invoice-payment-edit-dialog .payment-pos-fields[hidden]{display:none!important}
+.invoice-payment-edit-dialog label,.invoice-payment-edit-dialog input,.invoice-payment-edit-dialog select,.invoice-payment-edit-dialog textarea{min-width:0;max-width:100%;box-sizing:border-box}
+.invoice-payment-edit-dialog .dialog-actions{position:sticky;bottom:0;background:var(--surface,#fff);padding:12px 0;display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:600px){dialog.app-dialog.invoice-payment-edit-dialog{padding:14px}.invoice-payment-edit-dialog .invoice-payment-row,.invoice-payment-edit-dialog .payment-pos-fields{grid-template-columns:minmax(0,1fr)}}

@@ -1,6 +1,18 @@
 <?php
 declare(strict_types=1);
+// Fail closed when a cancelled FTP deployment leaves an incomplete bootstrap.
+ini_set('display_errors','0');
 require __DIR__ . '/_private/src/bootstrap.php';
+foreach (['user','is_super','can','require_login','require_permission','tenant_id','query','verify_csrf'] as $requiredFunction) {
+    if (!function_exists($requiredFunction)) {
+        error_log('Sodoryar incomplete bootstrap: missing '.$requiredFunction);
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=utf-8');
+        header('Retry-After: 60');
+        exit('نسخه سامانه به‌طور کامل بارگذاری نشده است. لطفاً با پشتیبانی تماس بگیرید.');
+    }
+}
+unset($requiredFunction);
 /** Mixed-version deployment or stale OPcache must not expose a secondary fatal error. */
 if (!function_exists('public_operation_error')) {
     function public_operation_error(Throwable $ex): string {
@@ -768,6 +780,9 @@ try {
                 $locked=query('SELECT id,COALESCE(invoice_date,DATE(created_at)) financial_date FROM invoices WHERE id=? AND company_id=? FOR UPDATE',[$id,$tenant])->fetch();
                 if (!$locked) throw new RuntimeException('فاکتور متعلق به این شرکت نیست.');
                 accounting_assert_write_open($tenant,$locked['financial_date']);
+                if(query('SELECT invoice_id FROM invoice_voids WHERE company_id=? AND invoice_id=?',[$tenant,$id])->fetch())
+                    throw new RuntimeException('این فاکتور قبلاً باطل شده است.');
+                if(function_exists('cashbox_assert_payments_mutable'))cashbox_assert_payments_mutable($tenant,(int)$id);
                 query('INSERT INTO invoice_voids(invoice_id,company_id,voided_by,reason) VALUES(?,?,?,?)',[$id,$tenant,user()['id'],$reason]);
                 audit('invoice.void',json_encode(['invoice_id'=>$id,'reason'=>$reason],JSON_UNESCAPED_UNICODE));
                 db()->commit();
@@ -1253,7 +1268,7 @@ function render_invoices(int $tenant, int $limit): void {
     $voidColumn=database_table_exists('invoice_voids')?'v.reason AS void_reason, v.voided_at':'NULL AS void_reason, NULL AS voided_at';
     $voidJoin=database_table_exists('invoice_voids')?' LEFT JOIN invoice_voids v ON v.invoice_id=i.id AND v.company_id=i.company_id':'';
     $own=document_scope()==='own';
-    $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.pos_ref,i.invoice_date,i.created_at,c.first_name,c.last_name,'.$voidColumn.' FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id'.$voidJoin.' WHERE i.company_id=?'.($own?' AND i.user_id=?':'').' ORDER BY i.id DESC LIMIT '.(int)$limit,$own?[$tenant,user()['id']]:[$tenant])->fetchAll();
+    $rows=query('SELECT i.id,i.invoice_number,i.total_amount,i.payment_type,i.pos_ref,i.invoice_date,i.created_at,c.first_name,c.last_name,'.$voidColumn.' FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id'.$voidJoin.' WHERE i.company_id=?'.($own?' AND i.user_id=?':'').($voidJoin!==''?' AND v.invoice_id IS NULL':'').' ORDER BY i.id DESC LIMIT '.(int)$limit,$own?[$tenant,user()['id']]:[$tenant])->fetchAll();
     $paymentsByInvoice=[];
     $ledger=invoice_payment_ledger_ready();
     if ($ledger && $rows) {
