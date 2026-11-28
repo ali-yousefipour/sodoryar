@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     });
   };
   scan(document.body);
+  // Native numeric controls retain ASCII DOM values for min/max/step validation;
+  // Persian locale allows browsers that support localized number controls to
+  // show national digits without changing the submitted values.
+  document.querySelectorAll('input[type="number"]').forEach(input=>input.lang='fa-IR');
   // Added DOM fragments may include financial tables, notifications and modals.
   const observer=new MutationObserver(records=>{
     for(const record of records){
@@ -66,4 +70,33 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(isSafeInput(event.target)){delete event.target.dataset.persianComposing;localizeInput(event.target);}
   },true);
   document.addEventListener('input',event=>localizeInput(event.target),true);
+  // Convert Persian keyboard digits back to transport digits only when the form
+  // payload is constructed; this does not change what is visible to the user.
+  document.addEventListener('formdata',event=>{
+    const form=event.target;
+    if(!(form instanceof HTMLFormElement))return;
+    const data=event.formData;
+    const replacements=new Map();
+    data.forEach((value,key)=>{
+      if(typeof value!=='string'||!/[۰-۹٠-٩]/.test(value))return;
+      const associated=[...form.elements].find(field=>field?.name===key);
+      if(!associated||!(associated instanceof HTMLInputElement))return;
+      const numeric=associated.dataset.moneyInput!==undefined
+        ||/^(numeric|decimal|tel)$/.test(associated.inputMode)
+        ||/(?:amount|price|national|mobile|phone|postal|tracking|reference|plate|card_number)/i.test(key);
+      if(!numeric)return;
+      const group=replacements.get(key)||[];
+      group.push(value);
+      replacements.set(key,group);
+    });
+    for(const [key] of replacements){
+      const originals=data.getAll(key);
+      data.delete(key);
+      originals.forEach(value=>{
+        if(typeof value!=='string'){data.append(key,value);return;}
+        data.append(key,value.replace(/[۰-۹]/g,c=>String(c.charCodeAt(0)-1776))
+          .replace(/[٠-٩]/g,c=>String(c.charCodeAt(0)-1632)));
+      });
+    }
+  });
 });

@@ -35,6 +35,24 @@ def log_in(browser, name: str):
     response = page.goto(f"{ORIGIN}/?page=login", wait_until="domcontentloaded")
     assert response is not None and response.status == 200, "Login page failed to load"
     expect(page.locator(".login-card")).to_be_visible()
+    # Shared number handling must keep visible Persian digits in numeric text
+    # and in DOM elements rendered after the initial page load.
+    page.evaluate("""() => {
+      const input=document.createElement('input');
+      input.name='ci_numeric_probe';
+      input.type='text';
+      input.inputMode='numeric';
+      input.id='ciNumericProbe';
+      document.body.append(input);
+      const span=document.createElement('span');
+      span.id='ciDynamicDigits';
+      span.textContent='شماره 12345';
+      document.body.append(span);
+    }""")
+    page.locator("#ciNumericProbe").fill("12345")
+    expect(page.locator("#ciNumericProbe")).to_have_value("۱۲۳۴۵")
+    expect(page.locator("#ciDynamicDigits")).to_have_text("شماره ۱۲۳۴۵")
+    page.evaluate("() => {document.getElementById('ciNumericProbe').remove();document.getElementById('ciDynamicDigits').remove();}")
     assert "Vazirmatn" in page.locator("body").evaluate(
         "(el) => getComputedStyle(el).fontFamily"
     ), "Login must use the shared Persian font stack"

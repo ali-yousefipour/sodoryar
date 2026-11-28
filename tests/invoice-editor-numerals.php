@@ -25,7 +25,9 @@ if(substr_count($renderer,"'<dialog")!==1
 if(!str_contains($digits,'MutationObserver')
    ||!str_contains($digits,"NodeFilter.SHOW_TEXT")
    ||!str_contains($digits,"element.hasAttribute('pattern')")
-   ||!str_contains($digits,"element.dataset.moneyInput!==undefined")) {
+   ||!str_contains($digits,"element.dataset.moneyInput!==undefined")
+   ||!str_contains($digits,"document.addEventListener('formdata'")
+   ||!str_contains($digits,"input.lang='fa-IR'")) {
     throw new RuntimeException('Numeral localization missed dynamic text or safe input boundaries.');
 }
 if(!str_contains($index,'assets/invoice-editor-compact.js')
