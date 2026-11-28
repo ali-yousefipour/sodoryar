@@ -312,6 +312,16 @@ def main() -> None:
         assert editor_dialog.locator('[name="invoice_date"][data-jalali-iso]').count()==1
         assert editor_dialog.locator('[name="action"][value="replace_payments"]').count()==1
         assert editor_dialog.locator('dialog').count()==0
+        expect(editor_dialog.locator('[data-invoice-tab="date"]')).to_have_attribute("aria-selected","true")
+        expect(editor_dialog.locator('[data-invoice-panel="date"]')).to_be_visible()
+        expect(editor_dialog.locator('[data-invoice-panel="payment"]')).to_be_hidden()
+        size=editor_dialog.bounding_box()
+        assert size and size["height"] <= 615, "Invoice editor is too tall"
+        editor_dialog.locator('[data-invoice-tab="payment"]').click()
+        expect(editor_dialog.locator('[data-invoice-panel="payment"]')).to_be_visible()
+        expect(editor_dialog.locator('[data-invoice-panel="date"]')).to_be_hidden()
+        editor_dialog.locator('[data-invoice-tab="date"]').click()
+        expect(editor_dialog.locator('[data-invoice-panel="date"]')).to_be_visible()
         editor_dialog.locator('[data-dialog-close]').first.click()
         expect(editor_dialog).not_to_be_visible()
         collect_button=manager_a.locator(f'[data-dialog-open="invoiceCollect{partial_id.group(1)}"]')
@@ -340,6 +350,9 @@ def main() -> None:
         assert manager_dialog.locator('[name="action"][value="edit_invoice_date"]').count()==1
         assert manager_dialog.locator('[name="invoice_date"][data-jalali-iso]').count()==1
         assert manager_dialog.locator('[name="action"][value="replace_payments"]').count()==1
+        manager_dialog.locator('[data-invoice-tab="payment"]').click()
+        expect(manager_dialog.locator('[data-invoice-panel="payment"]')).to_be_visible()
+        assert manager_dialog.evaluate("(el) => el.scrollHeight <= window.innerHeight + 10")
         manager_dialog.locator('[data-dialog-close]').first.click()
         expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
         expect(manager_a.locator(".manager-results")).to_contain_text("CI E2E Custom Service")

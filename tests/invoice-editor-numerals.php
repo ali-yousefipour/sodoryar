@@ -16,7 +16,7 @@ if(substr_count($renderer,"'<dialog")!==1
    ||!str_contains($renderer,'data-invoice-panel="date"')
    ||!str_contains($renderer,'data-invoice-panel="payment"')
    ||!str_contains($renderer,'render_invoice_payment_replace_dialog')
-   ||!str_contains($css,'max-height:calc(100dvh - 30px)')
+   ||!str_contains($css,'height:auto;max-height:min(610px,calc(100dvh - 30px))')
    ||!str_contains($css,'.invoice-editor-body{flex:1 1 auto')
    ||!str_contains($tabScript,"setAttribute('role','tablist')")
    ||!str_contains($tabScript,"panel.hidden=panel.dataset.invoicePanel!==type")) {
