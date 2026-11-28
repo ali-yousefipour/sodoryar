@@ -725,6 +725,31 @@ try {
             } catch(Throwable $ex) { db()->rollBack(); throw $ex; }
             redirect('invoices','شیوه پرداخت فاکتور با ثبت سابقه اصلاح شد.');
         }
+        if (in_array($page,['invoices','invoice_manager'],true) && $action==='edit_invoice_date') {
+            require_permission('invoices.payment_edit'); $tenant=tenant_id();
+            $id=filter_var($_POST['invoice_id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            $date=ascii_digits((string)($_POST['invoice_date']??''));
+            $parsed=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+            $reason=trim((string)($_POST['reason']??''));
+            if(!$id||!$parsed||$parsed->format('Y-m-d')!==$date||$date>date('Y-m-d')||mb_strlen($reason)<5||mb_strlen($reason)>500)throw new RuntimeException('تاریخ یا دلیل اصلاح معتبر نیست.');
+            db()->beginTransaction();
+            try{
+                $invoice=query('SELECT * FROM invoices WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
+                if(!$invoice)throw new RuntimeException('فاکتور پیدا نشد.');
+                require_document_owner((int)$invoice['user_id']);
+                if(branches_ready())branch_require($tenant,(int)user()['id'],$invoice['branch_id']);
+                if(database_table_exists('invoice_voids')&&query('SELECT invoice_id FROM invoice_voids WHERE company_id=? AND invoice_id=?',[$tenant,$id])->fetch())throw new RuntimeException('فاکتور ابطال‌شده قابل ویرایش نیست.');
+                $before=$invoice['invoice_date']?:substr($invoice['created_at'],0,10);
+                accounting_assert_write_open($tenant,$before);
+                accounting_assert_write_open($tenant,$date);
+                if($before!==$date){
+                    query('UPDATE invoices SET invoice_date=? WHERE company_id=? AND id=?',[$date,$tenant,$id]);
+                    audit('invoice.date.update',json_encode(['invoice_id'=>$id,'reason'=>$reason,'before_date'=>$before,'after_date'=>$date],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE),$tenant);
+                }
+                db()->commit();
+            }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
+            redirect($page,'تاریخ فاکتور اصلاح شد؛ تاریخ دریافت وجه بدون تغییر باقی ماند.');
+        }
         if ($page==='invoices' && $action==='replace_payments') {
             require_permission('invoices.payment_edit'); $tenant=tenant_id();
             if (!invoice_payment_ledger_ready()) throw new RuntimeException('ابتدا میگرشن ۰۱۶ را اجرا کنید.');
@@ -1263,6 +1288,13 @@ function finish_invoice_creation(int $invoiceId): never {
     }
     redirect(can('invoices.view')?'invoices':'dashboard','فاکتور با موفقیت ثبت شد.');
 }
+
+function render_invoice_date_edit(int $id,string $date): void {
+    if(!can('invoices.payment_edit'))return;
+    $dialog='invoiceDateEdit'.$id;
+    echo '<button type="button" class="small secondary" data-dialog-open="'.$dialog.'">ویرایش تاریخ</button><dialog class="app-dialog" id="'.$dialog.'"><form method="post" class="stack">'.csrf_field().'<input type="hidden" name="action" value="edit_invoice_date"><input type="hidden" name="invoice_id" value="'.$id.'"><h2>اصلاح تاریخ فاکتور</h2><label>تاریخ شمسی<span class="jalali-field"><input type="hidden" name="invoice_date" data-jalali-iso value="'.e($date).'"><button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ</button></span></label><p class="muted">تاریخ دریافت وجه و زمان ثبت اولیه تغییر نمی‌کند.</p><label>دلیل اصلاح<textarea name="reason" required minlength="5" maxlength="500"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ثبت اصلاح</button></div></form></dialog>';
+}
+
 function render_invoices(int $tenant, int $limit): void {
     require_permission('invoices.view');
     $voidColumn=database_table_exists('invoice_voids')?'v.reason AS void_reason, v.voided_at':'NULL AS void_reason, NULL AS voided_at';
@@ -1291,6 +1323,7 @@ function render_invoices(int $tenant, int $limit): void {
         $payLabel=count($methods)>1?'ترکیبی':(($methods[0]??$r['payment_type'])==='cash'?'نقدی':'کارتخوان');
         $payLabel.=count($actualPayments)>1?' ('.fa_digits((string)count($actualPayments)).' تراکنش)':'';
         echo '<tr><td>'.e(display_financial_reference($r['invoice_number'])).'</td><td>'.e($r['first_name'].' '.$r['last_name']).'</td><td>'.money_toman($r['total_amount']).'</td><td>'.e($payLabel).'</td><td>'.money_toman($voided?0:$balance).'</td><td>'.e(jalali_datetime($r['invoice_date'] ?: $r['created_at'],true)).'</td><td>'.($voided?'<span class="status-chip status-muted" title="'.e($r['void_reason']).'">باطل‌شده</span>':'<span class="status-chip status-good">معتبر</span>').'</td><td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.e($r['id']).'">چاپ</a>':'');
+        if(!$voided)render_invoice_date_edit((int)$r['id'],$r['invoice_date']?:substr($r['created_at'],0,10));
         if (can('invoices.payment_edit') && !$voided && invoice_followup_ready() && $balance>0) {
             render_invoice_collect_dialog($tenant,(int)$r['id'],$balance);
         }

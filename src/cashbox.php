@@ -49,10 +49,11 @@ function cashbox_start_shift(int $tenant,int $operator,int $register,int $openin
     }catch(Throwable $ex){db()->rollBack();throw $ex;}
 }
 function cashbox_shift_totals(int $tenant,int $shift): array {
+    $valid=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=p.company_id AND v.invoice_id=p.invoice_id)':'';
     $money=query("SELECT COUNT(p.id) receipts,
        COALESCE(SUM(CASE WHEN p.payment_method='cash' THEN p.amount ELSE 0 END),0) cash,
        COALESCE(SUM(CASE WHEN p.payment_method='pos' THEN p.amount ELSE 0 END),0) pos
-       FROM invoice_payments p WHERE p.company_id=? AND p.cash_shift_id=? AND p.voided_at IS NULL",
+       FROM invoice_payments p WHERE p.company_id=? AND p.cash_shift_id=? AND p.voided_at IS NULL".$valid,
        [$tenant,$shift])->fetch();
     $adjust=query("SELECT
        COALESCE(SUM(CASE WHEN direction='in' THEN amount ELSE 0 END),0) incoming,
@@ -64,9 +65,10 @@ function cashbox_shift_totals(int $tenant,int $shift): array {
 }
 /** Net in DECIMAL before conversion: gross turnover may exceed the PHP integer range. */
 function cashbox_expected_cash(int $tenant,int $shift): int {
+    $valid=database_table_exists('invoice_voids')?' AND NOT EXISTS (SELECT 1 FROM invoice_voids v WHERE v.company_id=p.company_id AND v.invoice_id=p.invoice_id)':'';
     $value=query("SELECT s.opening_cash
         + COALESCE((SELECT SUM(p.amount) FROM invoice_payments p WHERE p.company_id=s.company_id
-            AND p.cash_shift_id=s.id AND p.voided_at IS NULL AND p.payment_method='cash'),0)
+            AND p.cash_shift_id=s.id AND p.voided_at IS NULL AND p.payment_method='cash'".$valid."),0)
         + COALESCE((SELECT SUM(CASE WHEN a.direction='in' THEN CAST(a.amount AS DECIMAL(65,0)) ELSE -CAST(a.amount AS DECIMAL(65,0)) END)
             FROM cash_shift_adjustments a WHERE a.company_id=s.company_id AND a.shift_id=s.id),0)
         FROM cash_shifts s WHERE s.company_id=? AND s.id=?",[$tenant,$shift])->fetchColumn();

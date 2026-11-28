@@ -297,6 +297,23 @@ function handle_module_post(string $page, string $action): void {
         }
         redirect('bills',$action==='trash'?'فیش به سطل زباله منتقل شد.':($action==='restore'?'فیش بازیابی شد.':'فیش واجد شرایط به‌صورت دائمی حذف شد.'));
     }
+    if ($page==='pos' && $action==='edit') {
+        require_admin();
+        $id=filter_var($_POST['terminal_id']??null,FILTER_VALIDATE_INT);
+        $brand=pos_provider_name($_POST);
+        $ip=trim((string)($_POST['ip_address']??''));
+        $port=filter_var(ascii_digits((string)($_POST['port']??'')),FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>65535]]);
+        if(!$id||!$port||($ip!==''&&!filter_var($ip,FILTER_VALIDATE_IP)))throw new RuntimeException('مشخصات کارتخوان نامعتبر است.');
+        db()->beginTransaction();
+        try{
+            $old=query('SELECT * FROM pos_settings WHERE company_id=? AND id=? FOR UPDATE',[$tenant,$id])->fetch();
+            if(!$old)throw new RuntimeException('کارتخوان متعلق به شرکت نیست.');
+            query('UPDATE pos_settings SET brand=?,ip_address=?,port=? WHERE company_id=? AND id=?',[$brand,$ip,$port,$tenant,$id]);
+            audit('pos.edit',json_encode(['terminal_id'=>$id,'before'=>['brand'=>$old['brand'],'ip'=>$old['ip_address'],'port'=>$old['port']],'after'=>['brand'=>$brand,'ip'=>$ip,'port'=>$port]],JSON_THROW_ON_ERROR|JSON_UNESCAPED_UNICODE),$tenant);
+            db()->commit();
+        }catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
+        redirect('pos','مشخصات کارتخوان اصلاح شد.');
+    }
     if ($page === 'pos' && $action === 'add') {
         require_admin();
         $brand=pos_provider_name($_POST); $ip=trim((string)($_POST['ip_address']??''));
@@ -580,7 +597,7 @@ function render_module(string $page, int $tenant): void {
     if ($page==='pos') { require_permission('pos.view'); ?>
       <h1>مدیریت کارتخوان‌ها</h1><p class="muted">تعریف دستگاه برای استفاده در اتصال آینده؛ پرداخت آنلاین از سرور لینوکسی انجام نمی‌شود.</p>
       <?php if(can('users.manage')): ?><div class="card"><h2>افزودن کارتخوان</h2><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="action" value="add"><div data-pos-provider><label for="posProviderSearch">شرکت ارائه‌دهنده کارتخوان (برند)</label><input id="posProviderSearch" type="search" placeholder="جست‌وجوی نام شرکت…" autocomplete="off" aria-controls="posProviderSelect"><label for="posProviderSelect">انتخاب شرکت</label><select id="posProviderSelect" name="brand" required><option value="">انتخاب شرکت</option><?php foreach(pos_provider_directory() as $provider): ?><option value="<?=e($provider)?>"><?=e($provider)?></option><?php endforeach; ?><option value="other">سایر</option></select><label data-pos-other hidden>نام شرکت دیگر<input name="brand_other" maxlength="100" disabled></label><small data-pos-provider-status aria-live="polite"></small></div><script src="assets/pos-provider.js?v=1" defer></script><label>IP دستگاه<input name="ip_address" placeholder="192.168.1.10"></label><label>پورت<input name="port" type="number" min="1" max="65535" required></label><?php if(function_exists('branches_ready') && branches_ready() && database_table_exists('pos_account_registry')): ?><label>شعبه<select name="branch_id" required><option value="">انتخاب شعبه</option><?=resource_options(branch_choices($tenant,(int)user()['id']))?></select></label><label>حساب مقصد<select name="account_id" required><option value="">انتخاب حساب</option><?=resource_options(query('SELECT id,title FROM company_bank_accounts WHERE company_id=? AND is_active=1 ORDER BY title',[$tenant])->fetchAll(),'title')?></select></label><label>شماره پایانه<input name="terminal_number" inputmode="numeric" maxlength="64" required></label><?php endif; ?><button>ثبت دستگاه</button></form></div><?php endif; ?>
-      <div class="card"><h2>دستگاه‌ها</h2><?php render_table(['برند','IP','پورت','فعال'],query('SELECT brand,ip_address,port,is_active FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll()); ?></div>
+      <div class="card"><h2>دستگاه‌ها</h2><div class="table-wrap"><table><thead><tr><th>برند</th><th>IP</th><th>پورت</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php foreach(query('SELECT * FROM pos_settings WHERE company_id=? ORDER BY id DESC',[$tenant])->fetchAll() as $device): $did=(int)$device['id']; $custom=!in_array($device['brand'],pos_provider_directory(),true); ?><tr><td><?=e($device['brand'])?></td><td><?=e($device['ip_address'])?></td><td><?=e(fa_digits((string)$device['port']))?></td><td><?=$device['is_active']?'فعال':'غیرفعال'?></td><td><?php if(can('users.manage')): ?><button type="button" class="secondary small" data-dialog-open="posEdit<?=$did?>">ویرایش</button><dialog class="app-dialog" id="posEdit<?=$did?>"><form method="post" class="stack"><?=csrf_field()?><input type="hidden" name="action" value="edit"><input type="hidden" name="terminal_id" value="<?=$did?>"><h2>ویرایش کارتخوان</h2><label>شرکت ارائه‌دهنده<select name="brand" required><?php foreach(pos_provider_directory() as $provider): ?><option value="<?=e($provider)?>" <?=$device['brand']===$provider?'selected':''?>><?=e($provider)?></option><?php endforeach; ?><option value="other" <?=$custom?'selected':''?>>سایر</option></select></label><label>نام شرکت (در صورت انتخاب سایر)<input name="brand_other" maxlength="100" value="<?=e($custom?$device['brand']:'')?>"></label><label>IP دستگاه<input name="ip_address" dir="ltr" value="<?=e($device['ip_address'])?>"></label><label>پورت<input name="port" type="number" min="1" max="65535" value="<?=e((string)$device['port'])?>" required></label><div class="dialog-actions"><button type="button" class="secondary" data-dialog-close>انصراف</button><button>ذخیره تغییرات</button></div></form></dialog><?php endif; ?></td></tr><?php endforeach; ?></tbody></table></div></div>
     <?php return; }
     if ($page==='templates') { require_admin(); ?>
       <h1>طراحی قالب چاپ فاکتور</h1><p class="muted">تنظیم مشخصات قالب و مشاهده نمونه چاپ؛ برای استفاده در فاکتور، قالب موردنظر را پیش‌فرض کنید.</p>

@@ -219,11 +219,12 @@ function render_invoice_manager_detail(int $tenant,int $id): void {
     echo '<section class="card"><h2>سابقه ابطال</h2>';
     if($void)echo '<p>دلیل: '.e($void['reason']).'</p><p>ابطال‌کننده: '.e($void['actor']??'—').' | زمان: '.e(jalali_datetime($void['voided_at'])).'</p>';else echo '<p>سند ابطال نشده است.</p>';
     echo '</section><section class="card"><h2>تاریخچه ویرایش</h2>';
-    $logs=query("SELECT l.action,l.details,l.created_at,u.full_name actor FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id WHERE l.company_id=? AND l.action IN ('invoice.payment.update','invoice.payments.replace') AND CASE WHEN JSON_VALID(l.details) THEN JSON_UNQUOTE(JSON_EXTRACT(l.details,'$.invoice_id')) ELSE NULL END=? ORDER BY l.id DESC",[$tenant,(string)$id])->fetchAll();
+    $logs=query("SELECT l.action,l.details,l.created_at,u.full_name actor FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id WHERE l.company_id=? AND l.action IN ('invoice.payment.update','invoice.payments.replace','invoice.date.update') AND CASE WHEN JSON_VALID(l.details) THEN JSON_UNQUOTE(JSON_EXTRACT(l.details,'$.invoice_id')) ELSE NULL END=? ORDER BY l.id DESC",[$tenant,(string)$id])->fetchAll();
     if(!$logs)echo '<p>سابقه ویرایشی ثبت نشده است.</p>';
     foreach($logs as $log){
         $d=json_decode((string)$log['details'],true);
         echo '<details class="card"><summary>'.e($log['actor']??'—').' — '.e(jalali_datetime($log['created_at'])).'</summary><p>دلیل: '.e((string)($d['reason']??'—')).'</p>';
+        if(isset($d['before_date'],$d['after_date']))echo '<p>تاریخ قبلی: '.e(jalali_datetime($d['before_date'],true)).' | تاریخ جدید: '.e(jalali_datetime($d['after_date'],true)).'</p>';
         foreach(($d['receipts']??[]) as $change){
             if(!is_array($change)||!isset($change['before'],$change['after']))continue;
             echo '<div class="table-wrap"><table><thead><tr><th>مشخصه</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
@@ -350,7 +351,9 @@ function render_invoice_management(int $tenant): void {
             '<td>'.e($row['first_name'].' '.$row['last_name']).'<small class="manager-secondary">'.e(fa_digits((string)$row['national_code'])).'</small></td>'.
             '<td class="manager-service">'.e((string)$row['services']).'</td><td>'.money_toman($total).'</td><td>'.money_toman($paid).'</td><td>'.money_toman(max(0,$total-$paid)).'</td>'.
             '<td>'.e($methods).'</td><td>'.e($row['operator_name']).'</td><td><span class="status-chip '.($void?'status-muted':($paid>=$total?'status-good':'status-warning')).'">'.e($status).'</span></td>'.
-            '<td><div class="management-actions"><a class="button-link secondary small" href="?page=invoice_manager&amp;detail='.(int)$row['id'].'">جزئیات</a>'.(can('invoices.print')?'<a class="button-link small" target="_blank" rel="noopener" href="?page=receipt&amp;id='.(int)$row['id'].'&amp;auto_print=1">چاپ</a>':'').'</div></td></tr>';
+            '<td><div class="management-actions"><a class="button-link secondary small" href="?page=invoice_manager&amp;detail='.(int)$row['id'].'">جزئیات</a>'.(can('invoices.print')?'<a class="button-link small" target="_blank" rel="noopener" href="?page=receipt&amp;id='.(int)$row['id'].'&amp;auto_print=1">چاپ</a>':'').'';
+        if(!$void)render_invoice_date_edit((int)$row['id'],$row['invoice_date']?:substr($row['created_at'],0,10));
+        echo '</div></td></tr>';
     }
     if(!$rows) echo '<tr><td colspan="12">فاکتوری با این فیلترها پیدا نشد.</td></tr>';
     echo '</tbody></table></div><nav class="manager-pagination" aria-label="صفحه‌بندی فاکتورها">';
