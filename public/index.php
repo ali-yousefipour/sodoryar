@@ -1093,6 +1093,34 @@ $navGroup=null;
 <tr><td><?=e($sub['name'])?></td><td><?=e($sub['end_date'])?></td><td><?=e(['active'=>'فعال','grace'=>'مهلت تمدید','expired'=>'منقضی','suspended'=>'تعلیق‌شده','not_started'=>'آغازنشده','invalid'=>'نامعتبر','unassigned'=>'تخصیص‌نیافته'][$subState['state']]??'نامشخص')?></td><td><?=money((int)$sub['total_amount']-(int)$sub['paid_amount'])?></td></tr>
 <?php endforeach; ?></tbody></table></div></div>
 <?php endif; ?>
+<?php if(sodoryar_subscription_ready()): ?>
+<div class="card"><div class="heading"><div><h2>وضعیت اشتراک شرکت‌ها</h2><p class="muted">این مبالغ مربوط به اشتراک نرم‌افزار هستند و وارد گردش صندوق شعب نمی‌شوند.</p></div></div>
+<?php
+$subscriptionSummary=query("SELECT
+ COUNT(*) total,
+ SUM(CASE WHEN status='suspended' THEN 1 ELSE 0 END) suspended,
+ SUM(CASE WHEN status='active' AND end_date>=CURRENT_DATE() AND start_date<=CURRENT_DATE() THEN 1 ELSE 0 END) active_count,
+ SUM(CASE WHEN status='active' AND end_date<CURRENT_DATE() AND DATEDIFF(CURRENT_DATE(),end_date) BETWEEN 1 AND 3 THEN 1 ELSE 0 END) grace_count,
+ SUM(CASE WHEN status='active' AND DATEDIFF(CURRENT_DATE(),end_date)>3 THEN 1 ELSE 0 END) expired_count,
+ COALESCE(SUM(total_amount-paid_amount),0) outstanding
+ FROM company_subscriptions")->fetch();
+?>
+<div class="stat-grid">
+<div class="stat-card"><span>اشتراک‌های ثبت‌شده</span><strong><?=money((int)$subscriptionSummary['total'])?></strong></div>
+<div class="stat-card"><span>فعال</span><strong><?=money((int)$subscriptionSummary['active_count'])?></strong></div>
+<div class="stat-card"><span>مهلت تمدید</span><strong><?=money((int)$subscriptionSummary['grace_count'])?></strong></div>
+<div class="stat-card"><span>منقضی</span><strong><?=money((int)$subscriptionSummary['expired_count'])?></strong></div>
+<div class="stat-card"><span>تعلیق‌شده</span><strong><?=money((int)$subscriptionSummary['suspended'])?></strong></div>
+<div class="stat-card"><span>مطالبات ثبت‌شده (تومان)</span><strong><?=money((string)$subscriptionSummary['outstanding'])?></strong></div>
+</div>
+<details><summary>آخرین تغییرات و تمدید اشتراک‌ها</summary>
+<div class="table-wrap"><table><thead><tr><th>شرکت</th><th>زمان ثبت تغییر</th><th>کاربر ثبت‌کننده</th><th>شروع دوره</th><th>پایان دوره</th><th>هزینه ماهانه</th><th>مبلغ پرداخت‌شده</th><th>وضعیت</th></tr></thead><tbody>
+<?php foreach(query('SELECT e.created_at,e.new_snapshot,c.name AS company_name,u.full_name AS actor_name FROM company_subscription_events e JOIN companies c ON c.id=e.company_id LEFT JOIN users u ON u.id=e.actor_id ORDER BY e.id DESC LIMIT 50')->fetchAll() as $event):
+$snapshot=json_decode((string)$event['new_snapshot'],true); if(!is_array($snapshot))continue; ?>
+<tr><td><?=e($event['company_name'])?></td><td><?=e($event['created_at'])?></td><td><?=e($event['actor_name']??'نامشخص')?></td><td><?=e($snapshot['start_date']??'')?></td><td><?=e($snapshot['end_date']??'')?></td><td><?=money((string)($snapshot['monthly_fee']??'0'))?></td><td><?=money((string)($snapshot['paid_amount']??'0'))?></td><td><?=e($snapshot['status']==='active'?'فعال':'تعلیق‌شده')?></td></tr>
+<?php endforeach; ?></tbody></table></div></details>
+</div>
+<?php endif; ?>
 <div class="card"><h2>شرکت‌های ثبت‌شده</h2><p class="muted">حذف شرکت به‌صورت بایگانی انجام می‌شود تا فاکتورها و گزارش‌های مالی آن محفوظ بمانند.</p><div class="table-wrap"><table><thead><tr><th>نام</th><th>شناسه</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody><?php
 $companyManagers=[];
 foreach(query('SELECT id,company_id,full_name,username,is_active FROM users WHERE role=? ORDER BY company_id,is_active DESC,id ASC',['company_admin'])->fetchAll() as $adminRow) {
