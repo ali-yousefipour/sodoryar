@@ -8,7 +8,9 @@ declare(strict_types=1);
  */
 function sodoryar_subscription_ready(): bool {
     static $ready=null;
-    if ($ready===null) {
+    // Retry a previously missing table: a disposable integration test may apply
+    // the migration after an earlier readiness probe in the same PHP process.
+    if ($ready!==true) {
         $ready=(bool)query("SHOW TABLES LIKE 'company_subscriptions'")->fetchColumn();
     }
     return $ready;
