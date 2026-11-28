@@ -263,7 +263,17 @@ try {
             $start=(string)($_POST['start_date']??'');
             $end=(string)($_POST['end_date']??'');
             if(($_POST['period_basis']??'')==='jalali') {
-                $end=sodoryar_subscription_jalali_end($start,(int)$months);
+                // Keep existing terms intact when only price/payment/status changes.
+                // Recalculate an inclusive Solar Hijri end only when term fields change.
+                if(($_POST['period_changed']??'1')==='0') {
+                    $previous=sodoryar_company_subscription((int)$id);
+                    if(!$previous || $previous['start_date']!==$start || (int)$previous['months']!==(int)$months) {
+                        throw new RuntimeException('دوره اشتراک تغییر کرده است؛ صفحه را تازه‌سازی کنید.');
+                    }
+                    $end=(string)$previous['end_date'];
+                } else {
+                    $end=sodoryar_subscription_jalali_end($start,(int)$months);
+                }
             }
             sodoryar_subscription_save((int)$id,$start,$end,(int)$fee,(int)$months,(int)$paid,(string)($_POST['status']??''),(int)user()['id']);
             redirect('companies','اشتراک شرکت با ثبت تاریخچه تغییرات ذخیره شد.');
@@ -1129,7 +1139,7 @@ $subscriptionStats=query("SELECT COUNT(*) total,
 <?php if(sodoryar_subscription_ready()): ?>
 <dialog class="app-dialog company-manage-dialog" id="companySubscriptionCreate" aria-labelledby="companySubscriptionTitle">
   <form method="post" class="company-dialog-form" data-subscription-period><?=csrf_field()?>
-    <input type="hidden" name="action" value="save_subscription"><input type="hidden" name="period_basis" value="jalali">
+    <input type="hidden" name="action" value="save_subscription"><input type="hidden" name="period_basis" value="jalali"><input type="hidden" name="period_changed" data-subscription-period-changed value="1">
     <div class="company-dialog-heading"><div><span class="company-eyebrow">اشتراک مبتنی بر تقویم رسمی ایران</span><h2 id="companySubscriptionTitle">تعریف اشتراک شمسی</h2><p class="muted">تاریخ پایان بر اساس تعداد ماه‌های شمسی از تاریخ شروع محاسبه می‌شود.</p></div><button type="button" class="secondary small" data-dialog-close aria-label="بستن پنجره">×</button></div>
     <div class="company-form-grid">
       <label class="company-span-2">شرکت مقصد<select name="company_id" required><option value="">انتخاب شرکت</option><?php foreach(query('SELECT id,name FROM companies ORDER BY name')->fetchAll() as $sc): ?><option value="<?=e($sc['id'])?>"><?=e($sc['name'])?></option><?php endforeach; ?></select></label>
@@ -1155,12 +1165,12 @@ $subscriptionStats=query("SELECT COUNT(*) total,
   <td><button type="button" class="secondary small" data-dialog-open="subEdit<?=e($sub['company_id'])?>">ویرایش / تمدید</button>
   <dialog class="app-dialog company-manage-dialog" id="subEdit<?=e($sub['company_id'])?>" aria-labelledby="subEditTitle<?=e($sub['company_id'])?>">
     <form method="post" class="company-dialog-form" data-subscription-period><?=csrf_field()?>
-      <input type="hidden" name="action" value="save_subscription"><input type="hidden" name="company_id" value="<?=e($sub['company_id'])?>"><input type="hidden" name="period_basis" value="jalali">
+      <input type="hidden" name="action" value="save_subscription"><input type="hidden" name="company_id" value="<?=e($sub['company_id'])?>"><input type="hidden" name="period_basis" value="jalali"><input type="hidden" name="period_changed" data-subscription-period-changed value="0">
       <div class="company-dialog-heading"><div><span class="company-eyebrow">تمدید و اصلاح اشتراک</span><h2 id="subEditTitle<?=e($sub['company_id'])?>"><?=e($sub['name'])?></h2><p class="muted">اطلاعات دوره فعلی نمایش داده شده است؛ سابقه تغییرات قبلی حفظ می‌شود.</p></div><button type="button" class="secondary small" data-dialog-close aria-label="بستن پنجره">×</button></div>
       <div class="company-form-grid">
         <label>تاریخ شروع شمسی<span class="jalali-field company-jalali-field"><input type="hidden" name="start_date" data-jalali-iso data-subscription-start value="<?=e($sub['start_date'])?>"><button type="button" class="secondary jalali-picker-button" data-jalali-open>انتخاب تاریخ شروع</button></span></label>
         <label>مدت اشتراک (ماه شمسی)<input type="number" name="months" min="1" max="120" value="<?=e($sub['months'])?>" data-subscription-months required></label>
-        <div class="company-period-preview company-span-2"><span>پایان دوره پس از محاسبه شمسی</span><output data-subscription-end-preview aria-live="polite"><?=e(jalali_datetime($sub['end_date'],true))?></output><input type="hidden" name="end_date" data-subscription-end-iso value="<?=e($sub['end_date'])?>"><small>با تغییر تاریخ شروع یا تعداد ماه، پایان دوره به‌صورت خودکار محاسبه می‌شود.</small></div>
+        <div class="company-period-preview company-span-2"><span>تاریخ پایان دوره (شمسی)</span><output data-subscription-end-preview aria-live="polite"><?=e(jalali_datetime($sub['end_date'],true))?></output><input type="hidden" name="end_date" data-subscription-end-iso value="<?=e($sub['end_date'])?>"><small>با تغییر تاریخ شروع یا تعداد ماه، پایان دوره به‌صورت خودکار محاسبه می‌شود.</small></div>
         <label>هزینه هر ماه (تومان)<input type="text" inputmode="numeric" data-money-input name="monthly_fee" value="<?=e($sub['monthly_fee'])?>" required></label>
         <label>مبلغ پرداخت‌شده (تومان)<input type="text" inputmode="numeric" data-money-input name="paid_amount" value="<?=e($sub['paid_amount'])?>" required></label>
         <label class="company-span-2">وضعیت<select name="status"><option value="active" <?=$sub['status']==='active'?'selected':''?>>فعال</option><option value="suspended" <?=$sub['status']==='suspended'?'selected':''?>>تعلیق دستی</option></select></label>
