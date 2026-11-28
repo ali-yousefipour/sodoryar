@@ -28,6 +28,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(value)node.textContent=value;
     return node;
   };
+  const branch=form.querySelector('#invoiceBranch');
+  const source=document.getElementById('invoiceTerminalOptions');
+  const scoped=source?.dataset.branchScoped==='1';
+  const syncTerminal=(terminal,row)=>{
+    const previous=row.terminal;
+    const options=[...(source?.options||[])].filter(o=>o.value&&(!scoped||o.dataset.branch===branch?.value));
+    terminal.replaceChildren(new Option(options.length?'انتخاب دستگاه':'کارتخوان فعال برای این شعبه تعریف نشده است',''));
+    const seen=new Set();
+    options.forEach(o=>{if(!seen.has(o.value)){seen.add(o.value);terminal.add(o.cloneNode(true));}});
+    terminal.value=seen.has(previous)?previous:(options[0]?.value||'');
+    row.terminal=terminal.value;
+  };
   const totalPaid=()=>rows.reduce((sum,r)=>sum+amount(r.amount),0n);
   const refresh=()=>{
     const due=total();
@@ -40,6 +52,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       const method=card.querySelector('[name$="[method]"]');if(method.value!==row.method)method.value=row.method;
       card.querySelector('.payment-pos-fields').hidden=row.method!=='pos';
       card.querySelector('input[name$="[tracking]"]').required=row.method==='pos';
+      const terminal=card.querySelector('select[name$="[terminal]"]');
+      if(terminal){terminal.required=scoped&&row.method==='pos'&&!noInitial?.checked;terminal.disabled=row.method!=='pos'||!!noInitial?.checked;}
       card.querySelector('[data-remove-payment]').hidden=mode!=='multi';
     });
     const set=(selector,n)=>{form.querySelector(selector).textContent=format.format(n);};
@@ -67,12 +81,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     field.addEventListener('blur',()=>{if(validGroup(field.value))field.value=format.format(BigInt(digits(field.value)));});
     amountLabel.append(field);
     const pos=el('div',{class:'payment-pos-fields'});
-    const source=document.getElementById('invoiceTerminalOptions');
-    if(source && source.options.length>1){
-      const terminalLabel=el('label',{},'دستگاه کارتخوان (اختیاری)');
-      const terminal=source.cloneNode(true);
-      terminal.id='';terminal.hidden=false;terminal.removeAttribute('aria-hidden');
-      terminal.name=`payments[${index}][terminal]`;
+    if(source && (scoped||source.options.length>1)){
+      const terminalLabel=el('label',{},scoped?'دستگاه کارتخوان شعبه':'دستگاه کارتخوان (اختیاری)');
+      const terminal=el('select',{name:`payments[${index}][terminal]`});
+      syncTerminal(terminal,row);
       terminal.addEventListener('change',()=>{row.terminal=terminal.value;});
       terminalLabel.append(terminal);pos.append(terminalLabel);
     }
@@ -106,6 +118,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   form.addEventListener('change',event=>{
     if(event.target.closest('[data-service-option],.extra-invoice-row'))refresh();
+  });
+  branch?.addEventListener('change',()=>{
+    host.querySelectorAll('.invoice-payment-row').forEach((card,i)=>{
+      const terminal=card.querySelector('select[name$="[terminal]"]');
+      if(terminal&&rows[i])syncTerminal(terminal,rows[i]);
+    });
+    refresh();
   });
   allowPartial?.addEventListener('change',()=>{if(!allowPartial.checked && noInitial?.checked)noInitial.checked=false;refresh();});
   noInitial?.addEventListener('change',refresh);
