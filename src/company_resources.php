@@ -120,6 +120,18 @@ function company_resources_post(string $page,string $action): never {
     } catch(Throwable $ex){if(db()->inTransaction())db()->rollBack();throw $ex;}
     redirect($page,'اطلاعات با موفقیت ثبت شد.');
 }
+/** Repair missing shared bank reference data; preserve existing IDs and disabled states. */
+function company_bank_directory(): array {
+    $names=['بانک ملی ایران','بانک سپه','بانک کشاورزی','بانک مسکن','بانک صنعت و معدن','بانک توسعه صادرات ایران','پست بانک ایران','بانک توسعه تعاون','بانک ملت','بانک صادرات ایران','بانک تجارت','بانک رفاه کارگران','بانک کارآفرین','بانک سامان','بانک اقتصاد نوین','بانک پاسارگاد','بانک پارسیان','بانک سرمایه','بانک سینا','بانک شهر','بانک ایران زمین','بانک گردشگری','بانک دی','بانک قرض الحسنه مهر ایران','بانک خاورمیانه','بانک ایران و ونزوئلا','بانک قرض الحسنه رسالت','مؤسسه اعتباری ملل'];
+    $existing=query('SELECT name FROM banks')->fetchAll(PDO::FETCH_COLUMN);
+    $normalize=static fn(string $name): string => preg_replace('/[\s\x{200c}\x{200d}]+/u','',str_replace(['ي','ك','ؤ','أ'],['ی','ک','و','ا'],$name));
+    $known=array_fill_keys(array_map($normalize,$existing),true);
+    foreach($names as $name){
+        if(isset($known[$normalize($name)]))continue;
+        query('INSERT INTO banks(name) VALUES(?) ON DUPLICATE KEY UPDATE id=id',[$name]);
+    }
+    return query('SELECT id,name FROM banks WHERE is_active=1 ORDER BY name')->fetchAll();
+}
 function resource_options(array $rows,string $label='name'): string {
     $html='';
     foreach($rows as $row)$html.='<option value="'.(int)$row['id'].'">'.e($row[$label]).'</option>';
@@ -154,7 +166,7 @@ function render_company_resources(string $page): void {
     } elseif($page==='bank_accounts'){
         echo '<h1>حساب‌های بانکی شرکت</h1>';
         if(!database_table_exists('company_bank_accounts')){echo '<div class="card">ابتدا مهاجرت ۰۲۵ را اجرا کنید.</div>';return;}
-        $banks=query('SELECT id,name FROM banks WHERE is_active=1 ORDER BY name')->fetchAll();
+        $banks=company_bank_directory();
         if(is_super()){
             echo '<details class="card"><summary>فعال‌سازی و غیرفعال‌سازی بانک‌ها</summary>';
             foreach(query('SELECT id,name,is_active FROM banks ORDER BY name')->fetchAll() as $bank){
@@ -164,7 +176,7 @@ function render_company_resources(string $page): void {
         }
 
         if(is_super()) echo '<div class="card"><h2>تعریف بانک</h2><form method="post" class="form-grid">'.$csrf.'<input type="hidden" name="action" value="bank"><label>نام بانک<input name="name" maxlength="160" required></label><button>ثبت بانک</button></form></div>';
-        echo '<div class="card"><h2>تعریف حساب</h2><form method="post" class="form-grid">'.$csrf.'<input type="hidden" name="action" value="account"><label>عنوان حساب<input name="title" maxlength="160" required></label><label>بانک<select name="bank_id" required>'.resource_options($banks).'</select></label><label>شعبه<select name="branch_id"><option value="">مشترک شرکت</option>'.$options.'</select></label><label>شماره حساب<input name="account_number" maxlength="40"></label><label>شبا<input name="iban" dir="ltr" maxlength="26"></label><button>ثبت حساب</button></form></div>';
+        echo '<div class="card"><h2>تعریف حساب</h2><form method="post" class="form-grid">'.$csrf.'<input type="hidden" name="action" value="account"><label>عنوان حساب<input name="title" maxlength="160" required></label><label>بانک<select name="bank_id" required><option value="">انتخاب بانک</option>'.resource_options($banks).'</select></label><label>شعبه<select name="branch_id"><option value="">مشترک شرکت</option>'.$options.'</select></label><label>شماره حساب<input name="account_number" maxlength="40"></label><label>شبا<input name="iban" dir="ltr" maxlength="26"></label><button>ثبت حساب</button></form></div>';
         render_table(['عنوان','بانک','شعبه','شماره حساب','شبا'],query("SELECT a.title,k.name bank,COALESCE(b.name,'مشترک شرکت') branch,a.account_number,a.iban FROM company_bank_accounts a JOIN banks k ON k.id=a.bank_id LEFT JOIN branches b ON b.id=a.branch_id AND b.company_id=a.company_id WHERE a.company_id=? ORDER BY a.id DESC",[$tenant])->fetchAll());
     }
 }
