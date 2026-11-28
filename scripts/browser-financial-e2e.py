@@ -124,14 +124,14 @@ def main() -> None:
         )
         context_a, manager_a = log_in(browser, "ci_manager_a")
         service_response=manager_a.goto(f"{ORIGIN}/?page=services")
-        if manager_a.get_by_text("CI E2E Service A").count() == 0:
+        if manager_a.get_by_text("CI E۲E Service A").count() == 0:
             manager_a.screenshot(path=str(OUTPUT / "service-error.png"), full_page=True)
             raise AssertionError(
                 f"Company A service missing: HTTP {service_response.status if service_response else 'none'}; "
                 f"URL={manager_a.url}; page={manager_a.locator('body').inner_text()[:1800]}"
             )
-        expect(manager_a.get_by_text("CI E2E Service A")).to_be_visible()
-        assert manager_a.get_by_text("CI E2E Service B").count() == 0, "Foreign company service leaked"
+        expect(manager_a.get_by_text("CI E۲E Service A")).to_be_visible()
+        assert manager_a.get_by_text("CI E۲E Service B").count() == 0, "Foreign company service leaked"
 
         # Global Ctrl+K search must honor tenant isolation and keyboard dismissal.
         manager_a.keyboard.press("Control+k")
@@ -139,9 +139,9 @@ def main() -> None:
         expect(search_dialog).to_be_visible()
         search_dialog.locator("#globalSearchInput").fill("CI E2E Service A")
         expect(search_dialog.locator("#globalSearchResults")).to_contain_text(
-            "CI E2E Service A", timeout=12000
+            "CI E۲E Service A", timeout=12000
         )
-        assert "CI E2E Service B" not in search_dialog.inner_text(), (
+        assert "CI E۲E Service B" not in search_dialog.inner_text(), (
             "Cross-company service leaked into global search"
         )
         manager_a.keyboard.press("Escape")
@@ -373,7 +373,7 @@ def main() -> None:
         assert manager_dialog.evaluate("(el) => el.scrollHeight <= window.innerHeight + 10")
         manager_dialog.locator('[data-dialog-close]').first.click()
         expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
-        expect(manager_a.locator(".manager-results")).to_contain_text("CI E2E Custom Service")
+        expect(manager_a.locator(".manager-results")).to_contain_text("CI E۲E Custom Service")
         assert manager_a.locator(".manager-results tbody tr").count() > 0, (
             "Invoice manager did not show the newly issued invoice"
         )
@@ -467,8 +467,8 @@ def main() -> None:
 
         context_b, manager_b = log_in(browser, "ci_manager_b")
         manager_b.goto(f"{ORIGIN}/?page=services")
-        expect(manager_b.get_by_text("CI E2E Service B")).to_be_visible()
-        assert manager_b.get_by_text("CI E2E Service A").count() == 0, "Company A service leaked into B"
+        expect(manager_b.get_by_text("CI E۲E Service B")).to_be_visible()
+        assert manager_b.get_by_text("CI E۲E Service A").count() == 0, "Company A service leaked into B"
         manager_b.goto(f"{ORIGIN}/?page=receipt&id={invoice_id.group(1)}")
         expect(manager_b.get_by_text("فاکتور پیدا نشد.")).to_be_visible()
         assert manager_b.locator(".receipt").count() == 0, "Foreign invoice receipt accessible by ID"
