@@ -40,7 +40,8 @@ if (!$databaseTouched) throw new RuntimeException('Authorized renderer did not p
 if (!str_contains($source,"<?php if(can('invoices.view')): ?><div class=\"card\"><div class=\"heading\"><h2>آخرین فاکتورها")) {
     throw new RuntimeException('Dashboard invoice history lacks its view permission gate.');
 }
-if (!str_contains($source,"if (can('invoices.payment_edit')) {")) {
+if (!str_contains($source,'function render_invoice_edit_dialog(')
+    || !str_contains($source,"if (!can('invoices.payment_edit')) return;")) {
     throw new RuntimeException('Payment edit dialog is not restricted to its own permission.');
 }
 echo "Invoice history authorization behavior passed\n";
