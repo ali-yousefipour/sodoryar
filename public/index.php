@@ -1089,7 +1089,7 @@ $navGroup=null;
 <label>وضعیت<select name="status"><option value="active">فعال</option><option value="suspended">تعلیق دستی</option></select></label>
 <button>ثبت یا به‌روزرسانی اشتراک</button></form>
 <div class="table-wrap"><table><thead><tr><th>شرکت</th><th>پایان اشتراک</th><th>وضعیت</th><th>مانده (تومان)</th></tr></thead><tbody>
-<?php foreach(query('SELECT c.name,s.end_date,s.total_amount,s.paid_amount,s.status FROM company_subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.end_date')->fetchAll() as $sub): $subState=sodoryar_subscription_state($sub,date('Y-m-d')); ?>
+<?php foreach(query('SELECT c.name,s.start_date,s.end_date,s.total_amount,s.paid_amount,s.status FROM company_subscriptions s JOIN companies c ON c.id=s.company_id ORDER BY s.end_date')->fetchAll() as $sub): $subState=sodoryar_subscription_state($sub,date('Y-m-d')); ?>
 <tr><td><?=e($sub['name'])?></td><td><?=e($sub['end_date'])?></td><td><?=e($subState['state'])?></td><td><?=money((int)$sub['total_amount']-(int)$sub['paid_amount'])?></td></tr>
 <?php endforeach; ?></tbody></table></div></div>
 <?php endif; ?>
