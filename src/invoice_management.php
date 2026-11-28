@@ -193,7 +193,55 @@ function invoice_management_trend(int $tenant): array {
     return array_values($days);
 }
 
+
+/** A separate read-only document view; do not expose internal audit notes to ordinary operators. */
+function render_invoice_manager_detail(int $tenant,int $id): void {
+    require_permission('invoices.view');
+    $branch=branches_ready();
+    $invoice=query("SELECT i.*,c.first_name,c.last_name,c.national_code,c.mobile,c.line_area,c.line_code,u.full_name issuer".($branch?',b.name branch_name':',NULL branch_name')." FROM invoices i JOIN customers c ON c.id=i.customer_id AND c.company_id=i.company_id LEFT JOIN users u ON u.id=i.user_id AND (u.company_id=i.company_id OR u.role='superadmin')".($branch?' LEFT JOIN branches b ON b.id=i.branch_id AND b.company_id=i.company_id':'')." WHERE i.company_id=? AND i.id=?",[$tenant,$id])->fetch();
+    echo '<div class="heading"><h1>جزئیات فاکتور</h1><a class="button-link secondary" href="?page=invoice_manager">بازگشت به گزارش فاکتورها</a></div>';
+    if(!$invoice){echo '<div class="alert error">فاکتور پیدا نشد.</div>';return;}
+    require_document_owner((int)$invoice['user_id']);
+    if($branch && user()['role']==='operator' && !in_array((int)$invoice['branch_id'],array_map('intval',array_column(branch_choices($tenant,(int)user()['id']),'id')),true)){echo '<div class="alert error">این سند خارج از شعب مجاز شماست.</div>';return;}
+    $manager=in_array(user()['role'],['company_admin','superadmin'],true)||can('invoices.payment_edit')||can('invoices.void');
+    $void=database_table_exists('invoice_voids')?query("SELECT v.reason,v.voided_at,u.full_name actor FROM invoice_voids v LEFT JOIN users u ON u.id=v.voided_by WHERE v.company_id=? AND v.invoice_id=?",[$tenant,$id])->fetch():false;
+    $fields=['شماره فاکتور'=>display_financial_reference($invoice['invoice_number']),'تاریخ سند'=>jalali_datetime($invoice['invoice_date']?:$invoice['created_at'],true),'زمان ثبت'=>jalali_datetime($invoice['created_at']),'صادرکننده'=>$invoice['issuer'],'شعبه صادرکننده'=>$invoice['branch_name'],'وضعیت'=>$void?'باطل‌شده':'معتبر','نام تاکسیران'=>$invoice['first_name'].' '.$invoice['last_name'],'کد ملی'=>fa_digits($invoice['national_code']),'تلفن همراه'=>fa_digits((string)$invoice['mobile']),'خط فعالیت'=>$invoice['line_area'],'کد خط'=>fa_digits((string)$invoice['line_code'])];
+    echo '<section class="card"><h2>مشخصات سند و تاکسیران</h2><div class="form-grid">';
+    foreach($fields as $label=>$value)echo '<div><small class="muted">'.e($label).'</small><p>'.e((string)($value?:'—')).'</p></div>';
+    echo '</div></section><section class="card"><h2>خدمات دریافتی</h2><div class="table-wrap"><table><thead><tr><th>خدمت</th><th>مبلغ</th></tr></thead><tbody>';
+    foreach(query('SELECT service_title,price FROM invoice_items WHERE company_id=? AND invoice_id=? ORDER BY id',[$tenant,$id])->fetchAll() as $item)echo '<tr><td>'.e($item['service_title']).'</td><td>'.money_toman($item['price']).'</td></tr>';
+    echo '</tbody></table></div><p>جمع کل: <strong>'.money_toman($invoice['total_amount']).'</strong></p></section>';
+    $totals=invoice_payment_totals($tenant,$id,(int)$invoice['total_amount']);
+    echo '<section class="card"><h2>پرداخت‌ها</h2><div class="table-wrap"><table><thead><tr><th>روش</th><th>مبلغ</th><th>شماره پیگیری</th><th>زمان</th></tr></thead><tbody>';
+    foreach($totals['payments'] as $pay)echo '<tr><td>'.($pay['payment_method']==='cash'?'نقدی':'کارتخوان').'</td><td>'.money_toman($pay['amount']).'</td><td>'.e(display_financial_reference($pay['tracking_number']??'')).'</td><td>'.e(jalali_datetime($pay['paid_at'])).'</td></tr>';
+    echo '</tbody></table></div><p>دریافتی: '.money_toman($totals['paid']).' | مانده: '.money_toman($totals['remaining']).'</p></section>';
+    if(!$manager)return;
+    echo '<section class="card"><h2>سابقه ابطال</h2>';
+    if($void)echo '<p>دلیل: '.e($void['reason']).'</p><p>ابطال‌کننده: '.e($void['actor']??'—').' | زمان: '.e(jalali_datetime($void['voided_at'])).'</p>';else echo '<p>سند ابطال نشده است.</p>';
+    echo '</section><section class="card"><h2>تاریخچه ویرایش</h2>';
+    $logs=query("SELECT l.action,l.details,l.created_at,u.full_name actor FROM activity_logs l LEFT JOIN users u ON u.id=l.user_id WHERE l.company_id=? AND l.action IN ('invoice.payment.update','invoice.payments.replace') AND CASE WHEN JSON_VALID(l.details) THEN JSON_UNQUOTE(JSON_EXTRACT(l.details,'$.invoice_id')) ELSE NULL END=? ORDER BY l.id DESC",[$tenant,(string)$id])->fetchAll();
+    if(!$logs)echo '<p>سابقه ویرایشی ثبت نشده است.</p>';
+    foreach($logs as $log){
+        $d=json_decode((string)$log['details'],true);
+        echo '<details class="card"><summary>'.e($log['actor']??'—').' — '.e(jalali_datetime($log['created_at'])).'</summary><p>دلیل: '.e((string)($d['reason']??'—')).'</p>';
+        foreach(($d['receipts']??[]) as $change){
+            if(!is_array($change)||!isset($change['before'],$change['after']))continue;
+            echo '<div class="table-wrap"><table><thead><tr><th>مشخصه</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
+            foreach(['amount'=>'مبلغ (تومان)','payment_method'=>'روش پرداخت','terminal_id'=>'شناسه کارتخوان','tracking_number'=>'پیگیری','reference_number'=>'مرجع'] as $key=>$label){
+                $before=$change['before'][$key]??null;$after=$change['after'][$key]??null;
+                $format=static fn($v)=>$v===null?'—':($key==='amount'?money_toman($v):($key==='payment_method'?($v==='cash'?'نقدی':'کارتخوان'):fa_digits((string)$v)));
+                echo '<tr><td>'.e($label).'</td><td>'.e($format($before)).'</td><td>'.e($format($after)).'</td></tr>';
+            }
+            echo '</tbody></table></div>';
+        }
+        if(isset($d['before'],$d['after']))echo '<p>روش قبلی: '.e((string)($d['before']['payment_type']??'—')).' | روش جدید: '.e((string)($d['after']['payment_type']??'—')).'</p><p>پیگیری قبلی: '.e(fa_digits((string)($d['before']['pos_ref']??'—'))).' | پیگیری جدید: '.e(fa_digits((string)($d['after']['pos_ref']??'—'))).'</p>';
+        echo '</details>';
+    }
+    echo '</section>';
+}
+
 function render_invoice_management(int $tenant): void {
+    if(isset($_GET['detail'])){render_invoice_manager_detail($tenant,(int)$_GET['detail']);return;}
     require_permission('invoices.view');
     try {$f=invoice_management_filters($_GET);} catch(RuntimeException $ex) {
         echo '<div class="alert error">'.e($ex->getMessage()).'</div>';
@@ -302,7 +350,7 @@ function render_invoice_management(int $tenant): void {
             '<td>'.e($row['first_name'].' '.$row['last_name']).'<small class="manager-secondary">'.e(fa_digits((string)$row['national_code'])).'</small></td>'.
             '<td class="manager-service">'.e((string)$row['services']).'</td><td>'.money_toman($total).'</td><td>'.money_toman($paid).'</td><td>'.money_toman(max(0,$total-$paid)).'</td>'.
             '<td>'.e($methods).'</td><td>'.e($row['operator_name']).'</td><td><span class="status-chip '.($void?'status-muted':($paid>=$total?'status-good':'status-warning')).'">'.e($status).'</span></td>'.
-            '<td>'.(can('invoices.print')?'<a href="?page=receipt&amp;id='.(int)$row['id'].'">مشاهده / چاپ</a>':'—').'</td></tr>';
+            '<td><div class="management-actions"><a class="button-link secondary small" href="?page=invoice_manager&amp;detail='.(int)$row['id'].'">جزئیات</a>'.(can('invoices.print')?'<a class="button-link small" target="_blank" rel="noopener" href="?page=receipt&amp;id='.(int)$row['id'].'&amp;auto_print=1">چاپ</a>':'').'</div></td></tr>';
     }
     if(!$rows) echo '<tr><td colspan="12">فاکتوری با این فیلترها پیدا نشد.</td></tr>';
     echo '</tbody></table></div><nav class="manager-pagination" aria-label="صفحه‌بندی فاکتورها">';
