@@ -228,3 +228,11 @@ sodoryar_subscription_save($companyA,$start,date('Y-m-d',strtotime('+1 month')),
 integration_assert(sodoryar_company_entitlement($companyA)['state']==='suspended','Suspension did not block access');
 integration_assert(sodoryar_company_entitlement($companyB)['allowed']===true,'Company B access changed by company A subscription');
 echo "PASS: rerunnable subscriptions migration, grace, suspension, renewal audit and tenant isolation.\\n";
+
+/* Keep the disposable browser finance fixture independent of the subscription
+ * state-machine test: company A is suspended above on purpose, but must be
+ * eligible for the subsequent real-login E2E. Do not weaken production checks. */
+query('DELETE FROM company_subscription_events WHERE company_id=?',[$companyA]);
+query('DELETE FROM company_subscriptions WHERE company_id=?',[$companyA]);
+integration_assert(sodoryar_company_entitlement($companyA)['state']==='unassigned',
+    'Subscription fixture cleanup did not restore the E2E company to opt-in legacy access');
