@@ -299,6 +299,21 @@ def main() -> None:
         assert candidates.count()==old_count+1
         partial_id=re.search(r"invoiceCollect([0-9]+)",candidates.first.get_attribute("data-dialog-open"))
         assert partial_id
+        # Shared invoice editor: edit date and payment in one dialog, never a separate date modal.
+        invoice_editor=manager_a.locator(
+            f'[data-dialog-open="invoiceEditor{partial_id.group(1)}"]'
+        )
+        expect(invoice_editor).to_be_visible()
+        assert manager_a.locator('[data-dialog-open^="invoiceDateEdit"]').count()==0
+        invoice_editor.click()
+        editor_dialog=manager_a.locator(f'#invoiceEditor{partial_id.group(1)}')
+        expect(editor_dialog).to_be_visible()
+        assert editor_dialog.locator('[name="action"][value="edit_invoice_date"]').count()==1
+        assert editor_dialog.locator('[name="invoice_date"][data-jalali-iso]').count()==1
+        assert editor_dialog.locator('[name="action"][value="replace_payments"]').count()==1
+        assert editor_dialog.locator('dialog').count()==0
+        editor_dialog.locator('[data-dialog-close]').first.click()
+        expect(editor_dialog).not_to_be_visible()
         collect_button=manager_a.locator(f'[data-dialog-open="invoiceCollect{partial_id.group(1)}"]')
         expect(collect_button).to_be_visible()
         collect_button.click()
@@ -313,6 +328,19 @@ def main() -> None:
             "Follow-up receipt did not fully settle invoice"
         )
         manager_a.goto(f"{ORIGIN}/?page=invoice_manager")
+        # Manager page reuses the same date+payment editor instead of adding a date dialog.
+        manager_editor=manager_a.locator(
+            f'[data-dialog-open="invoiceEditor{partial_id.group(1)}"]'
+        )
+        expect(manager_editor).to_be_visible()
+        assert manager_a.locator('[data-dialog-open^="invoiceDateEdit"]').count()==0
+        manager_editor.click()
+        manager_dialog=manager_a.locator(f'#invoiceEditor{partial_id.group(1)}')
+        expect(manager_dialog).to_be_visible()
+        assert manager_dialog.locator('[name="action"][value="edit_invoice_date"]').count()==1
+        assert manager_dialog.locator('[name="invoice_date"][data-jalali-iso]').count()==1
+        assert manager_dialog.locator('[name="action"][value="replace_payments"]').count()==1
+        manager_dialog.locator('[data-dialog-close]').first.click()
         expect(manager_a.get_by_role("heading", name="مدیریت و گزارش فاکتورها")).to_be_visible()
         expect(manager_a.locator(".manager-results")).to_contain_text("CI E2E Custom Service")
         assert manager_a.locator(".manager-results tbody tr").count() > 0, (
